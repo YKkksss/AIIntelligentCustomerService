@@ -3,8 +3,8 @@
 ## 1. 分支模型
 | 分支 | 用途 | 规则 |
 |---|---|---|
-| `main` | **只放已发布版本**，每个提交都对应一个 tag `vX.Y.Z` | 受保护：禁止直接 push、禁止 force push；只接受来自 `dev`（或 `hotfix/*`）的合并 |
-| `dev` | 集成分支，所有日常开发在此汇合；仓库默认分支 | 受保护：要求 CI 通过；禁止 force push |
+| `main` | **GitHub 默认分支**；只放已发布版本，每个提交都对应一个 tag `vX.Y.Z` | 受保护：禁止直接 push、禁止 force push；只接受来自 `dev`（或 `hotfix/*`）的合并 |
+| `dev` | 集成分支，所有日常开发在此汇合（不是默认分支，clone 后需 `git switch dev`；PR 目标请选 `dev`） | 受保护：要求 CI 通过；禁止 force push |
 | `feature/<简述>` | 从 `dev` 拉出的功能分支，如 `feature/sse-chat` | 完成后 PR 合回 `dev`，合并后删除 |
 | `fix/<简述>` | 从 `dev` 拉出的缺陷修复 | 同上 |
 | `hotfix/<简述>` | 线上紧急修复，从 `main` 拉出 | 合并到 `main` 打补丁 tag，并**同步合回 `dev`** |
