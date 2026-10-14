@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Node / 前端
+node_modules/
+frontend/dist/
+*.local
+
+# 环境与密钥（绝不提交）
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+deploy/server/.env
+
+# 运行时数据
+storage/
+logs/
+*.log
+data/
+eval_reports/
+
+# 镜像导出
+docker/images/*.tar
+
+# IDE / 系统
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# 公开仓库额外保护
+uploads/
+volumes/
+docker/volumes/
+deploy/**/data/
+backups/
+*.dump
+*.sql.gz
+*.snapshot
