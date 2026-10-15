@@ -6,7 +6,7 @@
 #   ./bootstrap.sh dirs                 # 创建 /data/aics 目录
 #   ./bootstrap.sh postgres             # 需要 PG_ADMIN_USER、AICS_DB_PASSWORD
 #   ./bootstrap.sh rabbitmq             # 需要 RABBITMQ_CONTAINER、AICS_MQ_PASSWORD
-#   ./bootstrap.sh redis-acl            # 可选：Redis 启用 ACL 时；需要 REDIS_CONTAINER、REDIS_ADMIN_PASSWORD、AICS_REDIS_PASSWORD
+#   ./bootstrap.sh redis-acl            # 打印 /etc/shared-infra/redis.conf 中的 ACL 行；设置 REDIS_CONTAINER、AICS_REDIS_PASSWORD 时顺带验证
 #   ./bootstrap.sh check                # 只读检查端口、内存、磁盘
 # 密码从环境变量读取，未设置时交互输入（不回显）；不要把密码写进本文件或命令历史。
 set -euo pipefail
@@ -24,7 +24,7 @@ need() {  # need VAR "提示"
 }
 
 cmd_dirs() {
-  sudo mkdir -p /data/aics/{qdrant/storage,qdrant/snapshots,storage,backups,logs}
+  sudo mkdir -p /data/aics/{storage,backups/pg,backups/qdrant,backups/storage,logs}
   sudo chown -R "$USER:$USER" /data/aics
   mkdir -p ~/aics
   echo "目录已创建：/data/aics、~/aics"
@@ -57,21 +57,25 @@ cmd_rabbitmq() {
 }
 
 cmd_redis_acl() {
-  : "${REDIS_CONTAINER:?请设置 REDIS_CONTAINER}"
-  need REDIS_ADMIN_PASSWORD "Redis 管理密码"
-  need AICS_REDIS_PASSWORD "AICS Redis 密码"
-  # 只放行 aics: 前缀与 Celery 结果 key；库号 5（缓存/限流/幂等）、6（Celery 结果）、7（测试）
-  docker exec -i -e REDISCLI_AUTH="$REDIS_ADMIN_PASSWORD" "$REDIS_CONTAINER" redis-cli \
-    ACL SETUSER aics on ">$AICS_REDIS_PASSWORD" '~aics:*' '~celery-task-meta-*' '&*' \
-    +@all -@dangerous +select +info
-  echo "Redis ACL 用户 aics 已设置；URL：redis://aics:<AICS_REDIS_PASSWORD>@192.168.110.86:6379/5"
-  echo "注意：若 Redis 使用配置文件持久化 ACL，需负责人确认 ACL SAVE 或 aclfile 设置"
+  # 共享 Redis 的 ACL 由配置文件管理（/etc/shared-infra/redis.conf），重启后仍生效；
+  # 这里只打印应写入的 user 行（密码用占位符），由服务器负责人添加后重启 Redis。
+  cat <<'ACL'
+# /etc/shared-infra/redis.conf 中 AICS 的 ACL 行（<AICS_REDIS_PASSWORD> 替换为真实密码）
+user aics on >'<AICS_REDIS_PASSWORD>' ~aics:* ~celery-task-meta-* ~chord-unlock-* &aics:* &celery-task-meta-* +@all -@admin -@dangerous
+ACL
+  echo "URL：redis://aics:<AICS_REDIS_PASSWORD>@192.168.110.86:6379/5（Celery 结果库号 6，测试库号 7）"
+  if [[ -n "${REDIS_CONTAINER:-}" && -n "${AICS_REDIS_PASSWORD:-}" ]]; then
+    echo "-- 验证 aics 用户：PING 应为 PONG，INFO 应被拒绝（NOPERM）"
+    docker exec -i -e REDISCLI_AUTH="$AICS_REDIS_PASSWORD" "$REDIS_CONTAINER" redis-cli --user aics -n 5 PING
+    docker exec -i -e REDISCLI_AUTH="$AICS_REDIS_PASSWORD" "$REDIS_CONTAINER" redis-cli --user aics -n 5 INFO server | head -1 || true
+  fi
 }
 
 cmd_check() {
   free -h; df -h /data 2>/dev/null || df -h /
   docker ps --format '{{.Names}}\t{{.Ports}}'
-  ss -ltn | grep -E ':(6333|6334|8080)\b' || echo "6333/6334/8080 端口空闲"
+  ss -ltn | grep -E ':8080\b' || echo "8080 端口空闲"
+  curl -s -o /dev/null -w 'qdrant(KnowledgeFlow) readyz: %{http_code}\n' http://127.0.0.1:6333/readyz || true
 }
 
 case "${1:-}" in

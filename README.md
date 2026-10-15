@@ -20,7 +20,7 @@ Python 3.12 · uv · FastAPI · LangChain + LangGraph · SQLAlchemy 2.0 async + 
 | 位置 | 内容 |
 |---|---|
 | 开发机（Windows，本项目目录） | 后端、Worker、前端代码的编写和运行 |
-| 内网服务器 192.168.110.86 | 复用 PostgreSQL / Redis / RabbitMQ；新增 Qdrant（`deploy/server/`） |
+| 内网服务器 192.168.110.86 | 复用 PostgreSQL 16 / Redis 8.2 / RabbitMQ 4.3 / Qdrant 1.18（共用 KnowledgeFlow 实例，集合前缀 `aics_`）；初始化脚本 `deploy/server/bootstrap/` |
 
 ## 当前状态
 M0 基础设施进行中：后端骨架（FastAPI、配置、日志、`/healthz`、`/readyz`、core 工具、Alembic 首个迁移）、前端骨架、CI 已完成；服务器初始化脚本在 `deploy/server/bootstrap/`，待在服务器执行。

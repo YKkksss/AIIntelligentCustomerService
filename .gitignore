@@ -25,6 +25,7 @@ frontend/dist/
 *.pem
 *.key
 deploy/server/.env
+deploy/dev/.env
 
 # 运行时数据
 /storage/

@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### 变更（服务器实际情况，2026-10-16）
+- 服务器可用内存实际约 1.5GB：不再自建 Qdrant，共用 KnowledgeFlow 的 Qdrant v1.18.2（API Key，集合前缀 `aics_`，ADR-0002 修订）；`deploy/server/docker-compose.yml` 改为仅本机开发用的 `deploy/dev/docker-compose.yml`；应用容器内存上限按 1.5GB 预算下调；备份只快照 `aics_` 集合。
+- 服务器已就绪：PG 16.15 库 `aics`/`aics_test` 与角色 `aics`；RabbitMQ 4.3.5 vhost/用户 `aics`；Redis 8.2.9 ACL 用户 `aics`（`~aics:* ~celery-task-meta-* ~chord-unlock-* &aics:* &celery-task-meta-*`，无 `@admin`/`@dangerous`，写在 `/etc/shared-infra/redis.conf`）；bootstrap 脚本与文档同步。
+- 开发计划：M1–M6 拆为子步骤（M1.1…M6.5），每步给出交付物、验收与依赖。
+
 ### 新增（M0 基础设施，2026-10-15）
 - 后端（`backend/`，Python 3.12 + uv）：FastAPI app factory（统一错误响应、`X-Request-ID`、structlog JSON 日志、prod 关闭 `/docs`）；`/healthz`；`/readyz` 并发检查 PostgreSQL / Redis / RabbitMQ / Qdrant（单项 2 秒超时，失败 503，不暴露错误细节）；console script `aics-api`、`aics-cli`（骨架）。
 - 配置：pydantic-settings（`AICS_` 前缀，根目录与 `backend/.env`），`AICS_MODELS` 注册表校验（名称唯一、kind、窗口、价格），`AICS_LLM_MODEL` / `AICS_EMBED_MODEL` / `AICS_RERANK_MODEL` 必须已注册且类型匹配；JWT 密钥 ≥ 64、pepper ≥ 32 字符。

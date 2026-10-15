@@ -1,7 +1,8 @@
 # Qdrant 设计
 
 ## 1. 集合
-- 命名：`aics_chunks__{embed_model}__{dim}`，非字母数字字符替换为 `_`，例：`aics_chunks__text_embedding_v4__1024`。
+- 实例：共用 KnowledgeFlow 的 Qdrant v1.18.2（ADR-0002 修订），AICS 只操作以 `AICS_QDRANT_COLLECTION_PREFIX`（默认 `aics_`，集成测试 `aics_test_`）开头的集合。
+- 命名：`{prefix}chunks__{embed_model}__{dim}`，模型名中非字母数字字符替换为 `_`，例：`aics_chunks__qwen3_7_text_embedding_flash__1024`。
 - 一个平台一个活动集合，所有应用共用，用 payload `app_id` 隔离（多租户推荐做法）。
 - 参数：
 ```json
