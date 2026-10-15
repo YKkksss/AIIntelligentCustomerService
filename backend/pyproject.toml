@@ -1,0 +1,189 @@
+[project]
+name = "aics"
+version = "0.1.0"
+description = "AICS 通用知识库 AI 客服平台（后端）"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "见仓库根目录 LICENSE" }
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "structlog>=24.4",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "redis>=5.2",
+    "celery>=5.4",
+    "httpx>=0.28",
+    "tiktoken>=0.8",
+    "jieba>=0.42.1",
+    "pyyaml>=6.0.2",
+    "uuid6>=2024.7.10",
+]
+
+[project.scripts]
+aics-api = "aics.main:run"
+aics-cli = "aics.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "respx>=0.21",
+    "aiosqlite>=0.20",
+    "ruff>=0.17,<0.18",
+    "import-linter>=2.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aics"]
+
+# ---------------- ruff（编码规范：line-length=100，规则 E,F,I,UP,B,SIM,ASYNC,S）----------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC", "S"]
+# 行宽由 ruff format 保证；中文注释与文档字符串不强制折行
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]   # 测试中允许 assert 与假密钥
+"migrations/**" = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["aics"]
+
+# ---------------- pytest ----------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "live: 调用真实模型供应商（发布前手动运行：pytest -m live）",
+    "integration: 需要真实 PG/Redis/Qdrant",
+]
+addopts = "-m 'not live and not integration'"
+filterwarnings = [
+    "ignore::DeprecationWarning:jieba.*",
+    "ignore::SyntaxWarning",
+    "ignore:Using `httpx` with `starlette.testclient`",
+]
+
+[tool.coverage.run]
+source = ["aics"]
+omit = ["src/aics/cli.py"]
+
+# ---------------- import-linter（模块划分 §3 依赖规则）----------------
+# 说明：L3 模块之间只允许 chat→apps、chat→webhooks、handoff→chat、handoff→webhooks、eval→chat、feedback→eval，
+# 用逐模块的 forbidden 合同表达；apps / knowledge 投递 Celery 任务按任务名 send_task，不 import aics.tasks。
+[tool.importlinter]
+root_package = "aics"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "分层：L4 入口 → L3 业务模块 → L2 领域库 → L1 基础设施 → L0 core"
+type = "layers"
+layers = [
+    "aics.main | aics.tasks | aics.cli",
+    "aics.health",
+    "aics.modules",
+    "aics.rag | aics.memory | aics.ingest",
+    "aics.db | aics.providers | aics.vectorstore | aics.storage",
+    "aics.core",
+]
+
+[[tool.importlinter.contracts]]
+name = "rag 不 import db / modules / fastapi（只经 rag.ports）"
+type = "forbidden"
+source_modules = ["aics.rag"]
+forbidden_modules = ["aics.db", "aics.modules", "aics.memory", "aics.ingest", "aics.storage", "fastapi", "starlette"]
+
+[[tool.importlinter.contracts]]
+name = "memory 不 import rag / modules"
+type = "forbidden"
+source_modules = ["aics.memory"]
+forbidden_modules = ["aics.rag", "aics.modules", "aics.ingest", "aics.storage", "fastapi"]
+
+[[tool.importlinter.contracts]]
+name = "ingest 不 import rag / memory / modules"
+type = "forbidden"
+source_modules = ["aics.ingest"]
+forbidden_modules = ["aics.rag", "aics.memory", "aics.modules", "fastapi"]
+
+[[tool.importlinter.contracts]]
+name = "core 不依赖任何项目包"
+type = "forbidden"
+source_modules = ["aics.core"]
+forbidden_modules = ["aics.db", "aics.providers", "aics.vectorstore", "aics.storage", "aics.rag", "aics.memory", "aics.ingest", "aics.modules", "aics.tasks", "aics.main", "aics.health", "aics.cli"]
+
+[[tool.importlinter.contracts]]
+name = "L1 基础设施互相独立"
+type = "independence"
+modules = ["aics.db", "aics.providers", "aics.vectorstore", "aics.storage"]
+
+[[tool.importlinter.contracts]]
+name = "Celery 任务只调用 service：不直接用 db / providers / vectorstore / repository"
+type = "forbidden"
+source_modules = ["aics.tasks"]
+forbidden_modules = ["aics.db", "aics.providers", "aics.vectorstore", "aics.storage", "sqlalchemy"]
+
+[[tool.importlinter.contracts]]
+name = "auth / apikeys / audit / stats / webhooks / knowledge / apps 不依赖其他业务模块"
+type = "independence"
+modules = [
+    "aics.modules.auth",
+    "aics.modules.apikeys",
+    "aics.modules.audit",
+    "aics.modules.stats",
+    "aics.modules.webhooks",
+    "aics.modules.knowledge",
+    "aics.modules.apps",
+]
+
+[[tool.importlinter.contracts]]
+name = "上述独立模块不依赖 chat / eval / feedback / handoff"
+type = "forbidden"
+source_modules = [
+    "aics.modules.auth",
+    "aics.modules.apikeys",
+    "aics.modules.audit",
+    "aics.modules.stats",
+    "aics.modules.webhooks",
+    "aics.modules.knowledge",
+    "aics.modules.apps",
+]
+forbidden_modules = ["aics.modules.chat", "aics.modules.eval", "aics.modules.feedback", "aics.modules.handoff"]
+
+[[tool.importlinter.contracts]]
+name = "chat 只可依赖 apps、webhooks"
+type = "forbidden"
+source_modules = ["aics.modules.chat"]
+forbidden_modules = ["aics.modules.auth", "aics.modules.apikeys", "aics.modules.audit", "aics.modules.stats", "aics.modules.knowledge", "aics.modules.eval", "aics.modules.feedback", "aics.modules.handoff", "aics.ingest"]
+
+[[tool.importlinter.contracts]]
+name = "handoff 只可依赖 chat、webhooks"
+type = "forbidden"
+source_modules = ["aics.modules.handoff"]
+forbidden_modules = ["aics.modules.auth", "aics.modules.apikeys", "aics.modules.audit", "aics.modules.stats", "aics.modules.knowledge", "aics.modules.apps", "aics.modules.eval", "aics.modules.feedback"]
+
+[[tool.importlinter.contracts]]
+name = "eval 只可依赖 chat"
+type = "forbidden"
+source_modules = ["aics.modules.eval"]
+forbidden_modules = ["aics.modules.auth", "aics.modules.apikeys", "aics.modules.audit", "aics.modules.stats", "aics.modules.knowledge", "aics.modules.apps", "aics.modules.webhooks", "aics.modules.feedback", "aics.modules.handoff"]
+
+[[tool.importlinter.contracts]]
+name = "feedback 只可依赖 eval"
+type = "forbidden"
+source_modules = ["aics.modules.feedback"]
+forbidden_modules = ["aics.modules.auth", "aics.modules.apikeys", "aics.modules.audit", "aics.modules.stats", "aics.modules.knowledge", "aics.modules.apps", "aics.modules.webhooks", "aics.modules.chat", "aics.modules.handoff"]
