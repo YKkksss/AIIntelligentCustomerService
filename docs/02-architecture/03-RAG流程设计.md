@@ -120,7 +120,7 @@ class RagState(TypedDict, total=False):
 | route_intent | 按意图路由：kb_qa → retrieve；chitchat / out_of_scope / clarify → 话术（无引用，不计入 `refusal_streak`）；human / action(v1) → handoff | `intent.enabled_intents` | — |
 | retrieve | 并行：Qdrant 向量检索（filter `app_id`、`enabled`）+ PG 全文检索（经 `ChunkSearch.keyword_search`，tsquery 构造见[数据库设计 §5](../03-database/01-数据库设计.md)）；向量命中回 PG 取正文时只保留当前生效版本且可检索的切块 | `vector_top_k`=20、`keyword_top_k`=20 | 任一路失败另一路继续，记 `vector_failed` / `keyword_failed`；两路都失败 → 抛出（`UPSTREAM_ERROR` / `SERVICE_UNAVAILABLE`） |
 | fuse | RRF：`Σ 1/(60 + rank)`，按 chunk 去重，取前 `fuse_top_k` | `fuse_top_k`=30 | — |
-| rerank | qwen3-rerank 打分，取前 `rerank_top_n` | `rerank_top_n`=5、`enable_rerank` | 见下"rerank 失败规则" |
+| rerank | qwen3.7-text-rerank 打分，取前 `rerank_top_n` | `rerank_top_n`=5、`enable_rerank` | 见下"rerank 失败规则" |
 | judge | 有 rerank 分数时：最高分 < `rerank_threshold` → 不可答；最高分 ≥ `judge_gray_upper` → 可答；处于灰区 `[rerank_threshold, judge_gray_upper)` 且 `judge_with_llm=true` 时让 LLM 输出 `{"answerable": bool}`（`judge_with_llm=false` 时灰区按可答）。无 rerank 分数时（rerank 关闭或失败）一律由 LLM 判断 | `rerank_threshold`=0.35、`judge_gray_upper`=0.5、`judge_with_llm` | LLM 判断超时/解析失败 → **按不可答处理**（`decision_reason="judge_failed"`，记 degraded `judge_failed`），走 refuse / handoff |
 | generate | 带编号上下文生成，流式输出 | `temperature`=0.2、`max_tokens`=800、`llm_model` | 上游错误 → 抛出，由 chat.service 写 `answer_type=error` |
 | postprocess | 解析 `[n]` 标号 → 引用；标号越界删除；输出检查（安全设计 §3.4）；无任何引用时 `degraded += ["no_citation"]`（仅 kb_qa 分支经过本节点） | — | — |

@@ -14,7 +14,7 @@ AICS（AI Intelligent Customer Service）是一个面向各行各业的知识库
 - 服务器准备：[docs/07-deployment/01-服务器准备与共享服务.md](docs/07-deployment/01-服务器准备与共享服务.md)
 
 ## 技术栈（摘要）
-Python 3.12 · uv · FastAPI · LangChain + LangGraph · SQLAlchemy 2.0 async + Alembic · PostgreSQL 16 · Qdrant · Redis 8 · RabbitMQ 4 + Celery · DeepSeek（对话）· 阿里云百炼（向量化 text-embedding-v4 / 重排序 qwen3-rerank）· Vue 3 + Vite + TS + Element Plus
+Python 3.12 · uv · FastAPI · LangChain + LangGraph · SQLAlchemy 2.0 async + Alembic · PostgreSQL 16 · Qdrant · Redis 8 · RabbitMQ 4 + Celery · DeepSeek（对话）· 阿里云百炼（向量化 qwen3.7-text-embedding-flash / 重排序 qwen3.7-text-rerank）· Vue 3 + Vite + TS + Element Plus
 
 ## 环境划分
 | 位置 | 内容 |
