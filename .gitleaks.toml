@@ -1,0 +1,15 @@
+# gitleaks 配置：使用默认规则，并允许文档与示例中的占位符
+[extend]
+useDefault = true
+
+[allowlist]
+description = "占位符与测试假值"
+regexes = [
+  '''<[A-Z0-9_]+>''',
+  '''aics_xxx''',
+  '''sk-test''',
+]
+paths = [
+  '''frontend/package-lock\.json''',
+  '''backend/uv\.lock''',
+]
