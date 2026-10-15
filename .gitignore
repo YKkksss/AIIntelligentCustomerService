@@ -27,10 +27,10 @@ frontend/dist/
 deploy/server/.env
 
 # 运行时数据
-storage/
-logs/
+/storage/
+/logs/
 *.log
-data/
+/data/
 eval_reports/
 
 # 镜像导出
