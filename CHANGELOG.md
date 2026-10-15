@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### 新增（M1.1 外部依赖封装，2026-10-16）
+- `vectorstore/qdrant.py`：共享 Qdrant 集合命名（前缀须 `aics_`）、建集合（on_disk + int8 量化 + payload 索引，`app_id` 租户索引）、所有读写强制 `app_id`；`qdrant-client` 兼容 1.18。
+- `storage/`：`Storage` 协议与 `LocalStorage`（原子写、路径穿越校验）。
+- `providers/`：Embedding/Rerank/LLM 接口，OpenAI 兼容向量化实现（批量、维度校验），超时/重试/熔断。
+- 测试：单元（含 Redis ACL 禁用命令扫描）、共享 Qdrant 集成（`AICS_TEST_QDRANT_URL`/`AICS_TEST_QDRANT_API_KEY`）、live 向量化（`AICS_LIVE_EMBED_API_KEY`）。
+
 ### 变更（服务器实际情况，2026-10-16）
 - 服务器可用内存实际约 1.5GB：不再自建 Qdrant，共用 KnowledgeFlow 的 Qdrant v1.18.2（API Key，集合前缀 `aics_`，ADR-0002 修订）；`deploy/server/docker-compose.yml` 改为仅本机开发用的 `deploy/dev/docker-compose.yml`；应用容器内存上限按 1.5GB 预算下调；备份只快照 `aics_` 集合。
 - 服务器已就绪：PG 16.15 库 `aics`/`aics_test` 与角色 `aics`；RabbitMQ 4.3.5 vhost/用户 `aics`；Redis 8.2.9 ACL 用户 `aics`（`~aics:* ~celery-task-meta-* ~chord-unlock-* &aics:* &celery-task-meta-*`，无 `@admin`/`@dangerous`，写在 `/etc/shared-infra/redis.conf`）；bootstrap 脚本与文档同步。

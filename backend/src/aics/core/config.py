@@ -64,6 +64,8 @@ class Settings(BaseSettings):
     celery_result_backend: str | None = None
     qdrant_url: str
     qdrant_api_key: SecretStr
+    # 服务器上共用 KnowledgeFlow 的 Qdrant：AICS 只用此前缀的集合（集成测试用 aics_test_）
+    qdrant_collection_prefix: str = Field("aics_", pattern=r"^aics_[a-z0-9_]*$")
 
     # ---- 存储与导入 ----
     storage_backend: Literal["local", "s3"] = "local"
