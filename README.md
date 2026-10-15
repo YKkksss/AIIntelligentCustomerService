@@ -23,4 +23,4 @@ Python 3.12 · uv · FastAPI · LangChain + LangGraph · SQLAlchemy 2.0 async + 
 | 内网服务器 192.168.110.86 | 复用 PostgreSQL / Redis / RabbitMQ；新增 Qdrant（`deploy/server/`） |
 
 ## 当前状态
-设计文档阶段（v0.2 文档修订）。尚无应用代码。
+M0 基础设施进行中：后端骨架（FastAPI、配置、日志、`/healthz`、`/readyz`、core 工具、Alembic 首个迁移）、前端骨架、CI 已完成；服务器初始化脚本在 `deploy/server/bootstrap/`，待在服务器执行。

@@ -140,6 +140,7 @@ description: kb_qa 生成回答的 system 提示词
 ---
 你是「{app_name}」的客服助手。……
 ```
+- 版本检查：`backend/prompts.lock.json` 记录每个提示词文件的 `version` 与正文 sha256；`python -m aics.core.prompts check`（CI 与 pre-commit 运行）在正文变化而 version 未增加、或锁文件未更新时失败；升版本后运行 `update` 写回锁文件。
 - 每轮实际用到的提示词版本汇总为 `prompt_version` 字符串（如 `cc3.gen5.judge2`，按固定顺序拼接 `名称缩写+版本`）写入 `messages.prompt_version`；评测运行把完整 `{name: version}` 写入 `eval_runs.prompt_versions`，对比两次运行时可直接看出提示词是否变化。
 
 **condense**（`rag/prompts/condense.md`，仅 `intent.enabled=false` 时使用）

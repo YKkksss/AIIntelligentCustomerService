@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+### 新增（M0 基础设施，2026-10-15）
+- 后端（`backend/`，Python 3.12 + uv）：FastAPI app factory（统一错误响应、`X-Request-ID`、structlog JSON 日志、prod 关闭 `/docs`）；`/healthz`；`/readyz` 并发检查 PostgreSQL / Redis / RabbitMQ / Qdrant（单项 2 秒超时，失败 503，不暴露错误细节）；console script `aics-api`、`aics-cli`（骨架）。
+- 配置：pydantic-settings（`AICS_` 前缀，根目录与 `backend/.env`），`AICS_MODELS` 注册表校验（名称唯一、kind、窗口、价格），`AICS_LLM_MODEL` / `AICS_EMBED_MODEL` / `AICS_RERANK_MODEL` 必须已注册且类型匹配；JWT 密钥 ≥ 64、pepper ≥ 32 字符。
+- core：`tokens.count_tokens`（cl100k_base）、`textsearch`（按应用 jieba `Tokenizer` LRU 缓存、自定义词典不污染全局、`build_tsquery` 清洗 + OR 连接）、`prompts`（front-matter 加载、`prompts.lock.json` 版本检查 `python -m aics.core.prompts check|update`）、`models`、`errors`、`logging`。
+- db：async SQLAlchemy 引擎/会话、UUIDv7 主键、约束命名约定、`AppScopedRepository`（签名校验工具）；Alembic（async）与迁移 `0001`：`users`、`roles`（3 个角色种子权限）。
+- Celery app：队列 `ingest` / `context` / `eval` / `maintenance`（`acks_late`、prefetch 1），beat 表待后续里程碑填充。
+- 质量：ruff、import-linter（13 条合同，对应模块划分 §3）、pytest（单元 76 项，覆盖率 95%；迁移往返集成测试）、pre-commit（含 gitleaks、import-linter、提示词检查）、GitHub Actions CI（gitleaks、后端、前端）。
+- 前端（`frontend/`）：Vite + Vue 3 + TS + Element Plus + Vue Router + Pinia + axios，登录页占位、`/readyz` 状态展示；ESLint + Prettier。
+- 部署：`deploy/server/bootstrap/`（PG 库与用户 SQL、RabbitMQ vhost、Redis ACL、目录与检查，可重复执行）；`scripts/dev.ps1`。
+
+### 文档（M0 同步）
+- 目录结构补充 `health.py`、`prompts.lock.json`、`deploy/server/bootstrap/`；开发环境改用 `uv run aics-api`；配置文档补 `AICS_DEBUG` 与 `.env` 读取顺序；users 表补 NOT NULL / 默认值与小写约束，`user_app_roles` 移到 M1；`.gitattributes` 改为 `eol=lf` 与编码规范一致。
+
 ### 变更（v0.2 文档修订，2026-10-15）
 - 模块边界：新增 `aics.memory`（上下文组装、压缩、事实、回查）、`aics.rag.intent`（意图纯函数）、`aics.modules.stats`；`rag` 通过 `rag.ports` 依赖倒置，不直接访问数据库；写出模块依赖图与依赖规则；`AppRagConfig` 唯一定义在 `aics/rag/config.py`；新增 `core.tokens`、`core.textsearch`、`core.models`、`core.prompts`、`AppScopedRepository`。
 - 职责划分：`chat.service` 统一编排对话（落库顺序、`refusal_streak`、`handoff`、压缩触发），调试 / 评测 / OpenAI 兼容复用；rag 图只返回 `RagResult`，入口带 `RunMode`（online/debug/eval）。新增 ADR-0008、ADR-0009。
