@@ -6,25 +6,28 @@
 |---|---|---|
 | 00-planning | [01-项目概述](00-planning/01-项目概述.md) | 背景、目标、成功标准 |
 | | [02-范围定义](00-planning/02-范围定义.md) | v1 / v2 / 不做 |
-| | [03-开发计划](00-planning/03-开发计划.md) | 阶段、里程碑、任务清单、验收、估时 |
+| | [03-开发计划](00-planning/03-开发计划.md) | 阶段、里程碑、依赖、任务清单、验收 |
 | | [04-风险与对策](00-planning/04-风险与对策.md) | 风险登记表 |
 | | [05-术语表](00-planning/05-术语表.md) | 名词解释 |
 | 01-requirements | [01-功能需求](01-requirements/01-功能需求.md) | 按模块的功能需求（FR 编号） |
 | | [02-非功能需求](01-requirements/02-非功能需求.md) | 性能、可用性、安全、准确率指标 |
 | 02-architecture | [01-系统架构](02-architecture/01-系统架构.md) | 部署拓扑、组件、数据流 |
-| | [02-模块划分](02-architecture/02-模块划分.md) | 后端分层与模块职责 |
-| | [03-RAG流程设计](02-architecture/03-RAG流程设计.md) | LangGraph 节点、状态、提示词、阈值、兜底 |
-| | [04-文档处理流水线](02-architecture/04-文档处理流水线.md) | 解析、切块、索引、重建 |
+| | [02-模块划分](02-architecture/02-模块划分.md) | 后端分层、模块职责、依赖图与依赖规则、chat/rag/memory 职责 |
+| | [03-RAG流程设计](02-architecture/03-RAG流程设计.md) | LangGraph 节点、RunMode、RagResult、提示词版本、阈值、兜底 |
+| | [04-文档处理流水线](02-architecture/04-文档处理流水线.md) | 解析、切块、版本化构建与切换、替换、重建、删除、token 口径 |
 | | [05-模型供应商抽象](02-architecture/05-模型供应商抽象.md) | LLM / Embedding / Rerank 可替换 |
 | | [06-技术选型](02-architecture/06-技术选型.md) | 选型与理由 |
-| | [adr/](02-architecture/adr/) | 架构决策记录 ADR-0001 ~ 0005 |
+| | [07-对话上下文管理](02-architecture/07-对话上下文管理.md) | `aics.memory`：token 预算、滚动摘要、关键事实、按需回查 |
+| | [08-意图识别](02-architecture/08-意图识别.md) | 规则 + LLM 合并分类 + 向量快速通道、6 类意图与路由 |
+| | [09-会话生命周期与转人工](02-architecture/09-会话生命周期与转人工.md) | 空闲提醒与关闭、转人工状态机、continue/wait 模式、坐席接口、Webhook 与会话事件流 |
+| | [adr/](02-architecture/adr/) | 架构决策记录 ADR-0001 ~ 0011（0008 记忆模块与职责划分，0009 RunMode 与提示词版本化，0010 会话空闲关闭与事件推送，0011 转人工状态机与 Webhook） |
 | 03-database | [01-数据库设计](03-database/01-数据库设计.md) | ER 图、全部表结构、索引、DDL |
 | | [02-Qdrant设计](03-database/02-Qdrant设计.md) | 集合、payload、过滤、重建 |
 | | [03-迁移策略](03-database/03-迁移策略.md) | Alembic 规范 |
 | 04-api | [01-接口规范](04-api/01-接口规范.md) | 版本、鉴权、错误码、分页、限流、幂等 |
 | | [02-开放接口参考](04-api/02-开放接口参考.md) | 对外 API（含 SSE、OpenAI 兼容） |
 | | [03-管理接口参考](04-api/03-管理接口参考.md) | 后台 API |
-| | [04-第三方接入指南](04-api/04-第三方接入指南.md) | curl / Python / JS 示例 |
+| | [04-第三方接入指南](04-api/04-第三方接入指南.md) | curl / Python / JS 示例、出站 Webhook 格式与签名校验 |
 | 05-frontend | [01-管理后台设计](05-frontend/01-管理后台设计.md) | 页面、交互、前端工程 |
 | 06-development | [01-项目目录结构](06-development/01-项目目录结构.md) | 代码目录约定 |
 | | [02-开发环境搭建](06-development/02-开发环境搭建.md) | Windows + uv 从零跑起来 |

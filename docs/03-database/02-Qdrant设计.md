@@ -16,8 +16,9 @@ int8 量化 + 原向量放磁盘，内存约为原来的 1/4：100 万 × 1024 �
 
 ## 2. Point
 - `id` = `chunks.id`（UUID）。
-- payload：`{"app_id": "...", "document_id": "...", "chunk_id": "...", "enabled": true}`（正文不存 Qdrant，以 PG 为准）。
-- payload 索引：`app_id`（keyword, `is_tenant: true`）、`document_id`（keyword）、`enabled`（bool）。
+- payload：`{"app_id": "...", "document_id": "...", "chunk_id": "...", "index_version": 3, "enabled": true}`（正文、文档标题都不存 Qdrant，以 PG 为准）。`enabled` = PG 中 `enabled AND review_status <> 'flagged'`，禁用 / 复核状态变化时同步 `set_payload`。
+- payload 索引：`app_id`（keyword, `is_tenant: true`）、`document_id`（keyword）、`index_version`（integer）、`enabled`（bool）。
+- 同一文档可能短暂同时存在新旧两个构建号的点（替换 / 重建期间）；检索不按版本过滤，向量命中回 PG 取正文时按[数据库设计 §3.7](01-数据库设计.md)的可检索条件过滤，旧版本点由 `cleanup_document` 删除。为抵消过滤损耗，向量检索 `limit = vector_top_k × 1.5`，过滤后取前 `vector_top_k`。
 
 ## 3. 检索
 ```python
@@ -26,12 +27,12 @@ client.query_points(collection, query=vec, limit=k,
                               FieldCondition(key="enabled", match=MatchValue(value=True))]),
     search_params=SearchParams(hnsw_ef=128, quantization=QuantizationSearchParams(rescore=True)))
 ```
-检索封装层**强制要求** `app_id` 参数，不提供无过滤的检索方法。
+检索封装层**强制要求** `app_id` 参数，不提供无过滤的检索方法。会话消息集合 `aics_messages__*` 与意图示例集合 `aics_intents__*` 同理（分别强制 `app_id + conversation_id`、`app_id`）。
 
 ## 4. 换模型 / 重建
 1. 新配置模型 → 创建新集合（新名字）。
-2. `reindex_all` 任务：遍历所有 done 文档，读 PG chunks 重新向量化写入新集合（无需重新解析）。
+2. `reindex_all` 任务（队列 `ingest`）：遍历所有有生效版本的文档，读 PG 中生效构建号的 chunks 重新向量化写入新集合（无需重新解析，不改构建号）。
 3. 完成后切换配置并重启；旧集合保留 7 天后删除。
 
 ## 5. 一致性
-PG 为准。每日 `maintenance.reconcile`：按应用比较 PG enabled chunk 数与 Qdrant `count(filter app_id)`，差异写日志并告警，可一键对单个应用重建。
+PG 为准。每日 beat 任务 `reconcile`（队列 `maintenance`）：按应用比较 PG 可检索切块数（生效版本、`enabled AND review_status <> 'flagged'`）与 Qdrant `count(filter app_id, enabled=true)`；存在进行中构建或待清理旧版本的文档跳过不比较，差异写日志与指标，可一键对单个应用重建；手动执行时写 `jobs(type=reconcile)`。
