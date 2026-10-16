@@ -47,6 +47,29 @@ class _Cfg(BaseModel):
 
 
 # ---------------------------------------------------------------- intent
+# Built-in chitchat words by category (意图识别 §5.1); the default `chitchat_keywords` is
+# their union (§7 "见 §5.1 内置词表").
+CHITCHAT_BUILTIN: dict[str, tuple[str, ...]] = {
+    "greeting": (
+        "你好",
+        "您好",
+        "在吗",
+        "在不在",
+        "hi",
+        "hello",
+        "哈喽",
+        "早上好",
+        "上午好",
+        "下午好",
+        "晚上好",
+        "早安",
+    ),
+    "thanks": ("谢谢", "多谢", "感谢", "谢啦", "thx"),
+    "ack": ("好的", "好", "嗯", "嗯嗯", "ok", "收到", "明白了", "知道了"),
+    "bye": ("再见", "拜拜", "bye", "没问题了", "没有了", "晚安"),
+}
+
+
 class ChitchatReplies(_Cfg):
     greeting: Annotated[str, StringConstraints(max_length=200)]
     thanks: Annotated[str, StringConstraints(max_length=200)]
@@ -60,7 +83,8 @@ class IntentConfig(_Cfg):
     enabled: bool = True
     enabled_intents: list[str] = Field(default_factory=lambda: list(INTENTS))
     chitchat_keywords: list[Annotated[str, StringConstraints(min_length=1, max_length=8)]] = Field(
-        default_factory=lambda: ["你好", "您好", "在吗", "谢谢", "好的", "再见"], max_length=200
+        default_factory=lambda: [w for ws in CHITCHAT_BUILTIN.values() for w in ws],
+        max_length=200,
     )
     chitchat_replies: ChitchatReplies | None = None
     chitchat_max_chars: int = Field(20, ge=5, le=100)
@@ -75,6 +99,11 @@ class IntentConfig(_Cfg):
     min_confidence: float = Field(0.6, ge=0, le=1)
     clarify_threshold: float = Field(0.7, ge=0, le=1)
     classify_timeout_ms: int = Field(2000, ge=500, le=10000)
+    # Out-of-scope safeguard (M2.4, 设计讨论 0005): an LLM `out_of_scope` verdict is checked
+    # against the knowledge base (retrieve + rerank); a top rerank score ≥ the override score
+    # turns it back into kb_qa. Default score from the M2.4 intent eval.
+    out_of_scope_check: bool = True
+    out_of_scope_override_score: float = Field(0.8, ge=0.5, le=1)
     vector_fast_path: bool = False
     vector_threshold: float = Field(0.9, ge=0.8, le=0.99)
 

@@ -31,6 +31,9 @@ class ResolvedIntent:
     need_clarify: bool = False
     clarify_question: str | None = None
     slots: dict[str, str | None] = field(default_factory=dict)
+    rule_hit: dict[str, str | None] | None = None
+    mode: str = "merged"  # merged / parallel / rule
+    scope_check: dict[str, Any] | None = None  # out-of-scope safeguard details
 
     def trace(self) -> dict[str, Any]:
         return {
@@ -42,12 +45,27 @@ class ResolvedIntent:
             "fallback_reason": self.fallback_reason,
             "need_clarify": self.need_clarify,
             "slots": dict(self.slots),
+            "rule_hit": self.rule_hit,
+            "mode": self.mode,
+            "scope_check": self.scope_check,
         }
 
 
 def normalize_length(text: str) -> int:
     """Length used for `chitchat_max_chars`: characters without whitespace."""
     return len("".join(text.split()))
+
+
+def from_rule(question: str, intent: str, rule_hit: dict[str, str | None]) -> ResolvedIntent:
+    """Rule-layer verdict: source=rule, confidence 1.0 (§5.1)."""
+    return ResolvedIntent(
+        intent=intent,
+        rewritten_query=question,
+        confidence=1.0,
+        source="rule",
+        rule_hit=rule_hit,
+        mode="rule",
+    )
 
 
 def fallback(question: str, reason: str, *, rewritten: str | None = None) -> ResolvedIntent:
