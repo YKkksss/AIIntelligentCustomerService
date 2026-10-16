@@ -20,7 +20,7 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 from aics.core.errors import ConflictError, ConversationNotFoundError, ValidationAppError
@@ -99,6 +99,13 @@ class ConversationStore(Protocol):
         k: int,
     ) -> list[Hit]:
         """Keyword recall inside one conversation; `tsquery` comes from core.textsearch."""
+        ...
+
+    async def message_positions(
+        self, app_id: UUID, conversation_id: UUID, message_ids: Sequence[UUID]
+    ) -> dict[UUID, tuple[Any, ...]]:
+        """Comparable positions (older < newer) of messages of this conversation; unknown ids
+        are omitted. Used to decide which of two fact writes is newer (M2.5)."""
         ...
 
     # ---- facts ----
@@ -315,6 +322,17 @@ class InMemoryConversationStore:
                 )
         hits.sort(key=lambda h: (-h.score, -h.created_at.timestamp()))
         return hits[:k]
+
+    async def message_positions(
+        self, app_id: UUID, conversation_id: UUID, message_ids: Sequence[UUID]
+    ) -> dict[UUID, tuple[Any, ...]]:
+        self._conv(app_id, conversation_id)
+        wanted = set(message_ids)
+        return {
+            m.message.id: (i,)
+            for i, m in enumerate(self._msgs[conversation_id])
+            if m.message.id in wanted
+        }
 
     # ---- facts ----
     async def list_facts(

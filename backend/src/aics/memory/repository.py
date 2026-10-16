@@ -79,6 +79,18 @@ class MessageReadRepository(AppScopedRepository[Message]):
         )
         return (await self.session.execute(stmt)).scalar_one_or_none()
 
+    async def positions(
+        self, app_id: UUID, conversation_id: UUID, ids: Sequence[UUID]
+    ) -> dict[UUID, tuple[datetime, UUID]]:
+        if not ids:
+            return {}
+        stmt = select(Message.id, Message.created_at).where(
+            Message.app_id == app_id,
+            Message.conversation_id == conversation_id,
+            Message.id.in_(list(ids)),
+        )
+        return {mid: (ts, mid) for mid, ts in (await self.session.execute(stmt)).all()}
+
     async def non_system_after(
         self, app_id: UUID, conversation_id: UUID, after: tuple[datetime, UUID] | None, limit: int
     ) -> list[Message]:
@@ -354,6 +366,12 @@ class PgConversationStore:
             return []
         rows = await self.messages.search(app_id, conversation_id, tsquery, exclude_ids, k)
         return [Hit(m.id, m.role, m.content, m.created_at, s) for m, s in rows]
+
+    async def message_positions(
+        self, app_id: UUID, conversation_id: UUID, message_ids: Sequence[UUID]
+    ) -> dict[UUID, tuple[Any, ...]]:
+        await self._require_conv(app_id, conversation_id)
+        return dict(await self.messages.positions(app_id, conversation_id, message_ids))
 
     # ---- facts ----
     async def list_facts(

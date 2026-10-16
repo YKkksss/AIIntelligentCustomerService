@@ -10,7 +10,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
@@ -214,6 +214,16 @@ async def check_fact_order_and_validation(h: Harness) -> None:
     assert fw(value="  A123 ").value == "A123"
 
 
+async def check_message_positions(h: Harness) -> None:
+    c = await h.new_conversation(h.app_a)
+    ids = [await h.add_message(h.app_a, c, "user", f"m{i}") for i in range(4)]
+    pos = await h.store.message_positions(h.app_a, c, [ids[2], ids[0], ids[3], uuid4()])
+    assert set(pos) == {ids[0], ids[2], ids[3]}
+    assert pos[ids[0]] < pos[ids[2]] < pos[ids[3]]
+    other = await h.new_conversation(h.app_a)
+    assert await h.store.message_positions(h.app_a, other, ids) == {}
+
+
 async def check_isolation(h: Harness) -> None:
     a, b = h.app_a, h.app_b
     c = await h.new_conversation(a)
@@ -244,5 +254,6 @@ CONTRACT = [
     check_search,
     check_fact_lifecycle,
     check_fact_order_and_validation,
+    check_message_positions,
     check_isolation,
 ]

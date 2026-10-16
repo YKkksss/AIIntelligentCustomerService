@@ -11,8 +11,10 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
+from uuid import UUID
 
 from aics.memory.context import ContextAssembler, ContextQuery, LoadedContext, TempSummarizer
+from aics.memory.facts import FactCandidate, FactOutcome, reconcile, slot_candidates
 from aics.memory.store import ConversationStore, InMemoryConversationStore
 
 
@@ -75,3 +77,36 @@ class MemoryService:
             ).load(q)
         async with self.units() as u:
             return await ContextAssembler(u.store).load(q)
+
+    async def capture_slots(
+        self,
+        app_id: UUID,
+        conversation_id: UUID,
+        slots: dict[str, str | None] | None,
+        *,
+        intent_source: str,
+        intent_confidence: float,
+        user_message_id: UUID | None,
+        enable_facts: bool = True,
+    ) -> list[FactOutcome]:
+        """Per-turn slot write (§7.6), called by chat.service after the assistant message is
+        persisted. Own transaction; errors propagate (the caller logs and continues)."""
+        if not enable_facts:
+            return []
+        cands = slot_candidates(
+            slots,
+            intent_source=intent_source,
+            intent_confidence=intent_confidence,
+            user_message_id=user_message_id,
+        )
+        return await self.write_facts(app_id, conversation_id, cands)
+
+    async def write_facts(
+        self, app_id: UUID, conversation_id: UUID, candidates: list[FactCandidate]
+    ) -> list[FactOutcome]:
+        if not candidates:
+            return []
+        async with self.units() as u:
+            out = await reconcile(u.store, app_id, conversation_id, candidates)
+            await u.commit()
+        return out
