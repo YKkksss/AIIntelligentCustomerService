@@ -3,10 +3,10 @@
  "scope": "full",
  "variants": {
   "off": {
-   "answerable_ok": "11/12",
-   "answerable_grounded": "11/12",
+   "answerable_ok": "12/12",
+   "answerable_grounded": "12/12",
    "unanswerable_refused": "8/8",
-   "avg_completion_tokens": 72.9,
+   "avg_completion_tokens": 72.3,
    "avg_reasoning_tokens": 0.0,
    "rows": [
     {
@@ -21,17 +21,17 @@
       "confidence": 0.93,
       "source": "llm"
      },
-     "citations": 4,
-     "top_rerank": 0.9779188973315684,
+     "citations": 3,
+     "top_rerank": 0.9798679873468217,
      "degraded": [],
      "usage": {
-      "prompt_tokens": 2241,
-      "completion_tokens": 247,
+      "prompt_tokens": 2264,
+      "completion_tokens": 175,
       "reasoning_tokens": 0,
       "calls": 2
      },
-     "wall_ms": 75,
-     "answer": "结论：服装鞋包签收后 **15 天**内可申请无理由退货，需吊牌完好且不影响二次销售 [1][2]。\n\n补充条件：\n- 贴身衣物拆封后不支持无理由退货 [1]。\n- 商品页面标注“不支持七天无理由”的，以页面标注为准，但不得排除法律规定的质量问题退换权利 [1]。\n- 港澳台收货的服装鞋包订单，无理由退货期限统一为 *"
+     "wall_ms": 67,
+     "answer": "服装鞋包签收后 **15 天**内可申请无理由退货，需吊牌完好且不影响二次销售 [1][2]。\n\n补充条件：\n- 2026 年 3 月 1 日前签收的订单，仍按 2025 版政策的 7 天执行 [2]。\n- 港澳台地区统一为 7 天 [3]；海外仓直邮不支持无理由退货 [3]。\n- 贴身衣物拆封后不支持；商品页面标注\""
     },
     {
      "id": "q05",
@@ -78,7 +78,7 @@
       "reasoning_tokens": 0,
       "calls": 2
      },
-     "wall_ms": 29,
+     "wall_ms": 24,
      "answer": "同一订单每件商品最多申请 3 次保价；差价以优惠券形式退回的不计入次数。[1]"
     },
     {
@@ -94,16 +94,16 @@
       "source": "llm"
      },
      "citations": 2,
-     "top_rerank": 0.9977266331433294,
+     "top_rerank": 0.9988263115873977,
      "degraded": [],
      "usage": {
-      "prompt_tokens": 2050,
-      "completion_tokens": 101,
+      "prompt_tokens": 2000,
+      "completion_tokens": 148,
       "reasoning_tokens": 0,
       "calls": 2
      },
-     "wall_ms": 32,
-     "answer": "刻字等定制商品有质量问题的，签收后 30 天内可选择退货或换货 [2]；超过换货期限但在 90 天保修期内的，可申请免费维修 [2]。定制商品本身不支持无理由退货 [1]。"
+     "wall_ms": 20,
+     "answer": "刻字等定制商品有质量问题的，可在签收后 30 天内申请退货或换货[2]；若超过换货期限但在 90 天保修期内，可申请免费维修[2]。刻字、定制尺寸、个性化印刷商品本身不支持无理由退货，质量问题可在 30 天内申请重做[1]。\n\n补充：如商品页面标注“不支持七天无理由”，以页面标注为准，但不得排除法律规定的质量问题退换权"
     },
     {
      "id": "q18",
@@ -126,7 +126,7 @@
       "reasoning_tokens": 0,
       "calls": 2
      },
-     "wall_ms": 30,
+     "wall_ms": 27,
      "answer": "商家延迟发货的赔付为订单实付金额的 30%，单笔最低 5 元、最高 500 元。[1]"
     },
     {
@@ -150,32 +150,32 @@
       "reasoning_tokens": 0,
       "calls": 2
      },
-     "wall_ms": 29,
+     "wall_ms": 22,
      "answer": "商品标题不得超过 60 个汉字[1]。"
     },
     {
      "id": "q26",
      "answerable": true,
-     "ok": false,
-     "grounded": false,
-     "answer_type": "refused",
-     "decision_reason": "intent:out_of_scope",
+     "ok": true,
+     "grounded": true,
+     "answer_type": "answer",
+     "decision_reason": "above_gray_upper",
      "intent": {
-      "name": "out_of_scope",
+      "name": "kb_qa",
       "confidence": 0.85,
-      "source": "llm"
+      "source": "fallback"
      },
-     "citations": 0,
-     "top_rerank": null,
+     "citations": 1,
+     "top_rerank": 0.983834559926858,
      "degraded": [],
      "usage": {
-      "prompt_tokens": 1106,
-      "completion_tokens": 47,
+      "prompt_tokens": 2436,
+      "completion_tokens": 61,
       "reasoning_tokens": 0,
-      "calls": 1
+      "calls": 2
      },
-     "wall_ms": 4,
-     "answer": "抱歉，我是星河优选的客服助手，只能回答与本业务相关的问题。"
+     "wall_ms": 20,
+     "answer": "实验数据集一共有 12,480 条问答对。[1]"
     },
     {
      "id": "q30",
@@ -190,15 +190,15 @@
       "source": "llm"
      },
      "citations": 1,
-     "top_rerank": 0.9729915328838217,
+     "top_rerank": 0.9726816732044884,
      "degraded": [],
      "usage": {
-      "prompt_tokens": 2081,
+      "prompt_tokens": 2279,
       "completion_tokens": 90,
       "reasoning_tokens": 0,
       "calls": 2
      },
-     "wall_ms": 30,
+     "wall_ms": 1651,
      "answer": "先确认是否被代收或放入了快递柜；若 48 小时内仍未找到，请联系客服登记，我们会与快递公司核实，并在 3 个工作日内给出处理结果。[1]"
     },
     {
@@ -214,7 +214,7 @@
       "source": "llm"
      },
      "citations": 1,
-     "top_rerank": 0.9421617356626213,
+     "top_rerank": 0.9529556128354737,
      "degraded": [],
      "usage": {
       "prompt_tokens": 2493,
@@ -222,7 +222,7 @@
       "reasoning_tokens": 0,
       "calls": 2
      },
-     "wall_ms": 26,
+     "wall_ms": 27,
      "answer": "E07 表示后盖未关闭[1]。处理方法：检查后盖卡扣是否扣紧[1]。"
     },
     {
@@ -246,7 +246,7 @@
       "reasoning_tokens": 0,
       "calls": 2
      },
-     "wall_ms": 19,
+     "wall_ms": 20,
      "answer": "单票货物赔偿金额最高不超过 5,000 元；甲方保价的，按保价金额赔偿。[1]"
     },
     {
@@ -262,7 +262,7 @@
       "source": "llm"
      },
      "citations": 1,
-     "top_rerank": 0.9994786744703058,
+     "top_rerank": 0.9991837527633866,
      "degraded": [],
      "usage": {
       "prompt_tokens": 2111,
@@ -270,7 +270,7 @@
       "reasoning_tokens": 0,
       "calls": 2
      },
-     "wall_ms": 25,
+     "wall_ms": 23,
      "answer": "100 星河豆抵扣 1 元[1]。单笔订单最多抵扣实付金额的 50%[1]。"
     },
     {
@@ -286,16 +286,16 @@
       "source": "llm"
      },
      "citations": 3,
-     "top_rerank": 0.932618539395609,
+     "top_rerank": 0.9295519003849175,
      "degraded": [],
      "usage": {
-      "prompt_tokens": 2194,
-      "completion_tokens": 77,
+      "prompt_tokens": 2288,
+      "completion_tokens": 76,
       "reasoning_tokens": 0,
       "calls": 2
      },
-     "wall_ms": 25,
-     "answer": "海外仓直邮订单不支持无理由退货，仅受理质量问题，且须在签收后 30 天内申请 [1][2][3]。"
+     "wall_ms": 1034,
+     "answer": "海外仓直邮订单不支持无理由退货，仅受理质量问题，需在签收后 30 天内申请。[1][2][3]"
     },
     {
      "id": "u01",
@@ -310,496 +310,7 @@
       "source": "llm"
      },
      "citations": 0,
-     "top_rerank": 0.4572437788393515,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 1105,
-      "completion_tokens": 44,
-      "reasoning_tokens": 0,
-      "calls": 1
-     },
-     "wall_ms": 22,
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。"
-    },
-    {
-     "id": "u02",
-     "answerable": false,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "refused",
-     "decision_reason": "intent:out_of_scope",
-     "intent": {
-      "name": "out_of_scope",
-      "confidence": 0.85,
-      "source": "llm"
-     },
-     "citations": 0,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 1107,
-      "completion_tokens": 48,
-      "reasoning_tokens": 0,
-      "calls": 1
-     },
-     "wall_ms": 3,
-     "answer": "抱歉，我是星河优选的客服助手，只能回答与本业务相关的问题。"
-    },
-    {
-     "id": "u03",
-     "answerable": false,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "refused",
-     "decision_reason": "below_threshold",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.95,
-      "source": "llm"
-     },
-     "citations": 0,
-     "top_rerank": 0.48521950848563,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 1114,
-      "completion_tokens": 62,
-      "reasoning_tokens": 0,
-      "calls": 1
-     },
-     "wall_ms": 20,
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。"
-    },
-    {
-     "id": "u04",
-     "answerable": false,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "refused",
-     "decision_reason": "below_threshold",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.9,
-      "source": "llm"
-     },
-     "citations": 0,
-     "top_rerank": 0.4380165817733977,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 1106,
-      "completion_tokens": 52,
-      "reasoning_tokens": 0,
-      "calls": 1
-     },
-     "wall_ms": 21,
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。"
-    },
-    {
-     "id": "u05",
-     "answerable": false,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "refused",
-     "decision_reason": "intent:out_of_scope",
-     "intent": {
-      "name": "out_of_scope",
-      "confidence": 0.95,
-      "source": "llm"
-     },
-     "citations": 0,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 1103,
-      "completion_tokens": 43,
-      "reasoning_tokens": 0,
-      "calls": 1
-     },
-     "wall_ms": 3,
-     "answer": "抱歉，我是星河优选的客服助手，只能回答与本业务相关的问题。"
-    },
-    {
-     "id": "u06",
-     "answerable": false,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "refused",
-     "decision_reason": "intent:out_of_scope",
-     "intent": {
-      "name": "out_of_scope",
-      "confidence": 0.85,
-      "source": "llm"
-     },
-     "citations": 0,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 1104,
-      "completion_tokens": 44,
-      "reasoning_tokens": 0,
-      "calls": 1
-     },
-     "wall_ms": 3,
-     "answer": "抱歉，我是星河优选的客服助手，只能回答与本业务相关的问题。"
-    },
-    {
-     "id": "u07",
-     "answerable": false,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "refused",
-     "decision_reason": "intent:out_of_scope",
-     "intent": {
-      "name": "out_of_scope",
-      "confidence": 0.9,
-      "source": "llm"
-     },
-     "citations": 0,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 1108,
-      "completion_tokens": 50,
-      "reasoning_tokens": 0,
-      "calls": 1
-     },
-     "wall_ms": 3,
-     "answer": "抱歉，我是星河优选的客服助手，只能回答与本业务相关的问题。"
-    },
-    {
-     "id": "u08",
-     "answerable": false,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "refused",
-     "decision_reason": "below_threshold",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.85,
-      "source": "llm"
-     },
-     "citations": 0,
-     "top_rerank": 0.33495706026017247,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 1104,
-      "completion_tokens": 45,
-      "reasoning_tokens": 0,
-      "calls": 1
-     },
-     "wall_ms": 25,
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。"
-    }
-   ]
-  },
-  "on": {
-   "answerable_ok": "11/12",
-   "answerable_grounded": "11/12",
-   "unanswerable_refused": "8/8",
-   "avg_completion_tokens": 137.3,
-   "avg_reasoning_tokens": 44.2,
-   "rows": [
-    {
-     "id": "q01",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "above_gray_upper",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.93,
-      "source": "llm"
-     },
-     "citations": 4,
-     "top_rerank": 0.9779188973315684,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 2266,
-      "completion_tokens": 413,
-      "reasoning_tokens": 178,
-      "calls": 2
-     },
-     "wall_ms": 22,
-     "answer": "服装鞋包类商品**签收后 15 天内**可申请无理由退货 [1][2]；需吊牌完好、不影响二次销售，贴身衣物拆封后不支持 [1]。商品页面标注\"不支持七天无理由\"的，以页面标注为准 [1]。\n\n另外两点取决于收货地区：\n- **港澳台**收货：无理由退货期限统一为 **7 天** [3][4]。\n- **海外仓直邮**"
-    },
-    {
-     "id": "q05",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "above_gray_upper",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.95,
-      "source": "llm"
-     },
-     "citations": 3,
-     "top_rerank": 0.9999990910358081,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 2286,
-      "completion_tokens": 77,
-      "reasoning_tokens": 0,
-      "calls": 2
-     },
-     "wall_ms": 30,
-     "answer": "港澳台订单须寄回香港集运仓，寄回运费最高报销 60 元。[1][2][3]"
-    },
-    {
-     "id": "q09",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "above_gray_upper",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.9,
-      "source": "llm"
-     },
-     "citations": 1,
-     "top_rerank": 0.9988631284336944,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 2221,
-      "completion_tokens": 128,
-      "reasoning_tokens": 48,
-      "calls": 2
-     },
-     "wall_ms": 45,
-     "answer": "同一订单内每件商品最多可申请 **3 次**保价；如果差价是以优惠券形式退回的，不计入次数。[1]"
-    },
-    {
-     "id": "q13",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "above_gray_upper",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.9,
-      "source": "llm"
-     },
-     "citations": 2,
-     "top_rerank": 0.9977266331433294,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 2075,
-      "completion_tokens": 518,
-      "reasoning_tokens": 313,
-      "calls": 2
-     },
-     "wall_ms": 25,
-     "answer": "结论：刻字等定制商品不支持无理由退货，但质量问题仍可申请售后。\n\n- 刻字、定制尺寸、个性化印刷商品不支持无理由退货，质量问题可在 30 天内申请重做 [1]。\n- 经确认存在质量问题的定制商品，签收后 30 天内可选择退货或换货；超过换货期限但在 90 天保修期内的，可申请免费维修 [2]。\n- 商品页面标注\"不支持"
-    },
-    {
-     "id": "q18",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "above_gray_upper",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.95,
-      "source": "llm"
-     },
-     "citations": 1,
-     "top_rerank": 0.9966380882661382,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 2549,
-      "completion_tokens": 156,
-      "reasoning_tokens": 53,
-      "calls": 2
-     },
-     "wall_ms": 24,
-     "answer": "商家延迟发货的赔付单笔最高为 **500 元**。[1]\n\n补充条件：赔付标准为订单实付金额的 30%，单笔最低 5 元、最高 500 元；预售商品以页面约定的发货时间为准。[1]"
-    },
-    {
-     "id": "q22",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "above_gray_upper",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.85,
-      "source": "llm"
-     },
-     "citations": 1,
-     "top_rerank": 0.9805554529611797,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 2556,
-      "completion_tokens": 84,
-      "reasoning_tokens": 16,
-      "calls": 2
-     },
-     "wall_ms": 23,
-     "answer": "商品标题不得超过 60 个汉字，且不得堆砌与商品无关的关键词。[1]"
-    },
-    {
-     "id": "q26",
-     "answerable": true,
-     "ok": false,
-     "grounded": false,
-     "answer_type": "refused",
-     "decision_reason": "intent:out_of_scope",
-     "intent": {
-      "name": "out_of_scope",
-      "confidence": 0.85,
-      "source": "llm"
-     },
-     "citations": 0,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 1106,
-      "completion_tokens": 47,
-      "reasoning_tokens": 0,
-      "calls": 1
-     },
-     "wall_ms": 3,
-     "answer": "抱歉，我是星河优选的客服助手，只能回答与本业务相关的问题。"
-    },
-    {
-     "id": "q30",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "above_gray_upper",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.9,
-      "source": "llm"
-     },
-     "citations": 1,
-     "top_rerank": 0.9729915328838217,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 2106,
-      "completion_tokens": 275,
-      "reasoning_tokens": 132,
-      "calls": 2
-     },
-     "wall_ms": 21,
-     "answer": "快递显示签收但未收到，建议按以下步骤处理：\n\n1. 先确认是否被他人代收，或快递是否被放入了快递柜/驿站 [1]。\n2. 若 48 小时内仍未找到，请联系客服登记，我们会与快递公司核实，并在 3 个工作日内给出处理结果 [1]。\n\n如果您多次就同一问题来电咨询，我们会合并为一个工单处理，避免重复派单 [1]。"
-    },
-    {
-     "id": "q35",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "above_gray_upper",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.95,
-      "source": "llm"
-     },
-     "citations": 1,
-     "top_rerank": 0.9421617356626213,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 2518,
-      "completion_tokens": 130,
-      "reasoning_tokens": 41,
-      "calls": 2
-     },
-     "wall_ms": 21,
-     "answer": "E07 表示**后盖未关闭**，适用于 X3/X5/X7 机型 [1]。\n\n处理方法：检查后盖卡扣是否扣紧 [1]。"
-    },
-    {
-     "id": "q39",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "above_gray_upper",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.95,
-      "source": "llm"
-     },
-     "citations": 1,
-     "top_rerank": 0.9972976251418091,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 2564,
-      "completion_tokens": 74,
-      "reasoning_tokens": 0,
-      "calls": 2
-     },
-     "wall_ms": 19,
-     "answer": "单票货物赔偿金额最高不超过 5,000 元；甲方保价的，按保价金额赔偿。[1]"
-    },
-    {
-     "id": "q43",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "above_gray_upper",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.95,
-      "source": "llm"
-     },
-     "citations": 4,
-     "top_rerank": 0.9994786744703058,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 2136,
-      "completion_tokens": 156,
-      "reasoning_tokens": 0,
-      "calls": 2
-     },
-     "wall_ms": 26,
-     "answer": "根据现行第 12 版规则，100 星河豆抵扣 1 元 [1]，单笔订单最多抵扣实付金额的 50% [1]。\n\n需要提醒的是，这是 2025 年现行版本；此前第 11 版、第 10 版、第 9 版虽同样是 100 星河豆抵 1 元 [3][4][5]，但抵扣上限比例不同（曾为 30% [4][5]）。"
-    },
-    {
-     "id": "q47",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "above_gray_upper",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.92,
-      "source": "llm"
-     },
-     "citations": 5,
-     "top_rerank": 0.932618539395609,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 2219,
-      "completion_tokens": 300,
-      "reasoning_tokens": 104,
-      "calls": 2
-     },
-     "wall_ms": 23,
-     "answer": "海外仓直邮订单**不支持无理由退货**，仅受理质量问题，且须在**签收后 30 天内**申请 [1][3][4][5]。\n\n补充关键条件：\n- 退款原路退回，15 个工作日内到账，汇率差不予补偿 [3][4][5]。\n- 须寄回所在国海外仓，运费由平台承担 [3][4][5]；寄回地址以审核通过后系统给出的地址为准 ["
-    },
-    {
-     "id": "u01",
-     "answerable": false,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "refused",
-     "decision_reason": "below_threshold",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.85,
-      "source": "llm"
-     },
-     "citations": 0,
-     "top_rerank": 0.4572437788393515,
+     "top_rerank": 0.29273982693446243,
      "degraded": [],
      "usage": {
       "prompt_tokens": 1105,
@@ -831,7 +342,7 @@
       "reasoning_tokens": 0,
       "calls": 1
      },
-     "wall_ms": 4,
+     "wall_ms": 21,
      "answer": "抱歉，我是星河优选的客服助手，只能回答与本业务相关的问题。"
     },
     {
@@ -852,30 +363,6 @@
      "usage": {
       "prompt_tokens": 1114,
       "completion_tokens": 62,
-      "reasoning_tokens": 0,
-      "calls": 1
-     },
-     "wall_ms": 20,
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。"
-    },
-    {
-     "id": "u04",
-     "answerable": false,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "refused",
-     "decision_reason": "below_threshold",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.9,
-      "source": "llm"
-     },
-     "citations": 0,
-     "top_rerank": 0.4380165817733977,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 1106,
-      "completion_tokens": 52,
       "reasoning_tokens": 0,
       "calls": 1
      },
@@ -883,6 +370,30 @@
      "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。"
     },
     {
+     "id": "u04",
+     "answerable": false,
+     "ok": true,
+     "grounded": true,
+     "answer_type": "refused",
+     "decision_reason": "below_threshold",
+     "intent": {
+      "name": "kb_qa",
+      "confidence": 0.9,
+      "source": "llm"
+     },
+     "citations": 0,
+     "top_rerank": 0.4380165817733977,
+     "degraded": [],
+     "usage": {
+      "prompt_tokens": 1106,
+      "completion_tokens": 52,
+      "reasoning_tokens": 0,
+      "calls": 1
+     },
+     "wall_ms": 17,
+     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。"
+    },
+    {
      "id": "u05",
      "answerable": false,
      "ok": true,
@@ -903,7 +414,7 @@
       "reasoning_tokens": 0,
       "calls": 1
      },
-     "wall_ms": 3,
+     "wall_ms": 16,
      "answer": "抱歉，我是星河优选的客服助手，只能回答与本业务相关的问题。"
     },
     {
@@ -927,7 +438,7 @@
       "reasoning_tokens": 0,
       "calls": 1
      },
-     "wall_ms": 2,
+     "wall_ms": 17,
      "answer": "抱歉，我是星河优选的客服助手，只能回答与本业务相关的问题。"
     },
     {
@@ -951,7 +462,7 @@
       "reasoning_tokens": 0,
       "calls": 1
      },
-     "wall_ms": 3,
+     "wall_ms": 21,
      "answer": "抱歉，我是星河优选的客服助手，只能回答与本业务相关的问题。"
     },
     {
@@ -967,7 +478,7 @@
       "source": "llm"
      },
      "citations": 0,
-     "top_rerank": 0.33495706026017247,
+     "top_rerank": 0.39489066887113927,
      "degraded": [],
      "usage": {
       "prompt_tokens": 1104,
@@ -979,518 +490,46 @@
      "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。"
     }
    ]
-  },
-  "norerank": {
-   "answerable_ok": "11/12",
-   "answerable_grounded": "11/12",
-   "unanswerable_refused": "8/8",
-   "avg_completion_tokens": 85.8,
-   "avg_reasoning_tokens": 0.0,
-   "rows": [
-    {
-     "id": "q01",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "judge_llm_yes",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.93,
-      "source": "llm"
-     },
-     "citations": 2,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 3289,
-      "completion_tokens": 169,
-      "reasoning_tokens": 0,
-      "calls": 3
-     },
-     "wall_ms": 2749,
-     "answer": "服装鞋包签收后 **15 天**内可申请无理由退货[1][3]，需吊牌完好且不影响二次销售[1]。\n\n补充：2025 版政策中该期限为 7 天，自 2026 年 3 月 1 日起按 15 天执行；3 月 1 日前签收的订单仍按 7 天执行[3]。"
-    },
-    {
-     "id": "q05",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "judge_llm_yes",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.95,
-      "source": "llm"
-     },
-     "citations": 5,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 3293,
-      "completion_tokens": 104,
-      "reasoning_tokens": 0,
-      "calls": 3
-     },
-     "wall_ms": 2093,
-     "answer": "港澳台订单须寄回香港集运仓，寄回运费最高报销 60 元。[1][2][3][4][5]"
-    },
-    {
-     "id": "q09",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "judge_llm_yes",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.9,
-      "source": "llm"
-     },
-     "citations": 1,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 4819,
-      "completion_tokens": 102,
-      "reasoning_tokens": 0,
-      "calls": 3
-     },
-     "wall_ms": 2074,
-     "answer": "同一订单每件商品最多可申请 3 次保价；差价以优惠券形式退回的不计入次数。[1]"
-    },
-    {
-     "id": "q13",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "judge_llm_yes",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.9,
-      "source": "llm"
-     },
-     "citations": 2,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 4884,
-      "completion_tokens": 133,
-      "reasoning_tokens": 0,
-      "calls": 3
-     },
-     "wall_ms": 1947,
-     "answer": "刻字等定制商品不支持无理由退货，但如果是质量问题，可在签收后 30 天内申请重做 [1]。此外，经确认存在质量问题的定制商品，签收后 30 天内也可选择退货或换货 [2]。"
-    },
-    {
-     "id": "q18",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "judge_llm_yes",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.95,
-      "source": "llm"
-     },
-     "citations": 1,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 3596,
-      "completion_tokens": 94,
-      "reasoning_tokens": 0,
-      "calls": 3
-     },
-     "wall_ms": 1763,
-     "answer": "商家延迟发货的赔付为订单实付金额的30%，单笔最低5元、最高500元[2]。"
-    },
-    {
-     "id": "q22",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "judge_llm_yes",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.85,
-      "source": "llm"
-     },
-     "citations": 1,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 5814,
-      "completion_tokens": 82,
-      "reasoning_tokens": 0,
-      "calls": 3
-     },
-     "wall_ms": 1876,
-     "answer": "商品标题不得超过 60 个汉字[1]。"
-    },
-    {
-     "id": "q26",
-     "answerable": true,
-     "ok": false,
-     "grounded": false,
-     "answer_type": "refused",
-     "decision_reason": "intent:out_of_scope",
-     "intent": {
-      "name": "out_of_scope",
-      "confidence": 0.85,
-      "source": "llm"
-     },
-     "citations": 0,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 1106,
-      "completion_tokens": 47,
-      "reasoning_tokens": 0,
-      "calls": 1
-     },
-     "wall_ms": 4,
-     "answer": "抱歉，我是星河优选的客服助手，只能回答与本业务相关的问题。"
-    },
-    {
-     "id": "q30",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "judge_llm_yes",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.9,
-      "source": "llm"
-     },
-     "citations": 1,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 2734,
-      "completion_tokens": 113,
-      "reasoning_tokens": 0,
-      "calls": 3
-     },
-     "wall_ms": 2228,
-     "answer": "先确认是否被代收或放入了快递柜[1]。若 48 小时内仍未找到，请联系客服登记，我们会与快递公司核实，并在 3 个工作日内给出处理结果[1]。"
-    },
-    {
-     "id": "q35",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "judge_llm_yes",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.95,
-      "source": "llm"
-     },
-     "citations": 1,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 3567,
-      "completion_tokens": 100,
-      "reasoning_tokens": 0,
-      "calls": 3
-     },
-     "wall_ms": 1837,
-     "answer": "E07 表示后盖未关闭[1]。请检查后盖卡扣是否扣紧[1]。"
-    },
-    {
-     "id": "q39",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "judge_llm_yes",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.95,
-      "source": "llm"
-     },
-     "citations": 1,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 3827,
-      "completion_tokens": 101,
-      "reasoning_tokens": 0,
-      "calls": 3
-     },
-     "wall_ms": 2286,
-     "answer": "单票货物赔偿金额最高不超过 5,000 元；甲方保价的，按保价金额赔偿。[1]"
-    },
-    {
-     "id": "q43",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "judge_llm_yes",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.95,
-      "source": "llm"
-     },
-     "citations": 1,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 3050,
-      "completion_tokens": 106,
-      "reasoning_tokens": 0,
-      "calls": 3
-     },
-     "wall_ms": 2244,
-     "answer": "100 星河豆可抵扣 1 元[3]。单笔订单最多抵扣实付金额的 50%[3]。"
-    },
-    {
-     "id": "q47",
-     "answerable": true,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "answer",
-     "decision_reason": "judge_llm_yes",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.92,
-      "source": "llm"
-     },
-     "citations": 3,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 3098,
-      "completion_tokens": 97,
-      "reasoning_tokens": 0,
-      "calls": 3
-     },
-     "wall_ms": 1731,
-     "answer": "海外仓直邮商品不支持无理由退货，仅受理质量问题，且须在签收后 30 天内申请 [1][2][4]。"
-    },
-    {
-     "id": "u01",
-     "answerable": false,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "refused",
-     "decision_reason": "judge_llm_no",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.85,
-      "source": "llm"
-     },
-     "citations": 0,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 1541,
-      "completion_tokens": 63,
-      "reasoning_tokens": 0,
-      "calls": 2
-     },
-     "wall_ms": 1090,
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。"
-    },
-    {
-     "id": "u02",
-     "answerable": false,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "refused",
-     "decision_reason": "intent:out_of_scope",
-     "intent": {
-      "name": "out_of_scope",
-      "confidence": 0.85,
-      "source": "llm"
-     },
-     "citations": 0,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 1107,
-      "completion_tokens": 48,
-      "reasoning_tokens": 0,
-      "calls": 1
-     },
-     "wall_ms": 3,
-     "answer": "抱歉，我是星河优选的客服助手，只能回答与本业务相关的问题。"
-    },
-    {
-     "id": "u03",
-     "answerable": false,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "refused",
-     "decision_reason": "judge_llm_no",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.95,
-      "source": "llm"
-     },
-     "citations": 0,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 1934,
-      "completion_tokens": 81,
-      "reasoning_tokens": 0,
-      "calls": 2
-     },
-     "wall_ms": 813,
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。"
-    },
-    {
-     "id": "u04",
-     "answerable": false,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "refused",
-     "decision_reason": "judge_llm_no",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.9,
-      "source": "llm"
-     },
-     "citations": 0,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 2734,
-      "completion_tokens": 77,
-      "reasoning_tokens": 0,
-      "calls": 2
-     },
-     "wall_ms": 752,
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。"
-    },
-    {
-     "id": "u05",
-     "answerable": false,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "refused",
-     "decision_reason": "intent:out_of_scope",
-     "intent": {
-      "name": "out_of_scope",
-      "confidence": 0.95,
-      "source": "llm"
-     },
-     "citations": 0,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 1103,
-      "completion_tokens": 43,
-      "reasoning_tokens": 0,
-      "calls": 1
-     },
-     "wall_ms": 4,
-     "answer": "抱歉，我是星河优选的客服助手，只能回答与本业务相关的问题。"
-    },
-    {
-     "id": "u06",
-     "answerable": false,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "refused",
-     "decision_reason": "intent:out_of_scope",
-     "intent": {
-      "name": "out_of_scope",
-      "confidence": 0.85,
-      "source": "llm"
-     },
-     "citations": 0,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 1104,
-      "completion_tokens": 44,
-      "reasoning_tokens": 0,
-      "calls": 1
-     },
-     "wall_ms": 4,
-     "answer": "抱歉，我是星河优选的客服助手，只能回答与本业务相关的问题。"
-    },
-    {
-     "id": "u07",
-     "answerable": false,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "refused",
-     "decision_reason": "intent:out_of_scope",
-     "intent": {
-      "name": "out_of_scope",
-      "confidence": 0.9,
-      "source": "llm"
-     },
-     "citations": 0,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 1108,
-      "completion_tokens": 50,
-      "reasoning_tokens": 0,
-      "calls": 1
-     },
-     "wall_ms": 3,
-     "answer": "抱歉，我是星河优选的客服助手，只能回答与本业务相关的问题。"
-    },
-    {
-     "id": "u08",
-     "answerable": false,
-     "ok": true,
-     "grounded": true,
-     "answer_type": "refused",
-     "decision_reason": "judge_llm_no",
-     "intent": {
-      "name": "kb_qa",
-      "confidence": 0.85,
-      "source": "llm"
-     },
-     "citations": 0,
-     "top_rerank": null,
-     "degraded": [],
-     "usage": {
-      "prompt_tokens": 1718,
-      "completion_tokens": 63,
-      "reasoning_tokens": 0,
-      "calls": 2
-     },
-     "wall_ms": 800,
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。"
-    }
-   ]
   }
  },
  "live_generate_first_token_ms": [
   480,
+  523,
   572,
   581,
+  597,
+  604,
+  625,
   627,
   634,
   669,
+  679,
+  688,
+  725,
+  740,
   754,
   770,
   770,
+  795,
+  802,
   811,
+  812,
+  814,
   825,
+  853,
   858,
   864,
+  866,
+  875,
   879,
   894,
   898,
+  908,
   912,
   933,
   957,
   957,
+  960,
   978,
   982,
   986,
@@ -1499,11 +538,14 @@
   1023,
   1069,
   1072,
+  1114,
   1143,
   1155,
+  1246,
   1292,
   1322,
   1366,
+  1400,
   1430,
   1509,
   1542,
@@ -1512,11 +554,11 @@
   2488
  ],
  "cost_yuan_this_run": {
-  "llm": 0.0726,
-  "llm_calls": 26,
+  "llm": 0.0053,
+  "llm_calls": 2,
   "llm_tokens": [
-   33282,
-   752,
+   2351,
+   73,
    0
   ],
   "embed": 0.0,
