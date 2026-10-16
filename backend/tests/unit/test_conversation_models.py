@@ -77,3 +77,34 @@ def test_seeded_default_session_equals_platform_default() -> None:
     spec.loader.exec_module(mod)
     expected = PLATFORM_DEFAULT_SESSION.model_dump()
     assert expected == mod.DEFAULT_SESSION_CONFIG
+
+
+def test_conversation_facts_ddl() -> None:
+    from aics.db.models import ConversationFact
+
+    ddl = _ddl(ConversationFact)
+    for frag in [
+        "UNIQUE (conversation_id, key)",
+        "category IN ('order', 'identity', 'product', 'issue', 'resolution', 'emotion', 'other')",
+        "importance BETWEEN 1 AND 3",
+        "source IN ('slot', 'compaction')",
+        "version INTEGER DEFAULT 1 NOT NULL",
+        "retracted_at TIMESTAMP WITH TIME ZONE",
+        "first_seen_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL",
+        "other:[a-z_]{1,32}",
+        "ON DELETE CASCADE",
+    ]:
+        assert frag in ddl, frag
+
+
+def test_conversation_fact_history_ddl() -> None:
+    from aics.db.models import ConversationFactHistory
+
+    ddl = _ddl(ConversationFactHistory)
+    for frag in [
+        "op IN ('add', 'update', 'retract')",
+        "fact_id UUID NOT NULL",
+        "changed_at TIMESTAMP WITH TIME ZONE DEFAULT clock_timestamp() NOT NULL",
+        "(app_id, conversation_id, changed_at)",
+    ]:
+        assert frag in ddl, frag
