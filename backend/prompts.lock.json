@@ -1,4 +1,12 @@
 {
+  "memory/prompts/compact_summary.md": {
+    "version": 1,
+    "sha256": "25ce3a76701b9b131ec8cc53f90346a39ff1892f8a192f6ea8cd877c0dd86ff8"
+  },
+  "memory/prompts/extract_facts.md": {
+    "version": 1,
+    "sha256": "f126dbe60ecebb2b25915a3e75dad7033b8a2653b998cbc3521c1bc11863c971"
+  },
   "rag/prompts/chitchat.md": {
     "version": 1,
     "sha256": "ded94273da1a5793f92e917d9beff95ede23ca32495cef3720deea88c3bf97fb"

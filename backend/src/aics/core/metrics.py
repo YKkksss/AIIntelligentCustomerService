@@ -31,11 +31,10 @@ def observe(name: str, value: float) -> None:
 
 
 def value(name: str, **labels: str) -> float:
-    """Counter value; with no labels, the sum over all label sets."""
+    """Sum over all label sets of `name` that contain the given labels."""
+    want = {(k, str(v)) for k, v in labels.items()}
     with _lock:
-        if labels:
-            return _counters[(name, tuple(sorted((k, str(v)) for k, v in labels.items())))]
-        return sum(v for (n, _), v in _counters.items() if n == name)
+        return sum(v for (n, ls), v in _counters.items() if n == name and want <= set(ls))
 
 
 def observations(name: str) -> list[float]:

@@ -49,13 +49,14 @@ def create_celery() -> Celery:
         broker_connection_retry_on_startup=True,
     )
     # 任务模块随里程碑加入
-    app.conf.include = ["aics.tasks.ingest", "aics.tasks.maintenance"]
+    app.conf.include = ["aics.tasks.ingest", "aics.tasks.maintenance", "aics.tasks.context"]
     app.conf.task_routes = {
         "aics.ingest_document": {"queue": "ingest", "routing_key": "ingest"},
         "aics.retokenize_app": {"queue": "ingest", "routing_key": "ingest"},
         "aics.cleanup_document": {"queue": "maintenance", "routing_key": "maintenance"},
         "aics.reconcile": {"queue": "maintenance", "routing_key": "maintenance"},
         "aics.sweep_knowledge": {"queue": "maintenance", "routing_key": "maintenance"},
+        "aics.compact_conversation": {"queue": "context", "routing_key": "context"},
     }
     return app
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 from dataclasses import dataclass
 from functools import cache
@@ -74,6 +75,22 @@ def discover(root: Path = PACKAGE_ROOT) -> dict[str, Prompt]:
         for p in sorted((root / d).glob("*.md")):
             found[p.relative_to(root).as_posix()] = load_prompt_file(p)
     return found
+
+
+_PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
+
+
+def render_prompt(prompt: Prompt, **values: str) -> str:
+    """Substitute `{name}` placeholders listed in `values`; unknown braces stay as-is.
+
+    Templates contain literal JSON examples, so `str.format` cannot be used. Values are
+    inserted once (no recursive expansion): user text containing `{x}` cannot inject."""
+
+    def sub(m: re.Match[str]) -> str:
+        key = m.group(1)
+        return values[key] if key in values else m.group(0)
+
+    return _PLACEHOLDER.sub(sub, prompt.body)
 
 
 @cache

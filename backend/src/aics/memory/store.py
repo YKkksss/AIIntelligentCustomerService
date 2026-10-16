@@ -101,6 +101,10 @@ class ConversationStore(Protocol):
         """Keyword recall inside one conversation; `tsquery` comes from core.textsearch."""
         ...
 
+    async def is_app_deleting(self, app_id: UUID) -> bool:
+        """True when the app is being deleted (compaction then stops, §7.2)."""
+        ...
+
     async def message_positions(
         self, app_id: UUID, conversation_id: UUID, message_ids: Sequence[UUID]
     ) -> dict[UUID, tuple[Any, ...]]:
@@ -202,6 +206,7 @@ class InMemoryConversationStore:
         self._msgs: dict[UUID, list[_Msg]] = {}
         self._facts: dict[tuple[UUID, str], Fact] = {}
         self._history: dict[UUID, list[FactChange]] = {}
+        self.deleting_apps: set[UUID] = set()
 
     # ---- seeding helpers ----
     def create_conversation(self, app_id: UUID) -> UUID:
@@ -322,6 +327,9 @@ class InMemoryConversationStore:
                 )
         hits.sort(key=lambda h: (-h.score, -h.created_at.timestamp()))
         return hits[:k]
+
+    async def is_app_deleting(self, app_id: UUID) -> bool:
+        return app_id in self.deleting_apps
 
     async def message_positions(
         self, app_id: UUID, conversation_id: UUID, message_ids: Sequence[UUID]

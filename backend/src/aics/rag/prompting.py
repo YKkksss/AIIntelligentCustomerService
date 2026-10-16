@@ -9,11 +9,10 @@ cannot inject further substitutions.
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
-from aics.core.prompts import Prompt, get_prompt
+from aics.core.prompts import Prompt, get_prompt, render_prompt
 from aics.rag.ports import ChatTurn, RecalledSnippet
 from aics.rag.retrieval import Candidate
 
@@ -41,7 +40,6 @@ ANSWER_STYLES: dict[str, str] = {
 LANGUAGES: dict[str, str] = {"zh-CN": "简体中文", "zh-TW": "繁體中文", "en": "English"}
 
 ROLE_LABEL: dict[str, str] = {"user": "user", "assistant": "assistant", "human_agent": "agent"}
-_PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
 
 
 def load(name: str) -> Prompt:
@@ -50,12 +48,7 @@ def load(name: str) -> Prompt:
 
 def render(prompt: Prompt, **values: str) -> str:
     """Substitute `{name}` placeholders listed in `values`; unknown braces stay as-is."""
-
-    def sub(m: re.Match[str]) -> str:
-        key = m.group(1)
-        return values[key] if key in values else m.group(0)
-
-    return _PLACEHOLDER.sub(sub, prompt.body)
+    return render_prompt(prompt, **values)
 
 
 def prompt_version_string(versions: Mapping[str, str]) -> str:

@@ -9,12 +9,16 @@ FORBIDDEN = re.compile(
     r"slaveof|replicaof|save|bgsave|client_kill|client_list)\s*\(",
     re.IGNORECASE,
 )
+LOGGING = re.compile(r"\b(log|logger)\.info\s*\(")
 
 
 def test_no_forbidden_redis_commands() -> None:
     offenders = []
     for p in SRC.rglob("*.py"):
         for i, line in enumerate(p.read_text("utf-8").splitlines(), 1):
+            # structlog's `log.info(` is not the Redis INFO command
+            if LOGGING.search(line):
+                continue
             if FORBIDDEN.search(line) and "redis" in p.read_text("utf-8").lower():
                 offenders.append(f"{p.relative_to(SRC)}:{i}: {line.strip()}")
     assert offenders == []

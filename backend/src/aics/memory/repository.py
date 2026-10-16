@@ -16,7 +16,7 @@ from sqlalchemy import func, literal_column, select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from aics.core.errors import ConversationNotFoundError, ValidationAppError
-from aics.db.models import Conversation, ConversationFact, ConversationFactHistory, Message
+from aics.db.models import App, Conversation, ConversationFact, ConversationFactHistory, Message
 from aics.db.scoped import AppScopedRepository
 from aics.memory.schemas import (
     SUMMARY_HISTORY_KEEP,
@@ -366,6 +366,10 @@ class PgConversationStore:
             return []
         rows = await self.messages.search(app_id, conversation_id, tsquery, exclude_ids, k)
         return [Hit(m.id, m.role, m.content, m.created_at, s) for m, s in rows]
+
+    async def is_app_deleting(self, app_id: UUID) -> bool:
+        status = await self.session.scalar(select(App.status).where(App.id == app_id))
+        return status == "deleting"
 
     async def message_positions(
         self, app_id: UUID, conversation_id: UUID, message_ids: Sequence[UUID]
