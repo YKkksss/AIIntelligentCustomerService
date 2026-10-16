@@ -1,0 +1,1262 @@
+{
+ "variants": {
+  "flat+前缀": {
+   "vector": {
+    "n": 51,
+    "hit@1": 0.8823529411764706,
+    "hit@3": 0.9411764705882353,
+    "hit@5": 0.9411764705882353,
+    "mrr": 0.9149477973007385
+   },
+   "fulltext": {
+    "n": 51,
+    "hit@1": 0.6274509803921569,
+    "hit@3": 0.6862745098039216,
+    "hit@5": 0.6862745098039216,
+    "mrr": 0.6620494157258863
+   },
+   "hybrid": {
+    "n": 51,
+    "hit@1": 0.803921568627451,
+    "hit@3": 0.8627450980392157,
+    "hit@5": 0.9411764705882353,
+    "mrr": 0.8501901366607248
+   }
+  },
+  "flat+前缀+02 文档级 legal": {
+   "vector": {
+    "n": 51,
+    "hit@1": 0.9411764705882353,
+    "hit@3": 0.9607843137254902,
+    "hit@5": 0.9607843137254902,
+    "mrr": 0.9564270152505446
+   },
+   "fulltext": {
+    "n": 51,
+    "hit@1": 0.5882352941176471,
+    "hit@3": 0.6470588235294118,
+    "hit@5": 0.6862745098039216,
+    "mrr": 0.6256096028154852
+   },
+   "hybrid": {
+    "n": 51,
+    "hit@1": 0.803921568627451,
+    "hit@3": 0.8431372549019608,
+    "hit@5": 0.9411764705882353,
+    "mrr": 0.8481877599524659
+   },
+   "hybrid+rerank": {
+    "n": 51,
+    "hit@1": 1.0,
+    "hit@3": 1.0,
+    "hit@5": 1.0,
+    "mrr": 1.0
+   }
+  }
+ },
+ "unanswerable": {
+  "flat+前缀+02 文档级 legal": {
+   "unanswerable": [
+    {
+     "id": "u01",
+     "rerank_max": 0.29273982693446243,
+     "vector_max": 0.4120288
+    },
+    {
+     "id": "u02",
+     "rerank_max": 0.4232070467548396,
+     "vector_max": 0.6256288
+    },
+    {
+     "id": "u03",
+     "rerank_max": 0.48521950848563,
+     "vector_max": 0.51160985
+    },
+    {
+     "id": "u04",
+     "rerank_max": 0.4380165817733977,
+     "vector_max": 0.58418524
+    },
+    {
+     "id": "u05",
+     "rerank_max": 0.12802651699796508,
+     "vector_max": 0.39421594
+    },
+    {
+     "id": "u06",
+     "rerank_max": 0.3493901047779326,
+     "vector_max": 0.3711915
+    },
+    {
+     "id": "u07",
+     "rerank_max": 0.3320202034375883,
+     "vector_max": 0.42291117
+    },
+    {
+     "id": "u08",
+     "rerank_max": 0.39489066887113927,
+     "vector_max": 0.44740647
+    },
+    {
+     "id": "u09",
+     "rerank_max": 0.6707955703160045,
+     "vector_max": 0.64603424
+    },
+    {
+     "id": "u10",
+     "rerank_max": 0.36947043252809353,
+     "vector_max": 0.37700284
+    },
+    {
+     "id": "u11",
+     "rerank_max": 0.4146651990104707,
+     "vector_max": 0.5211249
+    }
+   ],
+   "answerable": [
+    {
+     "id": "q01",
+     "rerank_max": 0.9798679873468217,
+     "vector_max": 0.77617055,
+     "hit1": true
+    },
+    {
+     "id": "q02",
+     "rerank_max": 0.9928807580855112,
+     "vector_max": 0.82403266,
+     "hit1": true
+    },
+    {
+     "id": "q03",
+     "rerank_max": 0.9995451845316184,
+     "vector_max": 0.71944094,
+     "hit1": true
+    },
+    {
+     "id": "q04",
+     "rerank_max": 0.9777648626078982,
+     "vector_max": 0.68522793,
+     "hit1": true
+    },
+    {
+     "id": "q05",
+     "rerank_max": 0.9999990910358081,
+     "vector_max": 0.8096724,
+     "hit1": true
+    },
+    {
+     "id": "q06",
+     "rerank_max": 0.9999999998250395,
+     "vector_max": 0.803993,
+     "hit1": true
+    },
+    {
+     "id": "q07",
+     "rerank_max": 0.9999996650641193,
+     "vector_max": 0.79389983,
+     "hit1": true
+    },
+    {
+     "id": "q08",
+     "rerank_max": 0.9895570960610542,
+     "vector_max": 0.7121876,
+     "hit1": true
+    },
+    {
+     "id": "q09",
+     "rerank_max": 0.9988631284336944,
+     "vector_max": 0.7650366,
+     "hit1": true
+    },
+    {
+     "id": "q10",
+     "rerank_max": 0.9639217226833217,
+     "vector_max": 0.59955466,
+     "hit1": true
+    },
+    {
+     "id": "q11",
+     "rerank_max": 0.8743321707749706,
+     "vector_max": 0.5127003,
+     "hit1": true
+    },
+    {
+     "id": "q12",
+     "rerank_max": 0.926144615200925,
+     "vector_max": 0.6188389,
+     "hit1": true
+    },
+    {
+     "id": "q13",
+     "rerank_max": 0.9988263115873977,
+     "vector_max": 0.67056245,
+     "hit1": true
+    },
+    {
+     "id": "q14",
+     "rerank_max": 0.9756315729556858,
+     "vector_max": 0.76563185,
+     "hit1": true
+    },
+    {
+     "id": "q15",
+     "rerank_max": 0.9338716317411097,
+     "vector_max": 0.47438073,
+     "hit1": true
+    },
+    {
+     "id": "q16",
+     "rerank_max": 0.9804323289181194,
+     "vector_max": 0.739486,
+     "hit1": true
+    },
+    {
+     "id": "q17",
+     "rerank_max": 0.9999998841491023,
+     "vector_max": 0.7663951,
+     "hit1": true
+    },
+    {
+     "id": "q18",
+     "rerank_max": 0.9942862058158666,
+     "vector_max": 0.7181033,
+     "hit1": true
+    },
+    {
+     "id": "q19",
+     "rerank_max": 0.9044037386776642,
+     "vector_max": 0.6222744,
+     "hit1": true
+    },
+    {
+     "id": "q20",
+     "rerank_max": 0.9859056264201027,
+     "vector_max": 0.6160958,
+     "hit1": true
+    },
+    {
+     "id": "q21",
+     "rerank_max": 0.9999999999735358,
+     "vector_max": 0.7169633,
+     "hit1": true
+    },
+    {
+     "id": "q22",
+     "rerank_max": 0.9801378060650007,
+     "vector_max": 0.6799376,
+     "hit1": true
+    },
+    {
+     "id": "q23",
+     "rerank_max": 0.8970243936696773,
+     "vector_max": 0.48271132,
+     "hit1": true
+    },
+    {
+     "id": "q24",
+     "rerank_max": 0.9999999995940543,
+     "vector_max": 0.72514683,
+     "hit1": true
+    },
+    {
+     "id": "q25",
+     "rerank_max": 0.915095112072903,
+     "vector_max": 0.45694852,
+     "hit1": true
+    },
+    {
+     "id": "q26",
+     "rerank_max": 0.983834559926858,
+     "vector_max": 0.5788501,
+     "hit1": true
+    },
+    {
+     "id": "q27",
+     "rerank_max": 0.9914667886361521,
+     "vector_max": 0.5185859,
+     "hit1": true
+    },
+    {
+     "id": "q28",
+     "rerank_max": 0.941783663060488,
+     "vector_max": 0.67842096,
+     "hit1": true
+    },
+    {
+     "id": "q29",
+     "rerank_max": 0.967171170748335,
+     "vector_max": 0.5508305,
+     "hit1": true
+    },
+    {
+     "id": "q30",
+     "rerank_max": 0.9726816732044884,
+     "vector_max": 0.78941244,
+     "hit1": true
+    },
+    {
+     "id": "q31",
+     "rerank_max": 0.9850028943018617,
+     "vector_max": 0.7041741,
+     "hit1": true
+    },
+    {
+     "id": "q32",
+     "rerank_max": 0.9445992550584796,
+     "vector_max": 0.69272894,
+     "hit1": true
+    },
+    {
+     "id": "q33",
+     "rerank_max": 0.9999999999992386,
+     "vector_max": 0.765992,
+     "hit1": true
+    },
+    {
+     "id": "q34",
+     "rerank_max": 0.9799346494790426,
+     "vector_max": 0.59796864,
+     "hit1": true
+    },
+    {
+     "id": "q35",
+     "rerank_max": 0.9529556128354737,
+     "vector_max": 0.6687165,
+     "hit1": true
+    },
+    {
+     "id": "q36",
+     "rerank_max": 0.9489124610440959,
+     "vector_max": 0.6165991,
+     "hit1": true
+    },
+    {
+     "id": "q37",
+     "rerank_max": 0.944008170455584,
+     "vector_max": 0.6067289,
+     "hit1": true
+    },
+    {
+     "id": "q38",
+     "rerank_max": 0.9804287554005479,
+     "vector_max": 0.6521669,
+     "hit1": true
+    },
+    {
+     "id": "q39",
+     "rerank_max": 0.9972976251418091,
+     "vector_max": 0.6883265,
+     "hit1": true
+    },
+    {
+     "id": "q40",
+     "rerank_max": 0.8381694149436757,
+     "vector_max": 0.5786786,
+     "hit1": true
+    },
+    {
+     "id": "q41",
+     "rerank_max": 0.9947075860847847,
+     "vector_max": 0.6859046,
+     "hit1": true
+    },
+    {
+     "id": "q42",
+     "rerank_max": 0.9634733625095591,
+     "vector_max": 0.71000814,
+     "hit1": true
+    },
+    {
+     "id": "q43",
+     "rerank_max": 0.9991837527633866,
+     "vector_max": 0.7069305,
+     "hit1": true
+    },
+    {
+     "id": "q44",
+     "rerank_max": 0.9983462248675241,
+     "vector_max": 0.7577089,
+     "hit1": true
+    },
+    {
+     "id": "q45",
+     "rerank_max": 0.9879888386926401,
+     "vector_max": 0.7208964,
+     "hit1": true
+    },
+    {
+     "id": "q46",
+     "rerank_max": 0.992692451125784,
+     "vector_max": 0.73082626,
+     "hit1": true
+    },
+    {
+     "id": "q47",
+     "rerank_max": 0.9295519003849175,
+     "vector_max": 0.6340034,
+     "hit1": true
+    },
+    {
+     "id": "q48",
+     "rerank_max": 0.9991302457324502,
+     "vector_max": 0.71238333,
+     "hit1": true
+    },
+    {
+     "id": "q49",
+     "rerank_max": 0.9580020126056321,
+     "vector_max": 0.52363455,
+     "hit1": true
+    },
+    {
+     "id": "q50",
+     "rerank_max": 0.9361002451435628,
+     "vector_max": 0.6433662,
+     "hit1": true
+    },
+    {
+     "id": "q51",
+     "rerank_max": 0.9827871907524997,
+     "vector_max": 0.61708045,
+     "hit1": true
+    }
+   ],
+   "summary": {
+    "unans_rerank_max": [
+     0.128,
+     0.293,
+     0.332,
+     0.349,
+     0.369,
+     0.395,
+     0.415,
+     0.423,
+     0.438,
+     0.485,
+     0.671
+    ],
+    "ans_hit1_rerank_top1": {
+     "min": 0.838,
+     "p10": 0.926,
+     "median": 0.98
+    },
+    "best_threshold": 0.68,
+    "unans_vector_max": [
+     0.412,
+     0.626,
+     0.512,
+     0.584,
+     0.394,
+     0.371,
+     0.423,
+     0.447,
+     0.646,
+     0.377,
+     0.521
+    ]
+   }
+  }
+ },
+ "failures": {
+  "flat+前缀": [
+   {
+    "id": "q03",
+    "q": "买的水果到手就烂了，要多久之内申请？",
+    "ranks": {
+     "vector": 1,
+     "fulltext": 6,
+     "hybrid": 4,
+     "hybrid+rerank": 4
+    },
+    "top1": "04-常见问题.html | 星河优选常见问题 > 退换货 > 关于“水果坏了怎么办”，还有哪些需要注意的？ / 涉及金额调整的处理结果，需经班组长二次确认后方可执行，并同步更新工单状态。顾客提供的检测报告须由具备 CMA 资质的第三方机构出具，报告日期应在申请日前 30 ",
+    "top1_score": -0.0
+   },
+   {
+    "id": "q04",
+    "q": "沙发上门取件距离 30 公里收多少钱？",
+    "ranks": {
+     "vector": 1,
+     "fulltext": 10,
+     "hybrid": 5,
+     "hybrid+rerank": 5
+    },
+    "top1": "07-区域运费与时效表.txt |  / 江西第2片区：城区时效同上，支持上门取件；节假日顺延 0 天。江西第3片区：县乡地区时效另加 1 天，支持上门取件；节假日顺延 2 天。山东：首重 11 元，续重每公斤 4 元，时效 4 天。山东第1片区：城区时效同上，支持上门取件；节假",
+    "top1_score": -0.0
+   },
+   {
+    "id": "q12",
+    "q": "书籍七天无理由退货寄回邮费怎么算？",
+    "ranks": {
+     "vector": 14,
+     "fulltext": null,
+     "hybrid": 25,
+     "hybrid+rerank": 25
+    },
+    "top1": "01-售后服务政策.md | 星河优选售后服务政策（2026 版） > 第十章 不同地区的售后差异 / 下表为各收货地区的售后规则差异，地区规定与品类规定冲突时以更严格者为准。 / | 地区 | 无理由退货 | 退款方式与时效 | 寄回方式 | / |---|---|---|---",
+    "top1_score": -0.0
+   },
+   {
+    "id": "q18",
+    "q": "商家延迟发货最多赔顾客多少钱？",
+    "ranks": {
+     "vector": 2,
+     "fulltext": 9,
+     "hybrid": 2,
+     "hybrid+rerank": 2
+    },
+    "top1": "02-平台交易规则.docx | 第四章 交易与发货 / 售后过程中产生的检测费用，经检测确认为质量问题的由商家承担，非质量问题的由申请方承担。 / 第二十六条 关于交易与发货相关事项，平台依据本规则对相关行为进行认定，认定结果以平台系统记录为依据。本条所称的情节严重，是指造成他人",
+    "top1_score": -0.0
+   },
+   {
+    "id": "q23",
+    "q": "规则里的“以上”“以内”包括本数吗？",
+    "ranks": {
+     "vector": null,
+     "fulltext": 11,
+     "hybrid": 22,
+     "hybrid+rerank": 22
+    },
+    "top1": "02-平台交易规则.docx | 第一章 总则 / 第一条 关于本规则的制定依据，多次实施同一违规行为的，按次分别扣分，扣分累计计算。平台对违规行为的处理不影响相关方依法追究违规者的法律责任。平台依据本规则对相关行为进行认定，认定结果以平台系统记录为依据。如顾客对处理结果有异议",
+    "top1_score": -0.0
+   },
+   {
+    "id": "q29",
+    "q": "专票要在多长时间内申请？",
+    "ranks": {
+     "vector": 1,
+     "fulltext": null,
+     "hybrid": 5,
+     "hybrid+rerank": 5
+    },
+    "top1": "E01-星河豆规则历次修订.md | 星河豆规则历次修订汇编 > 第 3 版（2020 年已废止） > 第 3 版 补充说明 2 / 大促期间（618、双 11、年货节）售后申请量较大，审核时效可能顺延 1 至 2 个工作日。顾客寄回商品时应保留快递底单或寄件截图，物流单号须在申请",
+    "top1_score": -0.0
+   },
+   {
+    "id": "q35",
+    "q": "净化器屏幕上显示 E07 是什么意思？",
+    "ranks": {
+     "vector": 1,
+     "fulltext": 16,
+     "hybrid": 2,
+     "hybrid+rerank": 2
+    },
+    "top1": "05-AirPure空气净化器手册.docx | 星河 AirPure 空气净化器用户手册（X3 / X5 / X7） / 版本 V2.3 2026 年 5 月",
+    "top1_score": -0.0
+   },
+   {
+    "id": "q38",
+    "q": "仓库把我们的货弄丢了怎么赔？",
+    "ranks": {
+     "vector": 1,
+     "fulltext": null,
+     "hybrid": 11,
+     "hybrid+rerank": 11
+    },
+    "top1": "06-仓储物流服务合同.pdf | 仓储物流服务合同 > 6. 乙方义务 / 6.1 乙方应为货物投保财产一切险，保额不低于库存货值。双方应本着诚实信用原则履行本合同。任何一方变更联系方式的，应提前 5 个工作日书面通知对方。因一方原因导致的额外费用，由过错方承担。售后过程中产生",
+    "top1_score": -0.0
+   },
+   {
+    "id": "q40",
+    "q": "合同 XH-WL-2026-0158 的争议由哪里仲裁？",
+    "ranks": {
+     "vector": 2,
+     "fulltext": null,
+     "hybrid": 3,
+     "hybrid+rerank": 3
+    },
+    "top1": "06-仓储物流服务合同.pdf | 仓储物流服务合同 / 合同编号：XH-WL-2026-0158 / 甲方：星河优选（杭州）电子商务有限公司 乙方：远航供应链管理有限公司",
+    "top1_score": -0.0
+   },
+   {
+    "id": "q51",
+    "q": "大件家具退货上门取件要我出钱吗？",
+    "ranks": {
+     "vector": 1,
+     "fulltext": null,
+     "hybrid": 5,
+     "hybrid+rerank": 5
+    },
+    "top1": "01-售后服务政策.md | 星河优选售后服务政策（2026 版） > 第六章 家具大件 > 6.6 各地区补充说明 > 6.6.1 中国大陆（家具大件） / 中国大陆收货的家具大件订单：按本政策各品类规定执行；退款原路退回，3 个工作日内到账（银行卡最长 7 个工作日）；",
+    "top1_score": -0.0
+   }
+  ],
+  "flat+前缀+02 文档级 legal": []
+ },
+ "evidence_check": {
+  "q01": 2,
+  "q02": 1,
+  "q03": 11,
+  "q04": 1,
+  "q05": 10,
+  "q06": 10,
+  "q07": 4,
+  "q08": 18,
+  "q09": 1,
+  "q10": 1,
+  "q11": 1,
+  "q12": 1,
+  "q13": 1,
+  "q14": 2,
+  "q15": 1,
+  "q16": 2,
+  "q17": 1,
+  "q18": 1,
+  "q19": 1,
+  "q20": 1,
+  "q21": 5,
+  "q22": 1,
+  "q23": 1,
+  "q24": 3,
+  "q25": 2,
+  "q26": 2,
+  "q27": 3,
+  "q28": 2,
+  "q29": 1,
+  "q30": 5,
+  "q31": 3,
+  "q32": 14,
+  "q33": 4,
+  "q34": 11,
+  "q35": 1,
+  "q36": 9,
+  "q37": 4,
+  "q38": 2,
+  "q39": 1,
+  "q40": 1,
+  "q41": 1,
+  "q42": 1,
+  "q43": 6,
+  "q44": 9,
+  "q45": 1,
+  "q46": 1,
+  "q47": 51,
+  "q48": 3,
+  "q49": 2,
+  "q50": 4,
+  "q51": 2
+ },
+ "per_question": {
+  "flat+前缀": {
+   "q01": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q02": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q03": {
+    "vector": 1,
+    "fulltext": 6,
+    "hybrid": 4,
+    "hybrid+rerank": 4
+   },
+   "q04": {
+    "vector": 1,
+    "fulltext": 10,
+    "hybrid": 5,
+    "hybrid+rerank": 5
+   },
+   "q05": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q06": {
+    "vector": 1,
+    "fulltext": null,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q07": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q08": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q09": {
+    "vector": 1,
+    "fulltext": null,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q10": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q11": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q12": {
+    "vector": 14,
+    "fulltext": null,
+    "hybrid": 25,
+    "hybrid+rerank": 25
+   },
+   "q13": {
+    "vector": 1,
+    "fulltext": null,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q14": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q15": {
+    "vector": 11,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q16": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q17": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q18": {
+    "vector": 2,
+    "fulltext": 9,
+    "hybrid": 2,
+    "hybrid+rerank": 2
+   },
+   "q19": {
+    "vector": 2,
+    "fulltext": 6,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q20": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q21": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q22": {
+    "vector": 1,
+    "fulltext": null,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q23": {
+    "vector": null,
+    "fulltext": 11,
+    "hybrid": 22,
+    "hybrid+rerank": 22
+   },
+   "q24": {
+    "vector": 1,
+    "fulltext": 3,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q25": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q26": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q27": {
+    "vector": 1,
+    "fulltext": 15,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q28": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q29": {
+    "vector": 1,
+    "fulltext": null,
+    "hybrid": 5,
+    "hybrid+rerank": 5
+   },
+   "q30": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q31": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q32": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q33": {
+    "vector": 1,
+    "fulltext": 3,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q34": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q35": {
+    "vector": 1,
+    "fulltext": 16,
+    "hybrid": 2,
+    "hybrid+rerank": 2
+   },
+   "q36": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q37": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q38": {
+    "vector": 1,
+    "fulltext": null,
+    "hybrid": 11,
+    "hybrid+rerank": 11
+   },
+   "q39": {
+    "vector": 1,
+    "fulltext": 3,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q40": {
+    "vector": 2,
+    "fulltext": null,
+    "hybrid": 3,
+    "hybrid+rerank": 3
+   },
+   "q41": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q42": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q43": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q44": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q45": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q46": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q47": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q48": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q49": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q50": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q51": {
+    "vector": 1,
+    "fulltext": null,
+    "hybrid": 5,
+    "hybrid+rerank": 5
+   }
+  },
+  "flat+前缀+02 文档级 legal": {
+   "q01": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q02": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q03": {
+    "vector": 1,
+    "fulltext": 5,
+    "hybrid": 4,
+    "hybrid+rerank": 1
+   },
+   "q04": {
+    "vector": 1,
+    "fulltext": 10,
+    "hybrid": 5,
+    "hybrid+rerank": 1
+   },
+   "q05": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q06": {
+    "vector": 1,
+    "fulltext": null,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q07": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q08": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q09": {
+    "vector": 1,
+    "fulltext": null,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q10": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q11": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q12": {
+    "vector": 9,
+    "fulltext": null,
+    "hybrid": 15,
+    "hybrid+rerank": 1
+   },
+   "q13": {
+    "vector": 1,
+    "fulltext": null,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q14": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q15": {
+    "vector": 6,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q16": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q17": {
+    "vector": 1,
+    "fulltext": 10,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q18": {
+    "vector": 1,
+    "fulltext": null,
+    "hybrid": 5,
+    "hybrid+rerank": 1
+   },
+   "q19": {
+    "vector": 1,
+    "fulltext": null,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q20": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q21": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q22": {
+    "vector": 1,
+    "fulltext": null,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q23": {
+    "vector": 1,
+    "fulltext": null,
+    "hybrid": 4,
+    "hybrid+rerank": 1
+   },
+   "q24": {
+    "vector": 1,
+    "fulltext": 5,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q25": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q26": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q27": {
+    "vector": 1,
+    "fulltext": 13,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q28": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q29": {
+    "vector": 1,
+    "fulltext": null,
+    "hybrid": 6,
+    "hybrid+rerank": 1
+   },
+   "q30": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q31": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q32": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q33": {
+    "vector": 1,
+    "fulltext": 3,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q34": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q35": {
+    "vector": 1,
+    "fulltext": 16,
+    "hybrid": 2,
+    "hybrid+rerank": 1
+   },
+   "q36": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q37": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q38": {
+    "vector": 1,
+    "fulltext": null,
+    "hybrid": 11,
+    "hybrid+rerank": 1
+   },
+   "q39": {
+    "vector": 1,
+    "fulltext": 3,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q40": {
+    "vector": 2,
+    "fulltext": null,
+    "hybrid": 3,
+    "hybrid+rerank": 1
+   },
+   "q41": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q42": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q43": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q44": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q45": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q46": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q47": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q48": {
+    "vector": 1,
+    "fulltext": 2,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q49": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q50": {
+    "vector": 1,
+    "fulltext": 1,
+    "hybrid": 1,
+    "hybrid+rerank": 1
+   },
+   "q51": {
+    "vector": 1,
+    "fulltext": null,
+    "hybrid": 5,
+    "hybrid+rerank": 1
+   }
+  }
+ },
+ "cost": {
+  "query_embed_tokens_this_run": 0,
+  "rerank_calls_this_run": 0,
+  "rerank_tokens_this_run": 0,
+  "rerank_yuan_this_run": 0.0
+ }
+}

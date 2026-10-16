@@ -1,0 +1,139 @@
+{
+ "seconds": 25.9,
+ "failed": [],
+ "chunks_total": 861,
+ "per_doc": [
+  {
+   "app": "mainlegal",
+   "title": "01-售后服务政策.md",
+   "chunks": 81,
+   "override": false
+  },
+  {
+   "app": "main",
+   "title": "01-售后服务政策.md",
+   "chunks": 81,
+   "override": false
+  },
+  {
+   "app": "main",
+   "title": "02-平台交易规则.docx",
+   "chunks": 41,
+   "override": false
+  },
+  {
+   "app": "mainlegal",
+   "title": "02-平台交易规则.docx",
+   "chunks": 78,
+   "override": true
+  },
+  {
+   "app": "mainlegal",
+   "title": "03-多路召回检索方法研究.pdf",
+   "chunks": 19,
+   "override": false
+  },
+  {
+   "app": "main",
+   "title": "03-多路召回检索方法研究.pdf",
+   "chunks": 19,
+   "override": false
+  },
+  {
+   "app": "mainlegal",
+   "title": "04-常见问题.html",
+   "chunks": 43,
+   "override": false
+  },
+  {
+   "app": "main",
+   "title": "04-常见问题.html",
+   "chunks": 43,
+   "override": false
+  },
+  {
+   "app": "main",
+   "title": "05-AirPure空气净化器手册.docx",
+   "chunks": 24,
+   "override": false
+  },
+  {
+   "app": "mainlegal",
+   "title": "05-AirPure空气净化器手册.docx",
+   "chunks": 24,
+   "override": false
+  },
+  {
+   "app": "mainlegal",
+   "title": "06-仓储物流服务合同.pdf",
+   "chunks": 16,
+   "override": false
+  },
+  {
+   "app": "main",
+   "title": "06-仓储物流服务合同.pdf",
+   "chunks": 16,
+   "override": false
+  },
+  {
+   "app": "mainlegal",
+   "title": "07-区域运费与时效表.txt",
+   "chunks": 11,
+   "override": false
+  },
+  {
+   "app": "main",
+   "title": "07-区域运费与时效表.txt",
+   "chunks": 11,
+   "override": false
+  },
+  {
+   "app": "mainlegal",
+   "title": "E01-星河豆规则历次修订.md",
+   "chunks": 109,
+   "override": false
+  },
+  {
+   "app": "main",
+   "title": "E01-星河豆规则历次修订.md",
+   "chunks": 109,
+   "override": false
+  },
+  {
+   "app": "mainlegal",
+   "title": "E04-SKU价格总表.md",
+   "chunks": 60,
+   "override": false
+  },
+  {
+   "app": "main",
+   "title": "E04-SKU价格总表.md",
+   "chunks": 60,
+   "override": false
+  },
+  {
+   "app": "main",
+   "title": "E05-跨境退货政策.html",
+   "chunks": 4,
+   "override": false
+  },
+  {
+   "app": "mainlegal",
+   "title": "E05-跨境退货政策.html",
+   "chunks": 4,
+   "override": false
+  },
+  {
+   "app": "mainlegal",
+   "title": "E06-供应商协作须知.docx",
+   "chunks": 4,
+   "override": false
+  },
+  {
+   "app": "main",
+   "title": "E06-供应商协作须知.docx",
+   "chunks": 4,
+   "override": false
+  }
+ ]
+}

@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### 测试（M1 第二轮检索评测，2026-10-16）
+- `scripts/e2e_m1/build_eval_r2.py`（general 应用 + 02 法规文档带文档级 legal 预设）；`eval_retrieval.py` 支持 `--apps/--variants/--rerank/--out`，重排改为按 (问题, 文档) 缓存。
+- 测试报告新增 §8 第二轮：文档级 legal 使法规题向量 Hit@1 0.56 → 0.89、整体 0.882 → 0.941；PDF 行合并指标不变；阈值 0.5 / 0.8 复测维持。参数默认值表新增文档级 chunk_config 与 PDF 行合并两行；待复验清单新增真实 PDF 样本。
+
 ### 修复
 - `documents.chunk_config` 未设置时存为 JSON `null` 而非 SQL NULL，导致按 `IS NULL` 区分“跟随应用”的查询（应用 `rag_config` 窗口校验、统计）把所有文档当成有覆盖；列改为 `JSONB(none_as_null=True)`（真实 worker 构建第二轮评测应用时发现）。
 

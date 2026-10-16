@@ -1,12 +1,14 @@
 """M1 检索质量评测：向量 / 全文 / 混合(RRF) / 混合+重排，对比上下文前缀与父子切块。
 
 按 RAG 设计文档参数：vector_top_k=20、keyword_top_k=20、RRF k=60、fuse_top_k=30、rerank_top_n=5。
-重排直接调用 DashScope text-rerank HTTP 接口（M2.2 才在 src 内实现 provider），结果缓存到 results/rerank_cache.json。
+重排直接调用 DashScope text-rerank HTTP 接口（M2.2 才在 src 内实现 provider），结果按 (问题, 文档) 缓存到 results/rerank_pair_cache.json（只为新文本付费）。
+用法见 README 段：`--apps apps_r2.json --variants main,mainlegal --out retrieval_eval_r2.json`。
 用法：先加载 env（含 AICS_EMBED_API_KEY / AICS_RERANK_API_KEY），再 `uv run python scripts/e2e_m1/eval_retrieval.py`。
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import hashlib
 import json
@@ -69,38 +71,45 @@ def rrf(*lists):
 
 
 class Reranker:
+    """交叉编码重排：每个 (问题, 文档) 的分数与同批其他文档无关，按对缓存，只为新文本付费。"""
+
     def __init__(self, s):
         self.s = s
-        self.cache_path = RES / "rerank_cache.json"
-        self.cache = json.loads(self.cache_path.read_text()) if self.cache_path.exists() else {}
+        self.pair_path = RES / "rerank_pair_cache.json"
+        self.pairs: dict[str, float] = (
+            json.loads(self.pair_path.read_text()) if self.pair_path.exists() else {}
+        )
         self.tokens = 0
+        self.calls = 0
         self.client = httpx.AsyncClient(timeout=60)
+
+    def _key(self, query: str, doc: str) -> str:
+        return hashlib.sha256(json.dumps([self.s.rerank_model, query, doc]).encode()).hexdigest()
 
     async def scores(self, query: str, docs: list[str]) -> list[float]:
         if not docs:
             return []
-        key = hashlib.sha256(json.dumps([self.s.rerank_model, query, docs]).encode()).hexdigest()
-        if key not in self.cache:
+        missing = [d for d in dict.fromkeys(docs) if self._key(query, d) not in self.pairs]
+        if missing:
             r = await self.client.post(
                 self.s.rerank_url,
                 headers={"Authorization": f"Bearer {self.s.rerank_api_key.get_secret_value()}"},
                 json={
                     "model": self.s.rerank_model,
-                    "input": {"query": query, "documents": docs},
-                    "parameters": {"return_documents": False, "top_n": len(docs)},
+                    "input": {"query": query, "documents": missing},
+                    "parameters": {"return_documents": False, "top_n": len(missing)},
                 },
             )
             r.raise_for_status()
             body = r.json()
-            out = [0.0] * len(docs)
             for it in body["output"]["results"]:
-                out[it["index"]] = float(it["relevance_score"])
-            self.cache[key] = {"scores": out, "tokens": body["usage"]["total_tokens"]}
+                self.pairs[self._key(query, missing[it["index"]])] = float(it["relevance_score"])
             self.tokens += body["usage"]["total_tokens"]
-        return self.cache[key]["scores"]
+            self.calls += 1
+        return [self.pairs[self._key(query, d)] for d in docs]
 
     def save(self):
-        self.cache_path.write_text(json.dumps(self.cache))
+        self.pair_path.write_text(json.dumps(self.pairs))
 
 
 def judge(q, unit):
@@ -128,8 +137,14 @@ def metrics(ranks):
 
 
 async def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--apps", default="apps.json")
+    ap.add_argument("--variants", default="main,noprefix,pc")
+    ap.add_argument("--out", default="retrieval_eval.json")
+    ap.add_argument("--rerank", default=None, help="只对这些变体重排（逗号分隔，缺省全部）")
+    args = ap.parse_args()
     s = get_settings()
-    apps = json.loads((RES / "apps.json").read_text())
+    apps = json.loads((RES / args.apps).read_text())
     qs = json.loads((HERE / "questions.json").read_text())
     engine = create_async_engine(
         s.db_url.get_secret_value() if hasattr(s.db_url, "get_secret_value") else s.db_url
@@ -147,7 +162,14 @@ async def main():
             embed_tokens += count_tokens(q["question"])
     qvec_cache.write_text(json.dumps(qvecs))
 
-    variants = [("main", "flat+前缀"), ("noprefix", "flat 无前缀"), ("pc", "父子+前缀")]
+    labels = {
+        "main": "flat+前缀",
+        "noprefix": "flat 无前缀",
+        "pc": "父子+前缀",
+        "mainlegal": "flat+前缀+02 文档级 legal",
+    }
+    variants = [(k, labels.get(k, k)) for k in args.variants.split(",")]
+    rerank_set = set((args.rerank or args.variants).split(","))
     report: dict = {"variants": {}, "unanswerable": {}, "failures": {}, "evidence_check": {}}
     async with engine.connect() as conn:
         # 证据校验：每个可回答问题在 main 中至少有一个块命中
@@ -212,7 +234,10 @@ async def main():
                     return out
 
                 cand = dedup(fused)
-                sc = await rr.scores(q["question"], [h for _, h in cand])
+                if key in rerank_set:
+                    sc = await rr.scores(q["question"], [h for _, h in cand])
+                else:  # 不重排：保持 RRF 顺序，不计 hybrid+rerank 指标
+                    sc = [-float(i) for i in range(len(cand))]
                 order = sorted(range(len(cand)), key=lambda i: -sc[i])
                 reranked = [cand[i] for i in order]
                 top_score = sc[order[0]] if order else 0.0
@@ -228,6 +253,7 @@ async def main():
                 }
                 for m, v in r_.items():
                     ranks[m].append(v)
+                report.setdefault("per_question", {}).setdefault(label, {})[q["id"]] = r_
                 top1_ans.append(
                     {
                         "id": q["id"],
@@ -250,20 +276,21 @@ async def main():
                             "top1_score": round(top_score, 3),
                         }
                     )
+            if key not in rerank_set:
+                ranks.pop("hybrid+rerank")
             report["variants"][label] = {m: metrics(v) for m, v in ranks.items()}
-            report["unanswerable"][label] = {"unanswerable": unans, "answerable": top1_ans}
+            if key in rerank_set:
+                report["unanswerable"][label] = {"unanswerable": unans, "answerable": top1_ans}
             report["failures"][label] = fails
             print(label, json.dumps(report["variants"][label], ensure_ascii=False))
     rr.save()
     await engine.dispose()
     report["cost"] = {
         "query_embed_tokens_this_run": embed_tokens,
+        "rerank_calls_this_run": rr.calls,
         "rerank_tokens_this_run": rr.tokens,
-        "rerank_tokens_total_cached": sum(v["tokens"] for v in rr.cache.values()),
+        "rerank_yuan_this_run": rr.tokens * RERANK_PRICE / 1e6,
     }
-    report["cost"]["rerank_yuan_total"] = (
-        report["cost"]["rerank_tokens_total_cached"] * RERANK_PRICE / 1e6
-    )
     # 阈值建议
     for label, d in report["unanswerable"].items():
         u = sorted(x["rerank_max"] for x in d["unanswerable"])
@@ -284,9 +311,7 @@ async def main():
             "unans_vector_max": [round(x["vector_max"], 3) for x in d["unanswerable"]],
         }
         print(label, json.dumps(d["summary"], ensure_ascii=False))
-    (RES / "retrieval_eval.json").write_text(
-        json.dumps(report, ensure_ascii=False, indent=1, default=str)
-    )
+    (RES / args.out).write_text(json.dumps(report, ensure_ascii=False, indent=1, default=str))
     print(json.dumps(report["cost"]))
 
 

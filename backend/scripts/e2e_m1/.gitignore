@@ -3,3 +3,5 @@ results/apps.json
 results/qvec_cache.json
 results/rerank_cache.json
 __pycache__/
+results/rerank_pair_cache.json
+results/apps_r2.json
