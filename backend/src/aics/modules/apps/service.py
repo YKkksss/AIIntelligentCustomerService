@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aics.core.config import Settings, get_settings
-from aics.core.errors import AppError, ValidationAppError
+from aics.core.errors import AppNotFoundError, ValidationAppError
 from aics.db.models import App, Document
 from aics.modules.apps.repository import AppRepository
 from aics.modules.apps.system_settings import SystemSettingsService
@@ -65,10 +65,6 @@ def list_chunk_presets() -> list[dict[str, Any]]:
 
 
 _merge_chunk = merge_chunk_config
-
-
-class AppNotFoundError(AppError):
-    code, status, message = "APP_NOT_FOUND", 404, "应用不存在"
 
 
 @dataclass(frozen=True)

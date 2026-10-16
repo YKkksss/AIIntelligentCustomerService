@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import redis.asyncio as aioredis
 import structlog
 import uvicorn
 from fastapi import FastAPI, Request
@@ -16,8 +17,9 @@ from aics import __version__
 from aics.core.config import get_settings
 from aics.core.errors import AppError, error_body
 from aics.core.logging import RequestLogMiddleware, configure_logging
-from aics.db.engine import dispose_engine
+from aics.db.engine import dispose_engine, get_sessionmaker
 from aics.health import router as health_router
+from aics.modules.apikeys.service import ApiKeyAuthenticator
 
 log = structlog.get_logger()
 
@@ -25,8 +27,17 @@ log = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     s = get_settings()
+    redis = aioredis.from_url(s.redis_url)
+    # Open-API authentication (core.security.Authenticator), implemented by modules.apikeys.
+    app.state.authenticator = ApiKeyAuthenticator(
+        get_sessionmaker(),
+        pepper=s.api_key_pepper.get_secret_value(),
+        redis=redis,
+        redis_prefix=s.redis_prefix,
+    )
     log.info("app.started", env=s.env, version=__version__)
     yield
+    await redis.aclose()
     await dispose_engine()
     log.info("app.stopped")
 
@@ -60,7 +71,9 @@ def create_app() -> FastAPI:
     @app.exception_handler(AppError)
     async def _app_error(request: Request, exc: AppError) -> JSONResponse:
         return JSONResponse(
-            error_body(exc.code, exc.message, _rid(request), exc.details), status_code=exc.status
+            error_body(exc.code, exc.message, _rid(request), exc.details),
+            status_code=exc.status,
+            headers=exc.headers or None,
         )
 
     @app.exception_handler(RequestValidationError)

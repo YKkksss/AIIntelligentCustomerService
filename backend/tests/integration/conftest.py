@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -16,7 +17,7 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from aics.core.config import get_settings
-from aics.db.models import App, Chunk, ChunkParent, Conversation, Document, Job, User
+from aics.db.models import ApiKey, App, Chunk, ChunkParent, Conversation, Document, Job, User
 from aics.modules.apps.service import AppService
 from aics.storage.local import LocalStorage
 from aics.vectorstore import QdrantVectorStore
@@ -64,6 +65,7 @@ async def pg(pg_migrated: str) -> AsyncIterator[dict[str, Any]]:
         async with sessions() as s:
             # messages / facts / fact history cascade from conversations
             await s.execute(delete(Conversation).where(Conversation.app_id.in_(ids)))
+            await s.execute(delete(ApiKey).where(ApiKey.app_id.in_(ids)))
             await s.execute(delete(App).where(App.id.in_(ids)))
             await s.execute(delete(User).where(User.id == user_id))
             await s.commit()
@@ -109,3 +111,20 @@ async def env(ingest_migrated: str, tmp_path: Path) -> AsyncIterator[dict[str, A
         await store.drop_chunks_collection()
         await client.close()
         await engine.dispose()
+
+
+REDIS_URL = os.environ.get("AICS_TEST_REDIS_URL", "redis://127.0.0.1:6379/7")
+
+
+@pytest.fixture
+async def redis_it() -> AsyncIterator[Any]:
+    """Real Redis (test db 7); skipped when unreachable."""
+    import redis.asyncio as aioredis
+
+    client = aioredis.from_url(REDIS_URL)
+    try:
+        await client.ping()
+    except Exception:
+        pytest.skip("redis not reachable")
+    yield client
+    await client.aclose()

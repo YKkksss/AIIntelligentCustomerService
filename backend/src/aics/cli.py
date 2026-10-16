@@ -2,6 +2,8 @@
 
 - `reindex --app ID [--document ID] [--inline]`：建重建任务并投递 Celery（`--inline` 在本进程直接执行构建）。
 - `reconcile [--app ID] [--inline]`：PG 与 Qdrant 对账；`--inline` 直接执行并输出 JSON，有差异时退出码 1。
+- `apikey create --app ID --name N --scopes chat[,kb:read…] [--rpm 60] [--quota N] [--expires-days N]`：
+  创建开放接口 Key，明文只在此输出一次；`apikey revoke --app ID --id KEY_ID`：吊销（M2.6）。
 - bootstrap-admin（M4）、eval（M5）随里程碑实现。
 """
 
@@ -104,6 +106,55 @@ async def _reconcile(app_id: UUID | None, inline: bool) -> int:
     return 1 if result["diff_count"] else 0
 
 
+async def _apikey(args: argparse.Namespace) -> int:
+    from datetime import UTC, datetime, timedelta
+
+    import redis.asyncio as aioredis
+
+    from aics.core.config import get_settings
+    from aics.db.engine import dispose_engine, get_sessionmaker
+    from aics.modules.apikeys.service import ApiKeyService
+    from aics.modules.apps.service import AppService
+
+    s = get_settings()
+    redis = aioredis.from_url(s.redis_url)
+    try:
+        async with get_sessionmaker()() as session:
+            await AppService(session).get_app(args.app)  # 404 for unknown / deleting apps
+            svc = ApiKeyService(
+                session,
+                pepper=s.api_key_pepper.get_secret_value(),
+                redis=redis,
+                redis_prefix=s.redis_prefix,
+            )
+            if args.apikey_cmd == "create":
+                expires = (
+                    datetime.now(UTC) + timedelta(days=args.expires_days)
+                    if args.expires_days
+                    else None
+                )
+                row, plain = await svc.create(
+                    args.app,
+                    name=args.name,
+                    scopes=[x.strip() for x in args.scopes.split(",") if x.strip()],
+                    rpm_limit=args.rpm,
+                    daily_quota=args.quota,
+                    expires_at=expires,
+                )
+                await session.commit()
+                out = {"id": str(row.id), "prefix": row.prefix, "scopes": row.scopes, "key": plain}
+                print(json.dumps(out, ensure_ascii=False))
+                print("该 Key 只显示这一次，请妥善保存。", file=sys.stderr)
+                return 0
+            ok = await svc.revoke(args.app, args.id)
+            await session.commit()
+            print(json.dumps({"id": str(args.id), "revoked": ok}))
+            return 0 if ok else 1
+    finally:
+        await redis.aclose()
+        await dispose_engine()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aics-cli")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -115,6 +166,18 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("reconcile", help="PG 与 Qdrant 对账")
     p.add_argument("--app", type=UUID)
     p.add_argument("--inline", action="store_true", help="不经 Celery，在本进程执行并输出结果")
+    p = sub.add_parser("apikey", help="开放接口 API Key（创建 / 吊销）")
+    ak = p.add_subparsers(dest="apikey_cmd", required=True)
+    c = ak.add_parser("create", help="创建 Key（明文只输出一次）")
+    c.add_argument("--app", required=True, type=UUID)
+    c.add_argument("--name", required=True)
+    c.add_argument("--scopes", default="chat", help="逗号分隔：chat,kb:read,kb:write,handoff:write")
+    c.add_argument("--rpm", type=int, default=60)
+    c.add_argument("--quota", type=int, default=None)
+    c.add_argument("--expires-days", type=int, default=None)
+    r = ak.add_parser("revoke", help="吊销 Key")
+    r.add_argument("--app", required=True, type=UUID)
+    r.add_argument("--id", required=True, type=UUID)
     for name, help_ in PLANNED.items():
         sub.add_parser(name, help=help_)
     args = parser.parse_args(argv)
@@ -127,6 +190,8 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_reindex(args.app, args.document, args.inline))
     if args.cmd == "reconcile":
         return asyncio.run(_reconcile(args.app, args.inline))
+    if args.cmd == "apikey":
+        return asyncio.run(_apikey(args))
     print(f"{args.cmd}: 尚未实现（{PLANNED[args.cmd]}）", file=sys.stderr)
     return 2
 
