@@ -20,7 +20,7 @@ flowchart TD
   RT -- out_of_scope --> O[out_of_scope_reply]
   RT -- clarify --> Q[clarify_reply]
   RT -- kb_qa --> R[retrieve 混合检索<br/>向量 + 关键词 并行]
-  R --> F[fuse RRF 融合]
+  R --> F[fuse 融合（加权 / RRF）]
   F --> K[rerank 重排序]
   K --> J{judge 可答性}
   J -- 可答 --> A[generate 生成回答]
@@ -119,7 +119,7 @@ class RagState(TypedDict, total=False):
 | condense_classify | 一次 LLM 调用输出改写问题 + 意图 JSON；无历史时与 retrieve 并行，非 kb_qa 丢弃检索；`intent.enabled=false` 时退化为纯 condense（无历史透传），意图固定 `kb_qa`/`fallback` | `intent.min_confidence`=0.6、`intent.clarify_threshold`=0.7、`intent.classify_timeout_ms` | 超时/解析失败/低置信 → `kb_qa` + 原问题，`intent_source=fallback` |
 | route_intent | 按意图路由：kb_qa → retrieve；chitchat / out_of_scope / clarify → 话术（无引用，不计入 `refusal_streak`）；human / action(v1) → handoff | `intent.enabled_intents` | — |
 | retrieve | 并行：Qdrant 向量检索（filter `app_id`、`enabled`）+ PG 全文检索（经 `ChunkSearch.keyword_search`，tsquery 构造见[数据库设计 §5](../03-database/01-数据库设计.md)）；向量命中回 PG 取正文时只保留当前生效版本且可检索的切块 | `vector_top_k`=20、`keyword_top_k`=20 | 任一路失败另一路继续，记 `vector_failed` / `keyword_failed`；两路都失败 → 抛出（`UPSTREAM_ERROR` / `SERVICE_UNAVAILABLE`） |
-| fuse | RRF：`Σ 1/(60 + rank)`，按 chunk 去重；全部候选回 PG 复核可检索性（被过滤后重算名次），同分按向量名次再按 id；父子切块按父块分组（引用该组得分最高的子块），取前 `fuse_top_k`（实现 `rag.retrieval`，M2.2） | `fuse_top_k`=30 | — |
+| fuse | 默认加权融合（`vector_weight`=0.7，见 §4.2）/ 可选 RRF `Σ 1/(60 + rank)`；按 chunk 去重；全部候选回 PG 复核可检索性（被过滤后重算名次），同分按向量名次再按 id；父子切块按父块分组（引用该组得分最高的子块），取前 `fuse_top_k`（实现 `rag.retrieval`，M2.2） | `fuse_top_k`=30 | — |
 
 > **关键词查询（M2.2）**：`core.textsearch.build_tsquery` 用 `QUERY_STOPWORDS`（M1 停用词 + 疑问词 / 口语虚词 / 英文疑问词）在精确切分上剔除停用词，再展开搜索模式子词，OR 连接；应用自定义词典中的词不被剔除。重排输入为 `heading_path + "\n" + text`。加权融合（`fusion=weighted`）在 M2.2b 引入，评测见 M1 测试报告 §9。
 | rerank | qwen3.7-text-rerank 打分，取前 `rerank_top_n` | `rerank_top_n`=5、`enable_rerank` | 见下"rerank 失败规则" |
@@ -140,13 +140,13 @@ class RagState(TypedDict, total=False):
 5. 父块的子块全部被禁用或 flagged 时，该父块自然不会被命中；只禁用部分子块不影响父块正文（后台"禁用父块"即禁用其全部子块）。
 6. 80% 窗口按 `rerank_top_n × parent_size` 计算（对话上下文管理 §9）；`parent_mode=full_doc` 时按 `full_doc_max_tokens` 计算。
 
-### 4.2 检索设置与命中测试（M2.2b，设计讨论 0001）
-- `rag_config.retrieval_mode`：`hybrid`（默认，向量 + 全文）/ `vector` / `fulltext`；单路模式下 fuse 只做去重排序。
-- `rag_config.fusion`：`rrf`（默认，k=60）/ `weighted`（`vector_weight` 0–1，全文权重 = 1 − vector_weight；两路分数各自 min-max 归一化后加权）。rerank 仍由 `enable_rerank` 控制，与融合方式独立。
+### 4.2 检索设置与命中测试（M2.2b，设计讨论 0001 / 0003，ADR-0015）
+- `rag_config.retrieval_mode`：`hybrid`（默认，向量 + 全文）/ `vector` / `fulltext`；单路模式下 fuse 只做去重排序，该路失败即抛出 `SERVICE_UNAVAILABLE`（无可降级的另一路）。
+- `rag_config.fusion`：**`weighted`（默认，`vector_weight`=0.7）** / `rrf`（k=60）。加权：两路命中先按可检索性过滤，再各自 min-max 归一（单个命中记 1.0），`score = w·vec + (1−w)·kw`，缺席的一路记 0；同分按向量名次、再按 id。rerank 仍由 `enable_rerank` 控制，与融合方式独立。默认值依据见 M1 测试报告 §10（不重排时加权 0.7 Hit@1 0.863 > RRF 0.804；重排后均 1.0）。
 - `rag_config.vector_score_threshold`（默认 null = 不过滤）：向量分数低于阈值的命中在融合前丢弃；rerank 阈值仍为 `rerank_threshold`。
-- 元数据过滤：请求可带 `filters: {"tags": [...]}`（任一匹配），Qdrant 用 payload `tags` 过滤、PG 全文路用 `documents.tags && :tags` 过滤；应用可配默认过滤。
-- 切块补充问题：`chunk_questions` 每条单独向量化（Qdrant 点 `kind=question`、payload 带 `chunk_id`），命中后映射回原切块，与切块自身命中按 chunk 去重取最高名次。
-- 命中测试：`knowledge.service.hit_test(app_id, query, overrides)` 只执行 retrieve → fuse → rerank，返回两路命中（分数、名次）、融合结果、rerank 分数与最终顺序，不调用 LLM、不写会话与统计。
+- 元数据过滤：`run_retrieval(..., tags=[...])`（任一匹配）；未传时用 `rag_config.default_tags`，显式 `[]` 表示不过滤。Qdrant 用 payload `tags` 过滤，PG 全文路与向量命中回 PG 取正文时都按 `documents.tags && :tags` 过滤（双重校验：Qdrant 标签同步滞后只会漏召回，不会串答）。改标签（`KnowledgeService.set_document_tags`）先写 PG，再 `set_payload` 到该文档全部点；构建切换后若标签已变再补同步。
+- 切块补充问题：`chunk_questions` 每条单独向量化（不加标题前缀），与切块同集合（点 id = 问题 id，payload `kind=question`、`chunk_id` 指向原切块、`tags` 同文档），向量路原始 limit = k × 2，按 chunk 去重取最高分（= 最高名次）后取前 k。重建文档时按正文哈希（同哈希取 ordinal 最近）迁移到新构建的切块，只改 payload；匹配不到转 `pending`（删点，后台待确认 / 重新挂接）。补充问题人工维护，不在入库时自动生成（设计讨论 0003 §4）。
+- 命中测试：`KnowledgeService.hit_test(app_id, query, reranker=..., overrides={"rag_config": {...}}, filters={"tags": [...]})` 只执行 retrieve → fuse → rerank，返回两路命中（分数、名次）、融合结果（分数、两路名次、正文预览）、rerank 分数与最终顺序、degraded 与耗时；overrides 与应用配置合并后按保存规则校验（失败 422）；不调用 LLM、不写会话与统计。
 
 ## 5. 提示词
 - 所有提示词是 `aics/rag/prompts/*.md` 文件（memory 的在 `aics/memory/prompts/`，评测评判在 `aics/modules/eval/prompts/`），由 `core.prompts` 加载；文件头为 YAML front-matter：

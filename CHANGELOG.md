@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### 新增（M2.2b 检索设置、标签过滤、补充问题与命中测试，2026-10-16）
+- `rag_config.retrieval_mode`（hybrid / vector / fulltext）、`fusion`（weighted / rrf）、`vector_weight`、`vector_score_threshold`、`default_tags`；**默认融合改为加权 `vector_weight=0.7`**（ADR-0015，评测见 M1 测试报告 §10）。
+- 迁移 `0008`：`documents.tags`（GIN）与 `chunk_questions`。
+- 标签过滤：Qdrant payload `tags` + PG `documents.tags` 双重校验；`KnowledgeService.set_document_tags`。
+- 切块补充问题：`KnowledgeService.add_chunk_questions` / `list_*` / `delete_chunk_question` / `reattach_chunk_question`；与切块同集合（`kind=question`），命中映射回切块；重建按正文哈希迁移，失配转 `pending`。
+- `KnowledgeService.hit_test`（只读命中测试）。
+- 向量库：payload `kind` / `tags` 与索引、`set_enabled` 按 `chunk_id` 过滤、`set_document_tags`、`move_question`、`delete_points`；计数排除问题点。
+- 集成测试支持 `AICS_TEST_QDRANT_URL=":memory:"`；评测脚本 `scripts/e2e_m2/eval_m22b.py`。
+- 设计讨论 0003、ADR-0015（修订 ADR-0004 融合方式）。
+
 ### 新增（M2.2 检索链路，2026-10-16）
 - `providers.llm.OpenAICompatibleLLM`（DeepSeek，LangChain `ChatOpenAI`）与 `providers.rerank`（`DashScopeReranker`、`LlamaCppReranker`、`NoopReranker`），工厂 `build_llm` / `build_reranker`。
 - `rag.ports`（`ChunkSearch`、`MemoryPort`、`RagPorts` 与数据类型）；`knowledge.chunk_search.PgChunkSearch`（OR tsquery 关键词检索、可检索条件过滤取切块 / 父块）。
