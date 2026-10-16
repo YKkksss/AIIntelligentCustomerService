@@ -6,7 +6,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-from aics.db.models import Chunk, Document, Job
+from aics.db.models import Chunk, ChunkParent, Document, Job
 from aics.db.scoped import AppScopedRepository
 
 
@@ -32,6 +32,17 @@ class ChunkRepository(AppScopedRepository[Chunk]):
             .order_by(Chunk.ordinal)
         )
         return list((await self.session.execute(stmt)).scalars())
+
+
+class ChunkParentRepository(AppScopedRepository[ChunkParent]):
+    model = ChunkParent
+
+    async def get_many(self, app_id: UUID, ids: list[UUID]) -> dict[UUID, ChunkParent]:
+        """检索命中子块后批量取父块正文（RAG 流程设计 §4.1）。"""
+        if not ids:
+            return {}
+        stmt = self._scoped(app_id).where(ChunkParent.id.in_(ids))
+        return {p.id: p for p in (await self.session.execute(stmt)).scalars()}
 
 
 class JobRepository(AppScopedRepository[Job]):

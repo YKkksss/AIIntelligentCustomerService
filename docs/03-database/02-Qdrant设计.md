@@ -17,7 +17,7 @@ int8 量化 + 原向量放磁盘，内存约为原来的 1/4：100 万 × 1024 �
 
 ## 2. Point
 - `id` = `chunks.id`（UUID）。
-- payload：`{"app_id": "...", "document_id": "...", "chunk_id": "...", "index_version": 3, "enabled": true}`（正文、文档标题都不存 Qdrant，以 PG 为准）。`enabled` = PG 中 `enabled AND review_status <> 'flagged'`，禁用 / 复核状态变化时同步 `set_payload`。
+- payload：`{"app_id": "...", "document_id": "...", "chunk_id": "...", "index_version": 3, "enabled": true}`（正文、文档标题都不存 Qdrant，以 PG 为准）。父子模式下点对应子块，payload 额外带 `parent_id`（检索后在 PG 侧按其去重；不建索引）。`enabled` = PG 中 `enabled AND review_status <> 'flagged'`，禁用 / 复核状态变化时同步 `set_payload`。
 - payload 索引：`app_id`（keyword, `is_tenant: true`）、`document_id`（keyword）、`index_version`（integer）、`enabled`（bool）。
 - 同一文档可能短暂同时存在新旧两个构建号的点（替换 / 重建期间）；检索不按版本过滤，向量命中回 PG 取正文时按[数据库设计 §3.7](01-数据库设计.md)的可检索条件过滤，旧版本点由 `cleanup_document` 删除。为抵消过滤损耗，向量检索 `limit = vector_top_k × 1.5`，过滤后取前 `vector_top_k`。
 

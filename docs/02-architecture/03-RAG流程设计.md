@@ -130,6 +130,14 @@ class RagState(TypedDict, total=False):
 
 > 阈值 0.35 / 0.5 是初值，必须用每个应用的评测集校准（见评测指南）。
 
+### 4.1 父子切块下的检索（`chunk_config.mode = parent_child`，实现随 M2.2）
+1. retrieve：两路都检索**子块**（Qdrant 点与 chunks 全文索引都是子块），可检索条件不变。
+2. fuse：先按子块做 RRF；随后按 `parent_id` 分组，每个父块取其最佳子块的 RRF 名次作为父块名次（同一父块的多个子块命中只占一个名额），取前 `fuse_top_k` 个父块。
+3. rerank：对父块正文（`heading_path + "\n" + 父块 text`）打分，取前 `rerank_top_n`；judge 阈值规则不变。
+4. generate：编号上下文中的每一项是一个父块；引用 `[n]` 指向父块，`citations` 记录父块所含的最佳子块 `chunk_id`（便于定位）与 `parent_id`。
+5. 父块的子块全部被禁用或 flagged 时，该父块自然不会被命中；只禁用部分子块不影响父块正文（后台"禁用父块"即禁用其全部子块）。
+6. 80% 窗口按 `rerank_top_n × parent_size` 计算（对话上下文管理 §9）。
+
 ## 5. 提示词
 - 所有提示词是 `aics/rag/prompts/*.md` 文件（memory 的在 `aics/memory/prompts/`，评测评判在 `aics/modules/eval/prompts/`），由 `core.prompts` 加载；文件头为 YAML front-matter：
 ```markdown

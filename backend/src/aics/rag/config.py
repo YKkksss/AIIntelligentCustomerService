@@ -11,9 +11,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
+from pathlib import Path
 from typing import Annotated, Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+import yaml
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -125,17 +128,117 @@ class AppRagConfig(_Cfg):
 
 
 # ---------------------------------------------------------------- chunk
-class ChunkConfig(_Cfg):
-    """`apps.chunk_config`；token 数按 `aics.core.tokens.count_tokens` 计。"""
+ChunkStrategy = Literal["heading", "article", "section", "faq", "clause"]
+ChunkMode = Literal["general", "parent_child"]
+PRESETS_FILE = Path(__file__).with_name("chunk_presets.yaml")
+CUSTOM_PRESET = "custom"
 
+
+@dataclass(frozen=True)
+class ChunkPreset:
+    name: str
+    label: str
+    description: str
+    config: dict[str, Any]
+
+
+@lru_cache(maxsize=1)
+def _load_presets() -> tuple[str, dict[str, ChunkPreset]]:
+    raw = yaml.safe_load(PRESETS_FILE.read_text(encoding="utf-8"))
+    presets = {
+        name: ChunkPreset(name, item["label"], item["description"], dict(item["config"]))
+        for name, item in raw["presets"].items()
+    }
+    default = raw["default"]
+    if default not in presets:
+        raise ValueError(f"chunk_presets.yaml: default={default!r} 不存在")
+    return default, presets
+
+
+def chunk_presets() -> list[ChunkPreset]:
+    """全部切块预设（顺序同配置文件），供管理接口 / 前端一键填充。"""
+    return list(_load_presets()[1].values())
+
+
+def default_chunk_preset() -> str:
+    return _load_presets()[0]
+
+
+def get_chunk_preset(name: str) -> ChunkPreset:
+    presets = _load_presets()[1]
+    if name not in presets:
+        raise ValueError(f"未知切块预设：{name}（可选 {', '.join(presets)}）")
+    return presets[name]
+
+
+_SEP_FORBIDDEN = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+
+
+class ChunkConfig(_Cfg):
+    """`apps.chunk_config`（文档处理流水线 §3.3）；token 数按 `aics.core.tokens.count_tokens` 计。
+
+    缺省的键按 `preset`（默认 `chunk_presets.yaml` 的 default）补齐，再由显式给出的键覆盖；
+    `preset` 只是记录来源（`custom` 表示不基于预设），切块逻辑只看展开后的字段。
+    """
+
+    preset: str = Field(default_factory=lambda: default_chunk_preset())
+    strategy: ChunkStrategy = "heading"
     chunk_size: int = Field(500, ge=100, le=2000)
     chunk_overlap: int = Field(80, ge=0)
+    separators: list[str] = Field(default_factory=list, max_length=10)
+    split_by_heading: bool = True
+    keep_tables: bool = True
+    mode: ChunkMode = "general"
+    parent_size: int = Field(1024, ge=300, le=4000)
+    child_size: int = Field(200, ge=50, le=1000)
+    child_overlap: int = Field(20, ge=0)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _fill_from_preset(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        name = data.get("preset") or default_chunk_preset()
+        if name == CUSTOM_PRESET:
+            return data
+        try:
+            preset = get_chunk_preset(name)
+        except ValueError as e:
+            raise ValueError(str(e)) from e
+        return {**preset.config, **data, "preset": name}
+
+    @field_validator("separators")
+    @classmethod
+    def _separators(cls, v: list[str]) -> list[str]:
+        out: list[str] = []
+        for sep in v:
+            if not sep or len(sep) > 16:
+                raise ValueError("分隔符长度须为 1–16 个字符")
+            if _SEP_FORBIDDEN.search(sep):
+                raise ValueError("分隔符不能包含除换行、制表符以外的控制字符")
+            if not sep.strip() and "\n" not in sep:
+                raise ValueError('分隔符不能只由空格组成（空行请用 "\\n\\n"）')
+            if sep not in out:
+                out.append(sep)
+        return out  # 按字面量匹配（re.escape），不支持正则，避免 ReDoS
 
     @model_validator(mode="after")
-    def _overlap(self) -> ChunkConfig:
+    def _rules(self) -> ChunkConfig:
         if self.chunk_overlap * 2 > self.chunk_size:
             raise ValueError("chunk_overlap 不能超过 chunk_size 的一半")
+        if self.preset != CUSTOM_PRESET:
+            get_chunk_preset(self.preset)
+        if self.mode == "parent_child":
+            if self.child_size >= self.parent_size:
+                raise ValueError("child_size 必须小于 parent_size")
+            if self.child_overlap * 2 > self.child_size:
+                raise ValueError("child_overlap 不能超过 child_size 的一半")
         return self
+
+    @property
+    def context_chunk_tokens(self) -> int:
+        """送入 LLM 的单个检索结果上限：父子模式为父块大小，否则为切块大小（窗口校验用）。"""
+        return self.parent_size if self.mode == "parent_child" else self.chunk_size
 
 
 # ---------------------------------------------------------------- session
@@ -298,16 +401,17 @@ def validate_app_config(
         need = (
             rag.history_token_budget
             + rag.max_tokens
-            + rag.rerank_top_n * chunk.chunk_size
+            + rag.rerank_top_n * chunk.context_chunk_tokens
             + PROMPT_RESERVE_TOKENS
         )
         limit = int(WINDOW_RATIO * llm_window)
+        unit = "parent_size" if chunk.mode == "parent_child" else "chunk_size"
         if need > limit:
             issues.append(
                 ConfigIssue(
                     ("rag_config",),
                     f"上下文超出模型 {llm_name} 窗口 80%：history_token_budget + max_tokens + "
-                    f"rerank_top_n × chunk_size + {PROMPT_RESERVE_TOKENS} = {need} > {limit}",
+                    f"rerank_top_n × {unit} + {PROMPT_RESERVE_TOKENS} = {need} > {limit}",
                 )
             )
 

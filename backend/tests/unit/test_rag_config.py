@@ -52,7 +52,14 @@ def test_defaults_match_design() -> None:
     h = HandoffConfig().model_dump()
     assert h["keywords"] == ["人工", "投诉"] and h["handoff_queue_timeout_minutes"] == 5
     assert h["handoff_accepted_idle_minutes"] == 30 and h["service_hours"] is None
-    assert ChunkConfig().model_dump() == {"chunk_size": 500, "chunk_overlap": 80}
+    c = ChunkConfig().model_dump()
+    assert (c["preset"], c["strategy"], c["chunk_size"], c["chunk_overlap"]) == (
+        "general",
+        "heading",
+        500,
+        80,
+    )
+    assert c["mode"] == "general" and c["separators"] == [] and c["split_by_heading"] is True
     assert SessionConfig().model_dump() == dict.fromkeys(
         ["idle_close_minutes", "idle_notice_before_minutes", "idle_close_notice"]
     )

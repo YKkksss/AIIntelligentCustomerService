@@ -1,0 +1,29 @@
+# 切块预设（一键填充 apps.chunk_config，填充后仍可逐项修改）。
+# 修改本文件即可增删预设，无需改代码；每个 config 都按 aics.rag.config.ChunkConfig 校验（单元测试覆盖）。
+# 未指定预设时使用 default 指向的预设。字段含义见 docs/02-architecture/04-文档处理流水线.md §3.3。
+default: general
+presets:
+  general:
+    label: 通用
+    description: 按标题分章节，章节内按句子累加，适合大多数说明文档、网页、FAQ 以外的知识库。
+    config: {strategy: heading, chunk_size: 500, chunk_overlap: 80, split_by_heading: true, keep_tables: true}
+  legal:
+    label: 法律法规
+    description: 以"第X条"为切分单位（一条一块，超长条文按句子再切），编/章/节层级保留在标题路径中。
+    config: {strategy: article, chunk_size: 400, chunk_overlap: 50, split_by_heading: true, keep_tables: true}
+  paper:
+    label: 学术论文
+    description: 按章节切分，摘要与参考文献各自独立成块（参考文献按条目累加、不重叠）。
+    config: {strategy: section, chunk_size: 800, chunk_overlap: 120, split_by_heading: true, keep_tables: true}
+  faq:
+    label: 问答对（FAQ）
+    description: 一组问答一块；以"问/Q"开头的段落或标题视为问题，答案过长时每块都带上问题。
+    config: {strategy: faq, chunk_size: 300, chunk_overlap: 0, split_by_heading: true, keep_tables: true}
+  manual:
+    label: 产品手册
+    description: 保留多级标题层级，表格整块不拆（超长表格按行拆分并重复表头）。
+    config: {strategy: heading, chunk_size: 600, chunk_overlap: 100, split_by_heading: true, keep_tables: true}
+  contract:
+    label: 合同协议
+    description: 按条款编号切分（"第X条""一、""1."为顶级条款，"1.1"等子条款在同一条款内累加）。
+    config: {strategy: clause, chunk_size: 500, chunk_overlap: 60, split_by_heading: true, keep_tables: true}

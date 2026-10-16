@@ -77,6 +77,26 @@ class Document(TimestampMixin, SoftDeleteMixin, Base):
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
 
 
+class ChunkParent(CreatedAtMixin, Base):
+    """父块（切块模式 parent_child）：不向量化、不参与检索，只在子块命中后取其正文送入 LLM。"""
+
+    __tablename__ = "chunk_parents"
+    __table_args__ = (UniqueConstraint("document_id", "index_version", "ordinal"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_id)
+    app_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    index_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    heading_path: Mapped[str | None] = mapped_column(Text)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    page_from: Mapped[int | None] = mapped_column(Integer)
+    page_to: Mapped[int | None] = mapped_column(Integer)
+
+
 class Chunk(CreatedAtMixin, Base):
     __tablename__ = "chunks"
     __table_args__ = (
@@ -84,6 +104,9 @@ class Chunk(CreatedAtMixin, Base):
         UniqueConstraint("document_id", "index_version", "ordinal"),
         Index("ix_chunks_tsv", "tsv", postgresql_using="gin"),
         Index("ix_chunks_app_enabled", "app_id", postgresql_where=sa_text("enabled")),
+        Index(
+            "ix_chunks_parent_id", "parent_id", postgresql_where=sa_text("parent_id IS NOT NULL")
+        ),
         Index(
             "ix_chunks_flagged",
             "app_id",
@@ -99,6 +122,10 @@ class Chunk(CreatedAtMixin, Base):
     )
     index_version: Mapped[int] = mapped_column(Integer, nullable=False)
     ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    # 父子模式下指向父块；通用模式为 NULL（切块自身正文即送入 LLM 的内容）
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("chunk_parents.id", ondelete="CASCADE")
+    )
     heading_path: Mapped[str | None] = mapped_column(Text)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     search_text: Mapped[str] = mapped_column(Text, nullable=False)

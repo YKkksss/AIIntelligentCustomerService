@@ -85,7 +85,14 @@ def test_every_app_scoped_table_has_scoped_repository() -> None:
     repos = [r for r in registered_repositories() if r.__module__.startswith("aics.")]
     covered = {r.model.__tablename__ for r in repos}  # type: ignore[attr-defined]
     tenant_tables = {t.name for t in Base.metadata.sorted_tables if "app_id" in t.c} | {"apps"}
-    assert tenant_tables == {"apps", "user_app_roles", "documents", "chunks", "jobs"}
+    assert tenant_tables == {
+        "apps",
+        "user_app_roles",
+        "documents",
+        "chunks",
+        "chunk_parents",
+        "jobs",
+    }
     assert tenant_tables <= covered
     for r in repos:
         assert unscoped_methods(r) == [], r

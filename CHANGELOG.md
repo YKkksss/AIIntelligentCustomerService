@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### 新增（M1.3b 切块预设、手动选项与父子切块，2026-10-16）
+- 切块预设 `rag/chunk_presets.yaml`（general / legal / paper / faq / manual / contract），`list_chunk_presets()`（`GET /admin/chunk-presets`）；未选预设取 general，选预设后可逐项修改，`preset` 记录来源。
+- `chunk_config` 新增 `strategy`、`separators`（字面量）、`split_by_heading`、`keep_tables`、`mode`、`parent_size` / `child_size` / `child_overlap`；父子模式 80% 窗口按 `parent_size` 校验。
+- chunker：五种策略（heading / article / section / faq / clause）与父子模式（`split_document` → `ChunkResult`）。
+- 迁移 `0003`：`chunk_parents` 表、`chunks.parent_id`；`ChunkParentRepository`。
+- 文档：文档处理流水线 §3.3、数据库设计 §3.7.1、RAG 流程设计 §4.1（父块去重）、Qdrant 设计、管理接口、功能需求 FR-APP-04、ADR-0012。
+
 ### 新增（M1.3 解析与切块，2026-10-16）
 - `ingest/parsers/`：`ParsedDoc` / `Block`；PDF（PyMuPDF：字号推断标题、去页眉页脚、表格识别、跨页段落合并）、DOCX（标题样式、列表、表格、zip 炸弹防护）、Markdown、TXT（编码检测，GBK 按 GB18030）、HTML（trafilatura）、URL 导入（重定向逐跳校验、15s / 10MB 限制）；扩展名白名单 + 魔数校验。
 - `core/netguard.py`：出站 URL SSRF 校验（私网 / 回环 / 链路本地 / 元数据地址、IPv6 内嵌 IPv4、整数 IP、端口限制、`AICS_URL_FETCH_ALLOWLIST`、对端 IP 复核），供 URL 导入与后续 Webhook 共用。

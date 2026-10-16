@@ -193,3 +193,51 @@ async def test_constraints(session: AsyncSession) -> None:
     with pytest.raises(IntegrityError):
         async with session.begin_nested():
             await JobRepository(session).add(a.id, Job(app_id=a.id, type="bogus"))
+
+
+async def test_chunk_preset_update_and_parent_child_rows(session: AsyncSession) -> None:
+    from aics.db.models import ChunkParent
+    from aics.modules.knowledge.repository import ChunkParentRepository
+
+    svc = AppService(session)
+    a = await svc.create_app(name="A", created_by=None, chunk_config={"preset": "legal"})
+    assert a.chunk_config["strategy"] == "article" and a.chunk_config["chunk_size"] == 400
+    r = await svc.update_app(a.id, {"chunk_config": {"chunk_overlap": 20}})
+    assert r.reindex_required and r.app.chunk_config["preset"] == "legal"
+    r = await svc.update_app(a.id, {"chunk_config": {"preset": "faq"}})
+    assert r.app.chunk_config["chunk_overlap"] == 0 and r.app.chunk_config["strategy"] == "faq"
+    r = await svc.update_app(
+        a.id, {"chunk_config": {"mode": "parent_child", "parent_size": 1024, "child_size": 200}}
+    )
+    assert r.app.chunk_config["mode"] == "parent_child" and r.app.chunk_config_version == 4
+
+    b = await svc.create_app(name="B", created_by=None)
+    d = await DocumentRepository(session).add(
+        a.id, Document(app_id=a.id, title="t", source_type="file", content_hash="2" * 64)
+    )
+    parents = ChunkParentRepository(session)
+    p = await parents.add(
+        a.id,
+        ChunkParent(
+            app_id=a.id, document_id=d.id, index_version=1, ordinal=0, text="父块正文", tokens=4
+        ),
+    )
+    c = await ChunkRepository(session).add(
+        a.id,
+        Chunk(
+            app_id=a.id,
+            document_id=d.id,
+            index_version=1,
+            ordinal=0,
+            parent_id=p.id,
+            text="子块",
+            search_text="子块",
+        ),
+    )
+    assert (await parents.get_many(a.id, [p.id]))[p.id].text == "父块正文"
+    assert await parents.get_many(b.id, [p.id]) == {}
+    assert await parents.get_many(a.id, []) == {}
+    await session.delete(p)  # 删除父块级联删除子块
+    await session.flush()
+    session.expunge(c)
+    assert await ChunkRepository(session).get(a.id, c.id) is None

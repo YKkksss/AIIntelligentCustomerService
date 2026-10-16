@@ -27,6 +27,7 @@ from aics.rag.config import (
     HandoffConfig,
     SessionConfig,
     WebhookConfig,
+    chunk_presets,
     validate_app_config,
 )
 
@@ -42,6 +43,29 @@ BASIC_FIELDS = (
 )
 ANSWER_STYLES = ("concise", "detailed", "custom")
 WEBHOOK_EDITABLE = {"url"}  # 签名密钥只能经 /webhook/secret 生成
+
+
+def list_chunk_presets() -> list[dict[str, Any]]:
+    """切块预设列表（`GET /admin/chunk-presets`，供前端一键填充 chunk_config）。
+
+    `config` 为展开后的完整 chunk_config（含未在预设中出现、取默认值的键），前端可直接回填后再让用户修改。
+    """
+    return [
+        {
+            "name": p.name,
+            "label": p.label,
+            "description": p.description,
+            "config": ChunkConfig.model_validate({"preset": p.name}).model_dump(mode="json"),
+        }
+        for p in chunk_presets()
+    ]
+
+
+def _merge_chunk(current: Mapping[str, Any], patch: Mapping[str, Any]) -> dict[str, Any]:
+    """chunk_config 部分更新：patch 指定了 preset 时以该预设为底（丢弃旧值），再叠加 patch 中的其他键。"""
+    if "preset" in patch:
+        return dict(patch)
+    return {**current, **patch}
 
 
 class AppNotFoundError(AppError):
@@ -265,7 +289,7 @@ class AppService:
             "rag_config": _merge(app.rag_config, patch.get("rag_config") or {}, ("intent",)),
             "handoff_config": _merge(app.handoff_config, patch.get("handoff_config") or {}, ()),
             "session_config": _merge(app.session_config, patch.get("session_config") or {}, ()),
-            "chunk_config": _merge(app.chunk_config, patch.get("chunk_config") or {}, ()),
+            "chunk_config": _merge_chunk(app.chunk_config, patch.get("chunk_config") or {}),
             "webhook_config": _merge(app.webhook_config, webhook_patch, ()),
         }
         cfg = self.build_config(**merged)
