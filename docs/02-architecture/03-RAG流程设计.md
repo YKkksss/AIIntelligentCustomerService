@@ -121,14 +121,14 @@ class RagState(TypedDict, total=False):
 | retrieve | 并行：Qdrant 向量检索（filter `app_id`、`enabled`）+ PG 全文检索（经 `ChunkSearch.keyword_search`，tsquery 构造见[数据库设计 §5](../03-database/01-数据库设计.md)）；向量命中回 PG 取正文时只保留当前生效版本且可检索的切块 | `vector_top_k`=20、`keyword_top_k`=20 | 任一路失败另一路继续，记 `vector_failed` / `keyword_failed`；两路都失败 → 抛出（`UPSTREAM_ERROR` / `SERVICE_UNAVAILABLE`） |
 | fuse | RRF：`Σ 1/(60 + rank)`，按 chunk 去重，取前 `fuse_top_k` | `fuse_top_k`=30 | — |
 | rerank | qwen3.7-text-rerank 打分，取前 `rerank_top_n` | `rerank_top_n`=5、`enable_rerank` | 见下"rerank 失败规则" |
-| judge | 有 rerank 分数时：最高分 < `rerank_threshold` → 不可答；最高分 ≥ `judge_gray_upper` → 可答；处于灰区 `[rerank_threshold, judge_gray_upper)` 且 `judge_with_llm=true` 时让 LLM 输出 `{"answerable": bool}`（`judge_with_llm=false` 时灰区按可答）。无 rerank 分数时（rerank 关闭或失败）一律由 LLM 判断 | `rerank_threshold`=0.35、`judge_gray_upper`=0.5、`judge_with_llm` | LLM 判断超时/解析失败 → **按不可答处理**（`decision_reason="judge_failed"`，记 degraded `judge_failed`），走 refuse / handoff |
+| judge | 有 rerank 分数时：最高分 < `rerank_threshold` → 不可答；最高分 ≥ `judge_gray_upper` → 可答；处于灰区 `[rerank_threshold, judge_gray_upper)` 且 `judge_with_llm=true` 时让 LLM 输出 `{"answerable": bool}`（`judge_with_llm=false` 时灰区按可答）。无 rerank 分数时（rerank 关闭或失败）一律由 LLM 判断 | `rerank_threshold`=0.5、`judge_gray_upper`=0.8、`judge_with_llm` | LLM 判断超时/解析失败 → **按不可答处理**（`decision_reason="judge_failed"`，记 degraded `judge_failed`），走 refuse / handoff |
 | generate | 带编号上下文生成，流式输出 | `temperature`=0.2、`max_tokens`=800、`llm_model` | 上游错误 → 抛出，由 chat.service 写 `answer_type=error` |
 | postprocess | 解析 `[n]` 标号 → 引用；标号越界删除；输出检查（安全设计 §3.4）；无任何引用时 `degraded += ["no_citation"]`（仅 kb_qa 分支经过本节点） | — | — |
 | refuse / handoff | 返回兜底话术 / 转人工话术，设置 `answer_type` 与 `handoff_reason` | `fallback_text`、`handoff.text` | — |
 
 **rerank 失败规则（与非功能需求一致，唯一规则）**：rerank 调用超时或出错（含重试后）→ 按 RRF 顺序取前 `rerank_top_n`，记 `degraded += ["rerank_failed"]`；因 RRF 分数与 rerank 阈值不可比，judge 改由 LLM 判断（不看 `judge_with_llm` 开关）；LLM 判断也失败 → 不可答。`enable_rerank=false` 时同样走 LLM 判断，但不记 degraded。
 
-> 阈值 0.35 / 0.5 是初值，必须用每个应用的评测集校准（见评测指南）。
+> 阈值 0.5 / 0.8 来自 M1 评测（合成语料，原初值 0.35 / 0.5），待服务器真实数据复验；每个应用仍应用其评测集校准（见评测指南）。默认值及依据唯一来源：[参数默认值与依据](../06-development/09-参数默认值与依据.md)。
 
 ### 4.1 父子切块下的检索（`chunk_config.mode = parent_child`，实现随 M2.2）
 1. retrieve：两路都检索**子块**（Qdrant 点与 chunks 全文索引都是子块），可检索条件不变。

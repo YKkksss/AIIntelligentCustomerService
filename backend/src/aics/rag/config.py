@@ -103,9 +103,10 @@ class AppRagConfig(_Cfg):
     fuse_top_k: int = Field(30, ge=1, le=200)
     rerank_top_n: int = Field(5, ge=1, le=20)
     enable_rerank: bool = True
-    rerank_threshold: float = Field(0.35, ge=0, le=1)
+    # 检索 / 判定默认值的依据见 docs/06-development/09-参数默认值与依据.md
+    rerank_threshold: float = Field(0.5, ge=0, le=1)
     judge_with_llm: bool = True
-    judge_gray_upper: float = Field(0.5, ge=0, le=1)
+    judge_gray_upper: float = Field(0.8, ge=0, le=1)
     history_token_budget: int = Field(3000, ge=500, le=16000)
     compact_trigger_tokens: int = Field(6000, le=64000)
     keep_recent_turns: int = Field(4, ge=1, le=20)

@@ -44,7 +44,7 @@ def test_defaults_match_design() -> None:
     rag = AppRagConfig.model_validate({})
     d = rag.model_dump()
     assert d["vector_top_k"] == 20 and d["fuse_top_k"] == 30 and d["rerank_top_n"] == 5
-    assert d["rerank_threshold"] == 0.35 and d["judge_gray_upper"] == 0.5
+    assert d["rerank_threshold"] == 0.5 and d["judge_gray_upper"] == 0.8
     assert d["history_token_budget"] == 3000 and d["compact_trigger_tokens"] == 6000
     assert d["llm_model"] is None and d["max_tokens"] == 800
     assert d["intent"]["enabled_intents"] == list(INTENTS)
@@ -81,6 +81,7 @@ def test_partial_config_filled_and_legacy_keys_ignored() -> None:
         {"compact_trigger_tokens": 2000},  # < history_token_budget
         {"history_token_budget": 100},
         {"rerank_threshold": 0.6, "judge_gray_upper": 0.5},
+        {"rerank_threshold": 0.9},  # 默认 judge_gray_upper=0.8 < 0.9
         {"intent": {"enabled_intents": ["chitchat"]}},
         {"intent": {"enabled_intents": ["kb_qa", "bogus"]}},
         {"intent": {"min_confidence": 0.8, "clarify_threshold": 0.7}},
