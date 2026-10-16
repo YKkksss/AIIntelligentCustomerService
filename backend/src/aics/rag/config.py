@@ -106,7 +106,7 @@ class AppRagConfig(_Cfg):
     enable_rerank: bool = True
     # Retrieval settings (M2.2b, RAG 流程设计 §4.2): routes, fusion and vector score floor.
     retrieval_mode: Literal["hybrid", "vector", "fulltext"] = "hybrid"
-    fusion: Literal["rrf", "weighted"] = "rrf"
+    fusion: Literal["rrf", "weighted"] = "weighted"  # M2.2b eval: weighted 0.7 best w/o rerank
     vector_weight: float = Field(0.7, ge=0, le=1)  # weighted only; keyword weight = 1 - this
     vector_score_threshold: float | None = Field(None, ge=-1, le=1)  # cosine; None = no floor
     # Default tag filter applied when a request carries none (any-match; [] = no filter)

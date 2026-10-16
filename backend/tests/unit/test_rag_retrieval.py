@@ -94,7 +94,7 @@ class FakeReranker:
         return sorted(scored, key=lambda x: -x[1])[:top_n]
 
 
-CFG = AppRagConfig()
+CFG = AppRagConfig(fusion="rrf")  # RRF-specific expectations below
 
 
 def test_rrf_scores() -> None:
@@ -154,7 +154,7 @@ async def test_both_routes_fail() -> None:
 
 
 async def test_rerank_failure_keeps_rrf_order() -> None:
-    cfg = AppRagConfig(rerank_top_n=2)
+    cfg = AppRagConfig(fusion="rrf", rerank_top_n=2)
     ch = FakeChunks(kw=[C[2], C[1]], retrievable=set(C))
     res = await run_retrieval(
         APP,
@@ -203,7 +203,7 @@ async def test_parent_child_grouping() -> None:
 
 
 async def test_fuse_top_k_and_empty() -> None:
-    cfg = AppRagConfig(fuse_top_k=3)
+    cfg = AppRagConfig(fusion="rrf", fuse_top_k=3)
     ch = FakeChunks(kw=C[5:], retrievable=set(C))
     res = await run_retrieval(
         APP, "q", cfg, vector=FakeVector(C[:5]), chunk_search=ch, reranker=None
@@ -307,3 +307,8 @@ def test_rag_config_validation() -> None:
     for bad in ({"retrieval_mode": "bm25"}, {"fusion": "max"}, {"vector_weight": 1.1}):
         with pytest.raises(ValidationError):
             AppRagConfig(**bad)
+
+
+def test_default_fusion_is_weighted_07() -> None:
+    cfg = AppRagConfig()
+    assert (cfg.fusion, cfg.vector_weight, cfg.retrieval_mode) == ("weighted", 0.7, "hybrid")

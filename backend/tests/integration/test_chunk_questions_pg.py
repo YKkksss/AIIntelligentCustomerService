@@ -237,7 +237,7 @@ async def test_hit_test(env: Env) -> None:
         assert r["vector"] and r["keyword"]
         assert {"chunk_id", "score", "rank"} <= set(r["vector"][0])
         assert r["rerank_applied"] and NEEDLE in r["reranked"][0]["text"]
-        assert r["reranked"][0]["rerank"] == 0.95 and r["rag_config"]["fusion"] == "rrf"
+        assert r["reranked"][0]["rerank"] == 0.95 and r["rag_config"]["fusion"] == "weighted"
         w = await ks.hit_test(
             env.app,
             "退货运费谁承担",

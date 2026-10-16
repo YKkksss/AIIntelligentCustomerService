@@ -1,0 +1,214 @@
+{
+ "n_answerable": 51,
+ "n_unanswerable": 11,
+ "chunks": 412,
+ "questions_attached": 1234,
+ "build_seconds": 866.9,
+ "metrics": {
+  "vector|q_off": {
+   "hit@1": 0.882,
+   "hit@3": 0.941,
+   "hit@5": 0.941,
+   "mrr": 0.916
+  },
+  "fulltext": {
+   "hit@1": 0.627,
+   "hit@3": 0.686,
+   "hit@5": 0.706,
+   "mrr": 0.665
+  },
+  "hybrid|rrf|q_off|norerank": {
+   "hit@1": 0.804,
+   "hit@3": 0.882,
+   "hit@5": 0.922,
+   "mrr": 0.856
+  },
+  "hybrid|rrf|q_off|rerank": {
+   "hit@1": 1.0,
+   "hit@3": 1.0,
+   "hit@5": 1.0,
+   "mrr": 1.0
+  },
+  "hybrid|w0.5|q_off|norerank": {
+   "hit@1": 0.824,
+   "hit@3": 0.941,
+   "hit@5": 0.961,
+   "mrr": 0.884
+  },
+  "hybrid|w0.5|q_off|rerank": {
+   "hit@1": 1.0,
+   "hit@3": 1.0,
+   "hit@5": 1.0,
+   "mrr": 1.0
+  },
+  "hybrid|w0.6|q_off|norerank": {
+   "hit@1": 0.843,
+   "hit@3": 0.961,
+   "hit@5": 0.961,
+   "mrr": 0.899
+  },
+  "hybrid|w0.6|q_off|rerank": {
+   "hit@1": 1.0,
+   "hit@3": 1.0,
+   "hit@5": 1.0,
+   "mrr": 1.0
+  },
+  "hybrid|w0.7|q_off|norerank": {
+   "hit@1": 0.863,
+   "hit@3": 0.961,
+   "hit@5": 0.961,
+   "mrr": 0.912
+  },
+  "hybrid|w0.7|q_off|rerank": {
+   "hit@1": 1.0,
+   "hit@3": 1.0,
+   "hit@5": 1.0,
+   "mrr": 1.0
+  },
+  "hybrid|w0.8|q_off|norerank": {
+   "hit@1": 0.863,
+   "hit@3": 0.941,
+   "hit@5": 0.961,
+   "mrr": 0.909
+  },
+  "hybrid|w0.8|q_off|rerank": {
+   "hit@1": 1.0,
+   "hit@3": 1.0,
+   "hit@5": 1.0,
+   "mrr": 1.0
+  },
+  "hybrid|w0.9|q_off|norerank": {
+   "hit@1": 0.882,
+   "hit@3": 0.941,
+   "hit@5": 0.941,
+   "mrr": 0.918
+  },
+  "hybrid|w0.9|q_off|rerank": {
+   "hit@1": 1.0,
+   "hit@3": 1.0,
+   "hit@5": 1.0,
+   "mrr": 1.0
+  },
+  "vector|q_on": {
+   "hit@1": 0.843,
+   "hit@3": 0.941,
+   "hit@5": 0.961,
+   "mrr": 0.892
+  },
+  "hybrid|rrf|q_on|norerank": {
+   "hit@1": 0.804,
+   "hit@3": 0.922,
+   "hit@5": 0.961,
+   "mrr": 0.865
+  },
+  "hybrid|rrf|q_on|rerank": {
+   "hit@1": 1.0,
+   "hit@3": 1.0,
+   "hit@5": 1.0,
+   "mrr": 1.0
+  },
+  "hybrid|w0.5|q_on|norerank": {
+   "hit@1": 0.824,
+   "hit@3": 0.961,
+   "hit@5": 0.98,
+   "mrr": 0.895
+  },
+  "hybrid|w0.5|q_on|rerank": {
+   "hit@1": 1.0,
+   "hit@3": 1.0,
+   "hit@5": 1.0,
+   "mrr": 1.0
+  },
+  "hybrid|w0.6|q_on|norerank": {
+   "hit@1": 0.882,
+   "hit@3": 0.961,
+   "hit@5": 0.98,
+   "mrr": 0.924
+  },
+  "hybrid|w0.6|q_on|rerank": {
+   "hit@1": 1.0,
+   "hit@3": 1.0,
+   "hit@5": 1.0,
+   "mrr": 1.0
+  },
+  "hybrid|w0.7|q_on|norerank": {
+   "hit@1": 0.902,
+   "hit@3": 0.941,
+   "hit@5": 0.961,
+   "mrr": 0.928
+  },
+  "hybrid|w0.7|q_on|rerank": {
+   "hit@1": 1.0,
+   "hit@3": 1.0,
+   "hit@5": 1.0,
+   "mrr": 1.0
+  },
+  "hybrid|w0.8|q_on|norerank": {
+   "hit@1": 0.863,
+   "hit@3": 0.941,
+   "hit@5": 0.961,
+   "mrr": 0.907
+  },
+  "hybrid|w0.8|q_on|rerank": {
+   "hit@1": 1.0,
+   "hit@3": 1.0,
+   "hit@5": 1.0,
+   "mrr": 1.0
+  },
+  "hybrid|w0.9|q_on|norerank": {
+   "hit@1": 0.863,
+   "hit@3": 0.941,
+   "hit@5": 0.961,
+   "mrr": 0.907
+  },
+  "hybrid|w0.9|q_on|rerank": {
+   "hit@1": 1.0,
+   "hit@3": 1.0,
+   "hit@5": 1.0,
+   "mrr": 1.0
+  }
+ },
+ "unanswerable_top_rerank_ge_threshold": {
+  "hybrid|rrf|q_off|rerank": 0.091,
+  "hybrid|w0.5|q_off|rerank": 0.091,
+  "hybrid|w0.6|q_off|rerank": 0.091,
+  "hybrid|w0.7|q_off|rerank": 0.091,
+  "hybrid|w0.8|q_off|rerank": 0.091,
+  "hybrid|w0.9|q_off|rerank": 0.091,
+  "hybrid|rrf|q_on|rerank": 0.091,
+  "hybrid|w0.5|q_on|rerank": 0.091,
+  "hybrid|w0.6|q_on|rerank": 0.091,
+  "hybrid|w0.7|q_on|rerank": 0.091,
+  "hybrid|w0.8|q_on|rerank": 0.091,
+  "hybrid|w0.9|q_on|rerank": 0.091
+ },
+ "examples_rank_rrf_norerank": {
+  "q06": {
+   "question": "海外仓直邮的商品退款多久到账？",
+   "q_off": 1,
+   "q_on": 1
+  },
+  "q12": {
+   "question": "书籍七天无理由退货寄回邮费怎么算？",
+   "q_off": 13,
+   "q_on": 8
+  },
+  "q29": {
+   "question": "专票要在多长时间内申请？",
+   "q_off": 6,
+   "q_on": 3
+  },
+  "q38": {
+   "question": "仓库把我们的货弄丢了怎么赔？",
+   "q_off": 11,
+   "q_on": 3
+  }
+ },
+ "tokens": {
+  "embed": 29522,
+  "rerank": 287835,
+  "llm_in": 137940,
+  "llm_out": 634183
+ },
+ "cost_yuan_this_run": 5.497
+}
