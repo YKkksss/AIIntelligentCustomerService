@@ -6,7 +6,7 @@
 - 超长段落按句末标点（。！？!?；;）与换行切句，单句仍超长按 token 二分硬切。
 - 自定义分隔符（字面量，不是正则）先把段落切成更小的单元，再参与累加。
 - 表格（`keep_tables=true`）尽量整块不拆：超过上限时按行拆分并在每块重复表头；表格不作为重叠来源。
-- 重叠：新块以前一块末尾不超过 `chunk_overlap` token 的完整句子开头；加上重叠会超过上限时缩减重叠。
+- 重叠：新块以前一块末尾不超过 `chunk_overlap` token 的完整句子开头；加上重叠会超过上限时缩减重叠（仍只保留完整句子，一句都放不下则本块不重叠）。
 - 标题本身不写入正文（向量化文本为 `heading_path + "\\n" + text`，见 §3.6）。
 
 策略（`strategy`）：heading 通用；article 法规（第X条为单位、编/章/节进标题路径）；section 论文（摘要、参考文献独立）；
@@ -306,7 +306,7 @@ class _Builder:
         budget = self._limit() - count_tokens(nxt.text) - 1
         if budget <= 0:
             return
-        ov = _suffix_within(ov, min(self.overlap_budget, budget))
+        ov = _sentence_suffix_within(ov, min(self.overlap_budget, budget))
         if ov:
             self.units.append(_Unit(ov, nxt.page, overlap=True, path=nxt.path))
 
@@ -369,6 +369,20 @@ def _hard_split(text: str, size: int) -> list[str]:
     if rest:
         out.append(rest)
     return out
+
+
+def _sentence_suffix_within(text: str, budget: int) -> str:
+    """缩减重叠时只保留末尾的完整句子；一句都放不下就不重叠（避免新块以半句话开头）。"""
+    if budget <= 0:
+        return ""
+    if count_tokens(text) <= budget:
+        return text.strip()
+    picked: list[str] = []
+    for s in reversed(_sentences(text)):
+        if count_tokens("".join([s, *picked])) > budget:
+            break
+        picked.insert(0, s)
+    return "".join(picked).strip()
 
 
 def _suffix_within(text: str, budget: int) -> str:

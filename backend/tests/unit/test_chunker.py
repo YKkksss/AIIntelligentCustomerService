@@ -129,3 +129,19 @@ def test_pages_tracked() -> None:
 def test_invalid_params() -> None:
     with pytest.raises(ValueError):
         chunk_document(ParsedDoc(), chunk_size=100, chunk_overlap=60)
+
+
+def test_shrunk_overlap_keeps_whole_sentences() -> None:
+    """下一段几乎占满块时缩减重叠：只保留完整句子，不能以半句话开头（E2E 发现）。"""
+    first = "说明：首重 1 公斤，续重每公斤计费；时效自出库起计算。"
+    big = "北京：首重 11 元，续重每公斤 4 元，时效 2 天。" * 40
+    doc = ParsedDoc(blocks=[Block("paragraph", first), Block("paragraph", big)])
+    size = count_tokens(big) + count_tokens("时效自出库起计算。") + 3
+    chunks = chunk_document(doc, chunk_size=size, chunk_overlap=80)
+    assert len(chunks) >= 2
+    head = chunks[1].text.split("\n")[0]
+    assert head in {
+        "时效自出库起计算。",
+        "北京：首重 11 元，续重每公斤 4 元，时效 2 天。" * 40,
+    } or (chunks[1].overlap_tokens == 0)
+    assert not chunks[1].text.startswith("公斤")
