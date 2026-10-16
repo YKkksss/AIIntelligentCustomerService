@@ -146,3 +146,53 @@ def test_llm_chat_model_overrides() -> None:
         llm.chat_model(model="qwen3.7-text-rerank")  # not a chat model
     with pytest.raises(ValueError):
         llm.chat_model(api_key="leak")
+
+
+def test_llm_thinking_switch_follows_registry() -> None:
+    from aics.core.models import ModelRegistry
+    from aics.providers.llm import OpenAICompatibleLLM
+
+    reg = ModelRegistry.model_validate(
+        [
+            {
+                "name": "hybrid",
+                "kind": "chat",
+                "context_window": 1000,
+                "price_in": 0,
+                "price_out": 0,
+                "thinking": "toggle",
+            },
+            {
+                "name": "plain",
+                "kind": "chat",
+                "context_window": 1000,
+                "price_in": 0,
+                "price_out": 0,
+            },
+        ]
+    )
+    llm = OpenAICompatibleLLM(
+        base_url="http://x", api_key="k", default_model="hybrid", registry=reg
+    )
+    assert llm.chat_model(thinking=False).extra_body == {"thinking": {"type": "disabled"}}
+    assert llm.chat_model(thinking=True).extra_body == {"thinking": {"type": "enabled"}}
+    assert llm.chat_model().extra_body is None
+    assert llm.chat_model(model="plain", thinking=False).extra_body is None
+
+
+def test_is_upstream_failure() -> None:
+    import openai
+
+    from aics.providers.llm import is_upstream_failure
+
+    req = httpx.Request("POST", "http://x")
+
+    def status(code: int) -> openai.APIStatusError:
+        return openai.APIStatusError("e", response=httpx.Response(code, request=req), body=None)
+
+    assert is_upstream_failure(httpx.ConnectError("x"))
+    assert is_upstream_failure(TimeoutError())
+    assert is_upstream_failure(openai.APITimeoutError(request=req))
+    assert is_upstream_failure(status(503)) and is_upstream_failure(status(429))
+    assert not is_upstream_failure(status(400)) and not is_upstream_failure(status(401))
+    assert not is_upstream_failure(ValueError("bug"))

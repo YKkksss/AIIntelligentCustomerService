@@ -20,6 +20,9 @@ class ModelSpec(BaseModel):
     context_window: int = Field(gt=0, description="上下文窗口（token）")
     price_in: float = Field(ge=0, description="元 / 百万 token，仅用于估算展示")
     price_out: float = Field(ge=0, description="元 / 百万 token，仅用于估算展示")
+    # "toggle": chat model accepts `thinking: {"type": "enabled"|"disabled"}` (DeepSeek
+    # hybrid reasoning models); "none": no switch, per-call thinking requests are ignored.
+    thinking: Literal["none", "toggle"] = "none"
 
 
 class ModelRegistry(RootModel[list[ModelSpec]]):

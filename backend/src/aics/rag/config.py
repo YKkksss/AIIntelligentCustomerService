@@ -127,6 +127,9 @@ class AppRagConfig(_Cfg):
     temperature: float = Field(0.2, ge=0, le=2)
     max_tokens: int = Field(800, ge=64, le=8192)
     llm_model: str | None = None
+    # Reasoning ("thinking") for generate on models with a switch (registry thinking=toggle);
+    # classify / judge always run without it. Default from the M2.3 live smoke (参数默认值).
+    llm_thinking: bool = False
     intent: IntentConfig = Field(default_factory=IntentConfig)
 
     @model_validator(mode="after")
