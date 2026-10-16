@@ -29,7 +29,23 @@ def decode_text(data: bytes) -> str:
     return data.decode(enc, errors="replace")
 
 
+# 解码后替换字符（U+FFFD）占比超过该值视为乱码（编码误判或二进制内容），拒绝入库
+MAX_REPLACEMENT_RATIO = 0.05
+
+
+def _check_garbled(text: str) -> None:
+    visible = [ch for ch in text if not ch.isspace()]
+    if not visible:
+        return
+    bad = sum(1 for ch in visible if ch == "\ufffd")
+    if bad / len(visible) > MAX_REPLACEMENT_RATIO:
+        raise ParseError(
+            message=f"文本疑似乱码（无法解码字符占 {bad / len(visible):.0%}），请确认文件编码"
+        )
+
+
 def parse_txt(data: bytes) -> ParsedDoc:
     text = decode_text(data)
+    _check_garbled(text)
     blocks = [Block("paragraph", p) for p in (clean_text(x) for x in _BLANK.split(text)) if p]
     return ParsedDoc(blocks=blocks)

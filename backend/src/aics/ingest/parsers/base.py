@@ -41,10 +41,16 @@ class UnsupportedFileTypeError(AppError):
 _WS = re.compile(r"[ \t\u00a0\u3000]+")
 
 
+def _is_control(ch: str) -> bool:
+    o = ord(ch)
+    return o < 32 or 0x7F <= o <= 0x9F
+
+
 def clean_text(text: str) -> str:
     """统一空白：去控制字符、合并行内空白、去首尾空白；保留换行。"""
     text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\x00", "")
-    text = "".join(ch for ch in text if ch == "\n" or ch == "\t" or ord(ch) >= 32)
+    # 去全部 C0/C1 控制字符（含 DEL 0x7F、0x80–0x9F），只保留换行与制表符
+    text = "".join(ch for ch in text if ch in "\n\t" or not _is_control(ch))
     lines = [_WS.sub(" ", ln).strip() for ln in text.split("\n")]
     return "\n".join(lines).strip()
 

@@ -103,3 +103,22 @@ def test_docx_zip_bomb_and_corrupt(monkeypatch: pytest.MonkeyPatch) -> None:
         parse_bytes(buf.getvalue(), "docx")
     with pytest.raises(ParseError, match="损坏"):
         parse_bytes(b"PK\x03\x04broken", "docx")
+
+
+def test_clean_text_strips_del_and_c1_controls() -> None:
+    from aics.ingest.parsers.base import clean_text
+
+    raw = "售后" + "\x7f\x1b\x02\x85\x9f" * 50 + "说明\t第二列\n下一行"
+    assert clean_text(raw) == "售后说明 第二列\n下一行"
+
+
+def test_txt_control_garbage_cleaned() -> None:
+    doc = parse_bytes(("售后" + "\x7f\x1b\x02\x03\x7f" * 400 + "说明").encode(), "txt")
+    assert [b.text for b in doc.blocks] == ["售后说明"]
+
+
+def test_txt_garbled_rejected() -> None:
+    bad = b"\xff\xfe" + b"\x00\xd8" * 200  # 带 BOM、全是孤立代理项 → 解码成 U+FFFD
+    with pytest.raises(ParseError, match="乱码"):
+        parse_bytes(bad, "txt")
+    assert parse_bytes("正常的退货说明。".encode(), "txt").blocks[0].text == "正常的退货说明。"
