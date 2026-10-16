@@ -2,7 +2,11 @@
 
 - 服务器上共用 KnowledgeFlow 的 Qdrant（ADR-0002 修订）：只操作 `prefix` 开头的集合，集合名只由本模块生成。
 - 所有读写都**强制** `app_id`：方法第一个参数是 app_id，过滤条件由本模块拼装，不提供无过滤的检索方法。
-- 正文与标题不进 Qdrant，payload 只有 app_id / document_id / chunk_id / index_version / enabled。
+- 正文与标题不进 Qdrant，payload 只有 app_id / document_id / chunk_id / index_version / enabled，
+  以及 M2.2b 起的 `kind`（chunk / question，缺省视为 chunk）与 `tags`（文档标签，过滤检索）。
+- Supplementary-question points (M2.2b) live in the same collection: point id = question id,
+  `chunk_id` = the chunk they answer, so chunk-level operations filter on payload `chunk_id`
+  and document-level ones on `document_id` and cover both kinds; counts exclude questions.
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ import structlog
 from qdrant_client import AsyncQdrantClient
 from qdrant_client import models as qm
 
+PointKind = Literal["chunk", "question"]
 CollectionKind = Literal["chunks", "messages", "intents"]
 SEARCH_HNSW_EF = 128
 
@@ -51,14 +56,27 @@ class ChunkPoint:
     vector: Sequence[float]
     enabled: bool = True
     parent_id: UUID | None = None  # 父子模式：子块所属父块
+    tags: Sequence[str] = ()
+    kind: PointKind = "chunk"
+    point_id: UUID | None = None  # question points: the question id (defaults to chunk_id)
 
 
 @dataclass(frozen=True)
 class ChunkHit:
-    chunk_id: UUID
+    chunk_id: UUID  # always the chunk (for question points: the chunk the question maps to)
     document_id: UUID
     index_version: int
     score: float
+    kind: PointKind = "chunk"
+    point_id: UUID | None = None
+
+
+def _is_question() -> qm.FieldCondition:
+    return qm.FieldCondition(key="kind", match=qm.MatchValue(value="question"))
+
+
+def _tags(tags: Sequence[str]) -> qm.FieldCondition:
+    return qm.FieldCondition(key="tags", match=qm.MatchAny(any=list(tags)))
 
 
 def _app(app_id: UUID) -> qm.FieldCondition:
@@ -110,6 +128,11 @@ class QdrantVectorStore:
             ):
                 await self.client.create_payload_index(name, field, field_schema=schema)
             log.info("vectorstore.collection_created", collection=name, dim=self.dim)
+        # M2.2b indexes; create_payload_index is idempotent, so pre-M2.2b collections get them too
+        for field in ("chunk_id", "kind", "tags"):
+            await self.client.create_payload_index(
+                name, field, field_schema=qm.PayloadSchemaType.KEYWORD
+            )
         self._ensured.add(name)
 
     async def drop_chunks_collection(self) -> None:
@@ -128,7 +151,7 @@ class QdrantVectorStore:
                 raise VectorStoreError(f"向量维度 {len(p.vector)} ≠ {self.dim}")
             structs.append(
                 qm.PointStruct(
-                    id=str(p.chunk_id),
+                    id=str(p.point_id or p.chunk_id),
                     vector=list(p.vector),
                     payload={
                         "app_id": str(app_id),
@@ -136,6 +159,8 @@ class QdrantVectorStore:
                         "chunk_id": str(p.chunk_id),
                         "index_version": p.index_version,
                         "enabled": p.enabled,
+                        "kind": p.kind,
+                        "tags": list(p.tags),
                         **({"parent_id": str(p.parent_id)} if p.parent_id else {}),
                     },
                 )
@@ -144,7 +169,9 @@ class QdrantVectorStore:
         return len(structs)
 
     async def set_enabled(self, app_id: UUID, chunk_ids: Sequence[UUID], enabled: bool) -> None:
-        """同步 PG 中 `enabled AND review_status <> 'flagged'` 的变化；只作用于本应用的点。"""
+        """同步 PG 中 `enabled AND review_status <> 'flagged'` 的变化；只作用于本应用的点。
+
+        Filters on payload `chunk_id`, so the chunk's supplementary-question points follow."""
         if not chunk_ids:
             return
         await self.ensure_chunks_collection()
@@ -152,7 +179,70 @@ class QdrantVectorStore:
             self.chunks_collection,
             payload={"enabled": enabled},
             points=qm.Filter(
-                must=[_app(app_id), qm.HasIdCondition(has_id=[str(c) for c in chunk_ids])]
+                must=[
+                    _app(app_id),
+                    qm.FieldCondition(
+                        key="chunk_id", match=qm.MatchAny(any=[str(c) for c in chunk_ids])
+                    ),
+                ]
+            ),
+            wait=True,
+        )
+
+    async def set_document_tags(self, app_id: UUID, document_id: UUID, tags: Sequence[str]) -> None:
+        """Mirror `documents.tags` onto every point of the document (all builds, both kinds)."""
+        if not await self.client.collection_exists(self.chunks_collection):
+            return
+        await self.client.set_payload(
+            self.chunks_collection,
+            payload={"tags": list(tags)},
+            points=qm.Filter(
+                must=[
+                    _app(app_id),
+                    qm.FieldCondition(
+                        key="document_id", match=qm.MatchValue(value=str(document_id))
+                    ),
+                ]
+            ),
+            wait=True,
+        )
+
+    async def move_question(
+        self,
+        app_id: UUID,
+        question_id: UUID,
+        *,
+        chunk_id: UUID,
+        index_version: int,
+        enabled: bool,
+        parent_id: UUID | None,
+    ) -> None:
+        """Re-point a question to a new build's chunk without re-embedding (payload only)."""
+        await self.ensure_chunks_collection()
+        payload: dict[str, object] = {
+            "chunk_id": str(chunk_id),
+            "index_version": index_version,
+            "enabled": enabled,
+        }
+        if parent_id is not None:
+            payload["parent_id"] = str(parent_id)
+        await self.client.set_payload(
+            self.chunks_collection,
+            payload=payload,
+            points=qm.Filter(must=[_app(app_id), qm.HasIdCondition(has_id=[str(question_id)])]),
+            wait=True,
+        )
+
+    async def delete_points(self, app_id: UUID, point_ids: Sequence[UUID]) -> None:
+        """Delete specific points of the app (supplementary questions)."""
+        if not point_ids or not await self.client.collection_exists(self.chunks_collection):
+            return
+        await self.client.delete(
+            self.chunks_collection,
+            points_selector=qm.FilterSelector(
+                filter=qm.Filter(
+                    must=[_app(app_id), qm.HasIdCondition(has_id=[str(p) for p in point_ids])]
+                )
             ),
             wait=True,
         )
@@ -177,8 +267,18 @@ class QdrantVectorStore:
 
     # ---------------- 读取 ----------------
     async def search_chunks(
-        self, app_id: UUID, vector: Sequence[float], limit: int, *, enabled_only: bool = True
+        self,
+        app_id: UUID,
+        vector: Sequence[float],
+        limit: int,
+        *,
+        enabled_only: bool = True,
+        tags: Sequence[str] | None = None,
+        include_questions: bool = True,
     ) -> list[ChunkHit]:
+        """Nearest points of the app; question points map to their chunk (callers dedup).
+
+        `tags` = any-match filter on document tags (None / empty = no filter)."""
         if len(vector) != self.dim:
             raise VectorStoreError(f"查询向量维度 {len(vector)} ≠ {self.dim}")
         if not await self.client.collection_exists(self.chunks_collection):
@@ -186,11 +286,14 @@ class QdrantVectorStore:
         must: list[qm.Condition] = [_app(app_id)]
         if enabled_only:
             must.append(qm.FieldCondition(key="enabled", match=qm.MatchValue(value=True)))
+        if tags:
+            must.append(_tags(tags))
+        must_not = [] if include_questions else [_is_question()]
         resp = await self.client.query_points(
             self.chunks_collection,
             query=list(vector),
             limit=limit,
-            query_filter=qm.Filter(must=must),
+            query_filter=qm.Filter(must=must, must_not=must_not),
             search_params=qm.SearchParams(
                 hnsw_ef=SEARCH_HNSW_EF, quantization=qm.QuantizationSearchParams(rescore=True)
             ),
@@ -201,12 +304,15 @@ class QdrantVectorStore:
             pl = pt.payload or {}
             if pl.get("app_id") != str(app_id):  # 防御：过滤失效时也不越权返回
                 continue
+            kind: PointKind = "question" if pl.get("kind") == "question" else "chunk"
             hits.append(
                 ChunkHit(
-                    chunk_id=UUID(str(pt.id)),
+                    chunk_id=UUID(str(pl.get("chunk_id") or pt.id)),
                     document_id=UUID(pl["document_id"]),
                     index_version=int(pl["index_version"]),
                     score=float(pt.score),
+                    kind=kind,
+                    point_id=UUID(str(pt.id)),
                 )
             )
         return hits
@@ -218,7 +324,9 @@ class QdrantVectorStore:
         if enabled_only:
             must.append(qm.FieldCondition(key="enabled", match=qm.MatchValue(value=True)))
         res = await self.client.count(
-            self.chunks_collection, count_filter=qm.Filter(must=must), exact=True
+            self.chunks_collection,
+            count_filter=qm.Filter(must=must, must_not=[_is_question()]),
+            exact=True,
         )
         return res.count
 
@@ -234,7 +342,7 @@ class QdrantVectorStore:
         res = await self.client.facet(
             self.chunks_collection,
             key="document_id",
-            facet_filter=qm.Filter(must=must),
+            facet_filter=qm.Filter(must=must, must_not=[_is_question()]),
             limit=limit,
             exact=True,
         )

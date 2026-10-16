@@ -46,12 +46,16 @@ class FakeChunks:
         self.kw, self.retrievable, self.fail = kw, retrievable, fail
         self.parents = parents or {}
 
-    async def keyword_search(self, app_id: UUID, question: str, k: int) -> list[KeywordHit]:
+    async def keyword_search(
+        self, app_id: UUID, question: str, k: int, *, tags: Sequence[str] | None = None
+    ) -> list[KeywordHit]:
         if self.fail:
             raise RuntimeError("pg down")
         return [KeywordHit(c, 1.0 / (i + 1)) for i, c in enumerate(self.kw[:k])]
 
-    async def fetch_chunks(self, app_id: UUID, chunk_ids: Sequence[UUID]) -> dict[UUID, ChunkText]:
+    async def fetch_chunks(
+        self, app_id: UUID, chunk_ids: Sequence[UUID], *, tags: Sequence[str] | None = None
+    ) -> dict[UUID, ChunkText]:
         return {c: chunk(c, self.parents.get(c)) for c in chunk_ids if c in self.retrievable}
 
     async def fetch_parents(
@@ -64,7 +68,9 @@ class FakeVector:
     def __init__(self, hits: list[UUID], fail: bool = False) -> None:
         self.hits, self.fail = hits, fail
 
-    async def search(self, app_id: UUID, question: str, k: int) -> list[tuple[UUID, float]]:
+    async def search(
+        self, app_id: UUID, question: str, k: int, *, tags: Sequence[str] | None = None
+    ) -> list[tuple[UUID, float]]:
         if self.fail:
             raise UpstreamUnavailableError("embedding down")
         return [(c, 0.9 - i * 0.01) for i, c in enumerate(self.hits[:k])]
@@ -248,14 +254,18 @@ async def test_single_route_modes(mode: str, expect: list[UUID]) -> None:
     calls: list[str] = []
 
     class V(FakeVector):
-        async def search(self, app_id: UUID, question: str, k: int) -> list[tuple[UUID, float]]:
+        async def search(
+            self, app_id: UUID, question: str, k: int, *, tags: Sequence[str] | None = None
+        ) -> list[tuple[UUID, float]]:
             calls.append("v")
-            return await super().search(app_id, question, k)
+            return await super().search(app_id, question, k, tags=tags)
 
     class K(FakeChunks):
-        async def keyword_search(self, app_id: UUID, question: str, k: int) -> list[KeywordHit]:
+        async def keyword_search(
+            self, app_id: UUID, question: str, k: int, *, tags: Sequence[str] | None = None
+        ) -> list[KeywordHit]:
             calls.append("k")
-            return await super().keyword_search(app_id, question, k)
+            return await super().keyword_search(app_id, question, k, tags=tags)
 
     cfg = AppRagConfig(retrieval_mode=mode)
     res = await run_retrieval(

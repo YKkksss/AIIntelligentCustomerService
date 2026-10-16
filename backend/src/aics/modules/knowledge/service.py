@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from aics.core.config import get_settings
 from aics.core.errors import AppError, NotFoundError, ValidationAppError
 from aics.db.models import App, Document, Job
+from aics.db.models.knowledge import MAX_TAGS, TAG_MAX_CHARS
 from aics.ingest.parsers import MIME_TYPES, detect_file_type, parse_bytes
 from aics.ingest.parsers.url import FetchedUrl, fetch_url
 from aics.ingest.service import OVERRIDE_KEY
@@ -93,6 +94,18 @@ def content_hash(data: bytes) -> str:
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def normalize_tags(tags: Sequence[str]) -> list[str]:
+    """Strip, drop empties, dedup (order kept); ≤ MAX_TAGS tags of ≤ TAG_MAX_CHARS chars."""
+    if isinstance(tags, str):
+        raise ValidationAppError(message="tags 必须是字符串数组")
+    out = list(dict.fromkeys(t.strip() for t in tags if isinstance(t, str) and t.strip()))
+    if len(out) > MAX_TAGS:
+        raise ValidationAppError(message=f"标签最多 {MAX_TAGS} 个")
+    if any(len(t) > TAG_MAX_CHARS for t in out):
+        raise ValidationAppError(message=f"单个标签最多 {TAG_MAX_CHARS} 字")
+    return out
 
 
 def _clean_title(title: str | None, fallback: str) -> str:
@@ -514,6 +527,29 @@ class KnowledgeService:
         for j in result.jobs:
             self._send(INGEST_TASK, [str(j.target_id), str(j.id)])
         return result
+
+    # ------------------------------------------------------------------ 标签（M2.2b）
+    async def set_document_tags(
+        self, app_id: UUID, document_id: UUID, tags: Sequence[str]
+    ) -> Document:
+        """Replace the document's tags (PG first, then Qdrant payload of all its points).
+
+        A failed Qdrant sync is logged, not raised: retrieval re-checks tags in PG
+        (`fetch_chunks(tags=...)`), so a stale payload can only miss a hit, never leak one
+        across tags; the next edit or rebuild re-mirrors."""
+        clean = normalize_tags(tags)
+        await self._app(app_id)
+        doc = await self._doc(app_id, document_id, lock=True)
+        if doc.status == "deleting":
+            raise DocumentBusyError(message="文档正在删除")
+        doc.tags = clean
+        await self.session.commit()
+        if self.store is not None:
+            try:
+                await self.store.set_document_tags(app_id, doc.id, clean)
+            except Exception:  # noqa: BLE001
+                log.warning("knowledge.tag_sync_failed", document_id=str(doc.id))
+        return doc
 
     # ------------------------------------------------------------------ 删除
     async def delete_document(

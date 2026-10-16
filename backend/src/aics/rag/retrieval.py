@@ -55,19 +55,48 @@ class RouteHit:
 
 
 class VectorSearch(Protocol):
-    async def search(self, app_id: UUID, question: str, k: int) -> list[tuple[UUID, float]]: ...
+    async def search(
+        self, app_id: UUID, question: str, k: int, *, tags: Sequence[str] | None = None
+    ) -> list[tuple[UUID, float]]: ...
+
+
+# Raw Qdrant limit = k × this: absorbs stale points (filtered in PG later) and several
+# points of one chunk (its supplementary questions) before dedup (Qdrant 设计 §2).
+VECTOR_OVERFETCH = 2
 
 
 class EmbeddingVectorSearch:
-    """Embed the question and query the app's chunk points in Qdrant (enabled only)."""
+    """Embed the question and query the app's points in Qdrant (enabled only).
 
-    def __init__(self, embedder: EmbeddingProvider, store: QdrantVectorStore) -> None:
+    Chunk points and supplementary-question points (M2.2b) both map to a chunk id; the
+    chunk keeps its best score (= best rank), so a matching question lifts its chunk.
+    `include_questions=False` gives the chunk-only baseline (evaluation)."""
+
+    def __init__(
+        self,
+        embedder: EmbeddingProvider,
+        store: QdrantVectorStore,
+        *,
+        include_questions: bool = True,
+    ) -> None:
         self.embedder, self.store = embedder, store
+        self.include_questions = include_questions
 
-    async def search(self, app_id: UUID, question: str, k: int) -> list[tuple[UUID, float]]:
+    async def search(
+        self, app_id: UUID, question: str, k: int, *, tags: Sequence[str] | None = None
+    ) -> list[tuple[UUID, float]]:
         vec = await self.embedder.embed_query(question)
-        hits = await self.store.search_chunks(app_id, vec, k)
-        return [(h.chunk_id, h.score) for h in hits]
+        hits = await self.store.search_chunks(
+            app_id,
+            vec,
+            k * VECTOR_OVERFETCH,
+            tags=tags,
+            include_questions=self.include_questions,
+        )
+        best: dict[UUID, float] = {}
+        for h in hits:  # Qdrant returns score-desc; keep the first (best) per chunk
+            best.setdefault(h.chunk_id, h.score)
+        return list(best.items())[:k]
 
 
 @dataclass
@@ -114,6 +143,7 @@ class RetrievalResult:
     fused: list[Candidate] = field(default_factory=list)
     reranked: list[Candidate] = field(default_factory=list)
     fusion: str = "rrf"
+    tags: list[str] = field(default_factory=list)
     rerank_applied: bool = False  # True only when real rerank scores are present
     degraded: list[str] = field(default_factory=list)
     timings: dict[str, int] = field(default_factory=dict)
@@ -123,6 +153,7 @@ class RetrievalResult:
             "vector": [(str(h.chunk_id), round(h.score, 4)) for h in self.vector_hits],
             "keyword": [(str(h.chunk_id), round(h.score, 4)) for h in self.keyword_hits],
             "fusion": self.fusion,
+            "tags": list(self.tags),
             "fused": [c.trace() for c in self.fused],
             "reranked": [c.trace() for c in self.reranked],
             "rerank_applied": self.rerank_applied,
@@ -153,11 +184,12 @@ async def retrieve(
     *,
     vector: VectorSearch,
     chunk_search: ChunkSearch,
+    tags: Sequence[str] | None = None,
 ) -> tuple[list[RouteHit], list[RouteHit], list[str]]:
     """Run both routes concurrently; returns (vector_hits, keyword_hits, degraded)."""
 
     async def kw() -> list[tuple[UUID, float]]:
-        hits = await chunk_search.keyword_search(app_id, question, cfg.keyword_top_k)
+        hits = await chunk_search.keyword_search(app_id, question, cfg.keyword_top_k, tags=tags)
         return [(h.chunk_id, h.score) for h in hits]
 
     async def none() -> list[tuple[UUID, float]]:
@@ -165,7 +197,9 @@ async def retrieve(
 
     mode = cfg.retrieval_mode
     v_res, k_res = await asyncio.gather(
-        vector.search(app_id, question, cfg.vector_top_k) if mode != "fulltext" else none(),
+        vector.search(app_id, question, cfg.vector_top_k, tags=tags)
+        if mode != "fulltext"
+        else none(),
         kw() if mode != "vector" else none(),
         return_exceptions=True,
     )
@@ -228,11 +262,12 @@ async def fuse(
     cfg: AppRagConfig,
     *,
     chunk_search: ChunkSearch,
+    tags: Sequence[str] | None = None,
 ) -> list[Candidate]:
     ids = list(
         dict.fromkeys([h.chunk_id for h in vector_hits] + [h.chunk_id for h in keyword_hits])
     )
-    rows = await chunk_search.fetch_chunks(app_id, ids)
+    rows = await chunk_search.fetch_chunks(app_id, ids, tags=tags)
     # Only currently retrievable chunks take part in ranking (ranks are recomputed after
     # filtering so a stale Qdrant point does not push others down).
     v_live = [h for h in vector_hits if h.chunk_id in rows]
@@ -309,19 +344,22 @@ async def run_retrieval(
     vector: VectorSearch,
     chunk_search: ChunkSearch,
     reranker: RerankProvider | None,
+    tags: Sequence[str] | None = None,
 ) -> RetrievalResult:
+    """`tags`: request tag filter (any-match); None → `cfg.default_tags`; [] → no filter."""
     if not question or not question.strip():
         raise ValueError("question must not be empty")
-    res = RetrievalResult(fusion=cfg.fusion)
+    eff = list(cfg.default_tags if tags is None else tags) or None
+    res = RetrievalResult(fusion=cfg.fusion, tags=eff or [])
     t0 = time.perf_counter()
     res.vector_hits, res.keyword_hits, deg = await retrieve(
-        app_id, question, cfg, vector=vector, chunk_search=chunk_search
+        app_id, question, cfg, vector=vector, chunk_search=chunk_search, tags=eff
     )
     res.degraded += deg
     res.timings["retrieve"] = _ms(t0)
     t1 = time.perf_counter()
     res.fused = await fuse(
-        app_id, res.vector_hits, res.keyword_hits, cfg, chunk_search=chunk_search
+        app_id, res.vector_hits, res.keyword_hits, cfg, chunk_search=chunk_search, tags=eff
     )
     res.timings["fuse"] = _ms(t1)
     t2 = time.perf_counter()

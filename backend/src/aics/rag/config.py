@@ -109,6 +109,10 @@ class AppRagConfig(_Cfg):
     fusion: Literal["rrf", "weighted"] = "rrf"
     vector_weight: float = Field(0.7, ge=0, le=1)  # weighted only; keyword weight = 1 - this
     vector_score_threshold: float | None = Field(None, ge=-1, le=1)  # cosine; None = no floor
+    # Default tag filter applied when a request carries none (any-match; [] = no filter)
+    default_tags: list[
+        Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)]
+    ] = Field(default_factory=list, max_length=20)
     # 检索 / 判定默认值的依据见 docs/06-development/09-参数默认值与依据.md
     rerank_threshold: float = Field(0.5, ge=0, le=1)
     judge_with_llm: bool = True

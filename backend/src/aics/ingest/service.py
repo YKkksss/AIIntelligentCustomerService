@@ -253,6 +253,7 @@ class IngestService:
             payload: dict[str, Any] = dict(job.payload or {})
             cfg: dict[str, Any] = dict(effective_chunk_config(app.chunk_config, doc, payload))
             cfg_version, custom_dict = app.chunk_config_version, list(app.custom_dict or [])
+            build_tags = list(doc.tags or [])
         replace_key: str | None = payload.get("storage_key")
 
         try:
@@ -285,8 +286,9 @@ class IngestService:
                 store=self.store,
                 batch_size=self.settings.embed_batch * EMBED_PROGRESS_BATCHES,
                 before_batch=before_batch,
+                tags=build_tags,
             )
-            old_key = await self._switch(
+            old_key, live_tags = await self._switch(
                 document_id, job_id, n, len(items), cfg_version, title, payload, custom_dict
             )
         except _Cancelled:
@@ -304,6 +306,7 @@ class IngestService:
                 await self.storage.delete(replace_key)
             return "failed"
 
+        await self._after_switch(app_id, document_id, n, build_tags, live_tags)
         if self.enqueue_cleanup is not None:
             r = self.enqueue_cleanup(document_id, n, old_key)
             if r is not None:
@@ -393,8 +396,8 @@ class IngestService:
         title: str,
         payload: Mapping[str, Any],
         custom_dict: list[str],
-    ) -> str | None:
-        """一个事务内切换生效版本；返回需要清理的旧文件 key（替换文件时）。"""
+    ) -> tuple[str | None, list[str]]:
+        """一个事务内切换生效版本；返回 (需要清理的旧文件 key（替换文件时）, 当前文档标签)。"""
         async with self.sessions() as s:
             doc = await s.get(Document, document_id, with_for_update=True)
             if doc is None or doc.status == "deleting" or doc.pending_index_version != n:
@@ -426,7 +429,26 @@ class IngestService:
                 await s.commit()
             except IntegrityError as exc:  # 替换后内容与同应用其他文档重复
                 raise ParseError(message="替换后的内容与已有文档重复") from exc
-            return old_key if old_key != doc.storage_key else None
+            return (old_key if old_key != doc.storage_key else None), list(doc.tags or [])
+
+    async def _after_switch(
+        self,
+        app_id: UUID,
+        document_id: UUID,
+        n: int,
+        build_tags: list[str],
+        live_tags: list[str],
+    ) -> None:
+        """Post-switch sync that must not fail the (already committed) build.
+
+        Tags edited while the build ran are re-mirrored onto the new points; any failure is
+        logged and repaired by the next tag edit / rebuild (PG stays the source of truth)."""
+        if build_tags == live_tags:
+            return
+        try:
+            await self.store.set_document_tags(app_id, document_id, live_tags)
+        except Exception:  # noqa: BLE001 - build already switched; reported via logs
+            log.exception("post-switch tag sync failed", extra={"document_id": str(document_id)})
 
     async def _safe_purge(self, app_id: UUID, document_id: UUID, n: int) -> None:
         try:

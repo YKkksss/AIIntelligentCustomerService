@@ -47,6 +47,7 @@ async def embed_and_upsert(
     store: QdrantVectorStore,
     batch_size: int,
     before_batch: Callable[[int, int], Awaitable[None]] | None = None,
+    tags: Sequence[str] = (),
 ) -> int:
     """分批向量化并 upsert；每批之前调用 `before_batch(done, total)`（中止检查与进度更新）。"""
     done = 0
@@ -58,7 +59,7 @@ async def embed_and_upsert(
         await store.upsert_chunks(
             app_id,
             [
-                ChunkPoint(i.chunk_id, document_id, index_version, v, i.enabled, i.parent_id)
+                ChunkPoint(i.chunk_id, document_id, index_version, v, i.enabled, i.parent_id, tags)
                 for i, v in zip(batch, vectors, strict=True)
             ],
         )
