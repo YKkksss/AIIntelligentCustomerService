@@ -1,20 +1,35 @@
 """Non-kb_qa branches and handoff (意图识别 §6.3; 会话生命周期与转人工 §3).
 
-M2.3 uses fixed replies; M2.4 adds the rule-layer templates (greeting / thanks / ack / bye)
-and the optional LLM chitchat reply. None of these emit citations or go through postprocess.
+None of these emit citations or go through postprocess.
+- chitchat_reply: rule hit → template by category; LLM-classified chitchat → short LLM reply
+  (≤ 60 字, max_tokens 100, no thinking), falling back to the template on any failure;
+- blocked_reply: sensitive keyword → `intent.sensitive_reply` (refused);
+- out_of_scope_reply / clarify_reply: fixed reply / the clarify question;
+- handoff: rule (keyword / max_refusals), intent (human / action) or judge (on_unanswerable).
 """
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
+import structlog
+from langchain_core.messages import HumanMessage
 from langgraph.runtime import Runtime
 
+from aics.core.errors import AppError
+from aics.rag import prompting
+from aics.rag.intent.templates import chitchat_category
+from aics.rag.intent.templates import chitchat_reply as template_reply
+from aics.rag.llm import StreamState
 from aics.rag.nodes.answer import emit_trace
 from aics.rag.schemas import DeltaEvent
 from aics.rag.state import RagDeps, RagState, merged
 
-DEFAULT_CHITCHAT_REPLY = "您好，请问有什么可以帮您？"
+log = structlog.get_logger()
+
+CHITCHAT_MAX_TOKENS = 100
+CHITCHAT_MAX_CHARS = 120  # final answer cap (prompt asks for ≤ 60 字; max_tokens bounds it)
 
 
 def _reply(
@@ -24,6 +39,7 @@ def _reply(
     answer_type: str,
     reason: str,
     handoff_reason: str | None = None,
+    **extra: Any,
 ) -> dict[str, Any]:
     emit_trace(state, runtime)
     runtime.stream_writer(DeltaEvent(text=text))
@@ -34,13 +50,75 @@ def _reply(
         decision_reason=reason,
         handoff_reason=handoff_reason,
         citations=[],
+        **extra,
     )
 
 
+def _template(state: RagState) -> str:
+    inp = state["input"]
+    resolved = state["intent"]
+    category = (resolved.rule_hit or {}).get("category") or chitchat_category(inp.question)
+    return template_reply(category, inp.config.intent, greeting=inp.profile.greeting)
+
+
 async def chitchat_reply(state: RagState, runtime: Runtime[RagDeps]) -> dict[str, Any]:
-    replies = state["input"].config.intent.chitchat_replies
-    text = (replies.greeting if replies and replies.greeting else "") or DEFAULT_CHITCHAT_REPLY
-    return _reply(state, runtime, text, "answer", "intent:chitchat")
+    if state["intent"].source == "rule":
+        return _reply(state, runtime, _template(state), "answer", "intent:chitchat(rule)")
+    inp = state["input"]
+    prompt = prompting.load("chitchat")
+    text = prompting.render(
+        prompt,
+        app_name=inp.profile.name,
+        system_prompt=(inp.profile.system_prompt or "").strip(),
+        language=prompting.LANGUAGES.get(inp.profile.language, inp.profile.language),
+        question=" ".join(inp.question.split()),
+    )
+    emit_trace(state, runtime)
+    st = StreamState()
+    t0 = time.perf_counter()
+    try:
+        async for piece in runtime.context.llm.stream(
+            [HumanMessage(text)],
+            st,
+            node="chitchat",
+            model=inp.config.llm_model,
+            temperature=0.7,
+            max_tokens=CHITCHAT_MAX_TOKENS,
+            thinking=False,
+        ):
+            runtime.stream_writer(DeltaEvent(text=piece))
+    except (TimeoutError, AppError) as e:
+        if st.text:  # partial reply already streamed; keep it
+            log.warning("rag.chitchat_interrupted", error_type=type(e).__name__)
+        else:
+            log.warning("rag.chitchat_failed", error_type=type(e).__name__)
+            fallback = _template(state)
+            runtime.stream_writer(DeltaEvent(text=fallback))
+            return merged(
+                state,
+                answer=fallback,
+                answer_type="answer",
+                decision_reason="intent:chitchat",
+                citations=[],
+                degraded=["chitchat_llm_failed"],
+                prompt_versions={"chitchat": str(prompt.version)},
+            )
+    answer = st.text[:CHITCHAT_MAX_CHARS].strip() or _template(state)
+    return merged(
+        state,
+        answer=answer,
+        answer_type="answer",
+        decision_reason="intent:chitchat",
+        citations=[],
+        usage=st.usage,
+        prompt_versions={"chitchat": str(prompt.version)},
+        timings={"chitchat": int((time.perf_counter() - t0) * 1000)},
+    )
+
+
+async def blocked_reply(state: RagState, runtime: Runtime[RagDeps]) -> dict[str, Any]:
+    text = state["input"].config.intent.sensitive_reply
+    return _reply(state, runtime, text, "refused", "sensitive_keyword")
 
 
 def out_of_scope_text(state: RagState) -> str:
@@ -61,12 +139,16 @@ async def clarify_reply(state: RagState, runtime: Runtime[RagDeps]) -> dict[str,
 
 async def handoff(state: RagState, runtime: Runtime[RagDeps]) -> dict[str, Any]:
     inp = state["input"]
-    intent = state["intent"].intent
+    resolved = state["intent"]
     if state.get("decision") == "handoff":  # judge: unanswerable + on_unanswerable
         return _reply(
             state, runtime, inp.handoff.text, "handoff", state["decision_reason"], "unanswerable"
         )
-    if intent == "action":
+    if resolved.source == "rule":
+        rule = (resolved.rule_hit or {}).get("rule")
+        reason = "max_refusals" if rule == "max_refusals" else "keyword"
+        return _reply(state, runtime, inp.handoff.text, "handoff", f"rule:{reason}", reason)
+    if resolved.intent == "action":
         return _reply(
             state,
             runtime,

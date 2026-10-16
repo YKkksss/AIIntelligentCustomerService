@@ -36,6 +36,7 @@ class AppProfile(BaseModel):
 
     name: str = Field(min_length=1, max_length=100)
     description: str | None = None
+    greeting: str | None = None  # apps.greeting; default chitchat greeting reply
     system_prompt: str | None = None
     answer_style: str | None = None
     fallback_text: str = Field(min_length=1, max_length=500)

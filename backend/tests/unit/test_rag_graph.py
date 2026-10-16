@@ -94,6 +94,8 @@ def make_responder(
             return json.dumps({"answerable": judge.get(q, False), "reason": "test"})
         if node == "condense":
             return "退款几天到账"
+        if node == "chitchat":
+            return "您好呀，有业务问题随时问我～"
         if generate is not None:
             return generate
         ctx = tag(text, "context")
@@ -324,7 +326,7 @@ async def test_breaker_opens_and_short_circuits() -> None:
 @pytest.mark.parametrize(
     ("raw", "answer_type", "reason", "handoff_reason"),
     [
-        ("chitchat", "answer", "intent:chitchat", None),
+        ("chitchat", "answer", "intent:chitchat", None),  # LLM chitchat reply
         ("out_of_scope", "refused", "intent:out_of_scope", None),
         ("human", "handoff", "intent:human", "intent_human"),
         ("action", "handoff", "intent:action", "intent_action"),
@@ -334,14 +336,15 @@ async def test_intent_branches(
     raw: str, answer_type: str, reason: str, handoff_reason: str | None
 ) -> None:
     llm = FakeLLMProvider(make_responder(classify=lambda q: classify_json(q, raw, 0.95)))
-    res, events = await run_rag_collect(inp("你好呀"), ports(kb_with({}), llm))
+    res, events = await run_rag_collect(inp("今天心情不错哈哈"), ports(kb_with({}), llm))
     assert (res.answer_type, res.decision_reason, res.handoff_reason) == (
         answer_type,
         reason,
         handoff_reason,
     )
     assert res.intent.name == raw and res.intent.source == "llm"
-    assert res.citations == [] and llm.nodes() == ["classify"]  # no retrieval / generate
+    assert res.citations == [] and "generate" not in llm.nodes()
+    assert llm.nodes()[0] == "classify"
     assert not any(isinstance(e, CitationsEvent) for e in events)
 
 

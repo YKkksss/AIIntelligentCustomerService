@@ -1,4 +1,4 @@
-"""guard and load_context nodes (RAG 流程设计 §4; 对话上下文管理 §6)."""
+"""load_context node (RAG 流程设计 §4; 对话上下文管理 §6)."""
 
 from __future__ import annotations
 
@@ -12,12 +12,6 @@ from aics.rag.ports import ContextRequest
 from aics.rag.state import RagDeps, RagState, merged
 
 log = structlog.get_logger()
-
-
-async def guard(state: RagState, runtime: Runtime[RagDeps]) -> dict[str, Any]:
-    """Rule layer hook. M2.3 lets everything through; the rules (sensitive words, handoff
-    keywords, refusal streak, chitchat templates) are M2.4 (`aics.rag.intent`)."""
-    return merged(state, timings={"guard": 0})
 
 
 async def load_context(state: RagState, runtime: Runtime[RagDeps]) -> dict[str, Any]:

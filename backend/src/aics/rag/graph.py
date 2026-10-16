@@ -1,9 +1,12 @@
 """The single-turn RAG graph and `run_rag` (RAG 流程设计 §1–§6).
 
-guard → load_context → condense_classify → route_intent
-  kb_qa → retrieve → fuse → rerank → judge → generate → postprocess
+guard ─ sensitive → blocked_reply │ handoff keyword / refusal streak → handoff │
+        chitchat exact match → chitchat_reply (template) │ else → load_context
+load_context → condense_classify (no history: ∥ retrieve + fuse) → route_intent
+  kb_qa → retrieve → fuse → rerank → judge → generate → postprocess   (parallel: → rerank)
                                             ↘ refuse | handoff
-  chitchat / out_of_scope / clarify → fixed reply;  human / action → handoff
+  out_of_scope → scope_check ─ strong KB evidence → judge │ else → out_of_scope_reply
+  chitchat → chitchat_reply (LLM) │ clarify → clarify_reply │ human / action → handoff
 
 Streaming (§6): nodes push `TraceEvent` (debug only) → `CitationsEvent` (kb_qa answer, before
 the first token) → `DeltaEvent`* through the LangGraph custom stream; `run_rag` yields them and
@@ -21,7 +24,7 @@ from langgraph.graph import END, START, StateGraph
 
 from aics.rag import prompting
 from aics.rag.llm import LlmGateway
-from aics.rag.nodes import answer, classify, context, replies, retrieval
+from aics.rag.nodes import answer, classify, context, guard, replies, retrieval
 from aics.rag.ports import RagPorts
 from aics.rag.schemas import IntentInfo, RagEvent, RagInput, RagResult, TokenUsage
 from aics.rag.state import RagDeps, RagState
@@ -29,7 +32,7 @@ from aics.rag.state import RagDeps, RagState
 
 def build_graph() -> Any:
     g = StateGraph(RagState, context_schema=RagDeps)
-    g.add_node("guard", context.guard)
+    g.add_node("guard", guard.guard)
     g.add_node("load_context", context.load_context)
     g.add_node("condense_classify", classify.condense_classify)
     g.add_node("retrieve", retrieval.retrieve)
@@ -43,13 +46,22 @@ def build_graph() -> Any:
     g.add_node("chitchat_reply", replies.chitchat_reply)
     g.add_node("out_of_scope_reply", replies.out_of_scope_reply)
     g.add_node("clarify_reply", replies.clarify_reply)
+    g.add_node("blocked_reply", replies.blocked_reply)
+    g.add_node("scope_check", classify.scope_check)
 
     g.add_edge(START, "guard")
-    g.add_edge("guard", "load_context")
+    g.add_conditional_edges(
+        "guard",
+        guard.route_guard,
+        ["blocked_reply", "handoff", "chitchat_reply", "load_context"],
+    )
     g.add_edge("load_context", "condense_classify")
     g.add_conditional_edges(
-        "condense_classify", classify.route_intent, sorted(set(classify.ROUTES.values()))
+        "condense_classify",
+        classify.route_intent,
+        sorted({*classify.ROUTES.values(), "rerank", "scope_check"}),
     )
+    g.add_conditional_edges("scope_check", classify.route_scope, ["judge", "out_of_scope_reply"])
     g.add_edge("retrieve", "fuse")
     g.add_edge("fuse", "rerank")
     g.add_edge("rerank", "judge")
@@ -62,6 +74,7 @@ def build_graph() -> Any:
         "chitchat_reply",
         "out_of_scope_reply",
         "clarify_reply",
+        "blocked_reply",
     ):
         g.add_edge(terminal, END)
     return g.compile(name="aics_rag")

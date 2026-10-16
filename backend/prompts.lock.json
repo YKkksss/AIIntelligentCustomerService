@@ -1,4 +1,8 @@
 {
+  "rag/prompts/chitchat.md": {
+    "version": 1,
+    "sha256": "ded94273da1a5793f92e917d9beff95ede23ca32495cef3720deea88c3bf97fb"
+  },
   "rag/prompts/condense.md": {
     "version": 1,
     "sha256": "82a76d5f2bb663d67e4a002ad39c3f60e1daa7bfc78f78819b3aa3bedf398fa4"

@@ -6,11 +6,14 @@
 - `intent.enabled=false`: plain condense — no history → pass-through without an LLM call;
   with history → rewrite (failure → original question); intent fixed kb_qa / fallback.
 
-Parallel classify ∥ retrieve for history-less questions (§5.4) is M2.4.
+- no history (and intent enabled): classify ∥ retrieve + fuse on the original question
+  (§5.4); kb_qa keeps the result (rewritten_query = original question), other intents
+  cancel it — except out_of_scope when the safeguard is on (`scope_check`).
 """
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
 
@@ -20,8 +23,10 @@ from langgraph.runtime import Runtime
 
 from aics.core.errors import AppError
 from aics.rag import prompting
+from aics.rag import retrieval as r
 from aics.rag.intent.fallback import ResolvedIntent, fallback, parse_intent_json, resolve
 from aics.rag.intent.schema import SLOT_KEYS
+from aics.rag.nodes.retrieval import retrieve_and_fuse
 from aics.rag.schemas import TokenUsage
 from aics.rag.state import RagDeps, RagState, merged
 
@@ -52,24 +57,66 @@ async def condense_classify(state: RagState, runtime: Runtime[RagDeps]) -> dict[
     inp = state["input"]
     cfg = inp.config
     t0 = time.perf_counter()
-    if not cfg.intent.enabled:
-        resolved, usage, versions = await _condense_only(state, runtime)
-    else:
-        resolved, usage, versions = await _classify(state, runtime)
+    parallel = cfg.intent.enabled and not state.get("history")
+    task: asyncio.Task[dict[str, Any]] | None = None
+    if parallel:
+        # 意图识别 §5.4: no history → classify ∥ retrieve(original question) + fuse.
+        task = asyncio.create_task(retrieve_and_fuse(inp, runtime.context.ports, inp.question))
+    try:
+        if not cfg.intent.enabled:
+            resolved, usage, versions = await _condense_only(state, runtime)
+        else:
+            resolved, usage, versions = await _classify(state, runtime)
+    except BaseException:
+        if task is not None:
+            task.cancel()
+        raise
     ms = int((time.perf_counter() - t0) * 1000)
+    extra: dict[str, Any] = {}
+    degraded: list[str] = []
+    timings = {"condense_classify": ms}
+    if task is not None:
+        resolved.mode = "parallel"
+        keep = resolved.intent == "kb_qa" or (
+            resolved.intent == "out_of_scope" and scope_check_enabled(state)
+        )
+        if keep:
+            resolved.rewritten_query = inp.question  # retrieval already used the original
+            try:
+                ret = await task
+            except Exception as e:
+                if resolved.intent == "kb_qa":
+                    raise
+                log.warning("rag.scope_check_retrieval_failed", error_type=type(e).__name__)
+                ret = None
+            if ret is not None:
+                degraded += ret.pop("degraded")
+                timings.update(ret.pop("timings"))
+                extra.update(ret)
+        else:
+            task.cancel()
+            log.info("rag.retrieval_cancelled", intent=resolved.intent)
+            extra["trace"] = {"retrieval_cancelled": True}
+    if resolved.fallback_reason in ("timeout", "upstream_error"):
+        degraded.append("classify_failed")
+    trace = {**extra.pop("trace", {}), "intent": resolved.trace()}
     upd = merged(
         state,
         intent=resolved,
         rewritten_query=resolved.rewritten_query,
         prompt_versions=versions,
-        timings={"condense_classify": ms},
-        trace={"intent": {**resolved.trace(), "mode": "merged"}},
+        timings=timings,
+        trace=trace,
+        degraded=degraded,
+        **({"usage": usage} if usage.calls else {}),
     )
-    if usage.calls:
-        upd.update(merged(state, usage=usage))
-    if resolved.fallback_reason in ("timeout", "upstream_error"):
-        upd.update(merged(state, degraded=["classify_failed"]))
+    upd.update(extra)
     return upd
+
+
+def scope_check_enabled(state: RagState) -> bool:
+    cfg = state["input"].config
+    return cfg.intent.out_of_scope_check and cfg.enable_rerank
 
 
 async def _classify(
@@ -154,4 +201,68 @@ ROUTES = {
 
 
 def route_intent(state: RagState) -> str:
-    return ROUTES[state["intent"].intent]
+    intent = state["intent"].intent
+    if intent == "kb_qa" and "fused" in state:
+        return "rerank"  # parallel mode already retrieved
+    if intent == "out_of_scope" and scope_check_enabled(state):
+        return "scope_check"
+    return ROUTES[intent]
+
+
+async def scope_check(state: RagState, runtime: Runtime[RagDeps]) -> dict[str, Any]:
+    """Out-of-scope safeguard (设计讨论 0005): verify an LLM `out_of_scope` verdict against
+    the knowledge base. Retrieve (unless parallel mode already did) + rerank; a top rerank
+    score ≥ `intent.out_of_scope_override_score` overrides the intent to kb_qa
+    (source=fallback, fallback_reason=kb_evidence) and continues at judge. Any failure keeps
+    the out_of_scope reply (the safeguard never makes things worse)."""
+    inp = state["input"]
+    cfg = inp.config
+    resolved = state["intent"]
+    t0 = time.perf_counter()
+    ports = runtime.context.ports
+    upd: dict[str, Any] = {}
+    info: dict[str, Any] = {"threshold": cfg.intent.out_of_scope_override_score}
+    try:
+        if "fused" in state:
+            fused = state["fused"]
+            query = inp.question
+        else:
+            query = resolved.rewritten_query or inp.question
+            ret = await retrieve_and_fuse(inp, ports, query)
+            ret.pop("degraded")
+            ret.pop("timings")
+            upd.update(ret)
+            fused = ret["fused"]
+        top, applied, _ = await r.rerank(query, fused, cfg, reranker=ports.reranker)
+    except Exception as e:
+        log.warning("rag.scope_check_failed", error_type=type(e).__name__)
+        info["error"] = type(e).__name__
+        resolved.scope_check = info
+        return merged(state, timings={"scope_check": _ms(t0)}, trace={"intent": resolved.trace()})
+    score = top[0].rerank_score if applied and top else None
+    info["top_score"] = score
+    override = score is not None and score >= cfg.intent.out_of_scope_override_score
+    info["override"] = override
+    resolved.scope_check = info
+    if override:
+        resolved.intent, resolved.source = "kb_qa", "fallback"
+        resolved.fallback_reason = "kb_evidence"
+        resolved.rewritten_query = query
+        upd.update(reranked=top, rerank_applied=applied)
+        log.info("rag.out_of_scope_overridden", score=round(score or 0, 4))
+    return merged(
+        state,
+        intent=resolved,
+        rewritten_query=resolved.rewritten_query,
+        timings={"scope_check": _ms(t0)},
+        trace={"intent": resolved.trace()},
+        **upd,
+    )
+
+
+def route_scope(state: RagState) -> str:
+    return "judge" if state["intent"].intent == "kb_qa" else "out_of_scope_reply"
+
+
+def _ms(t0: float) -> int:
+    return int((time.perf_counter() - t0) * 1000)

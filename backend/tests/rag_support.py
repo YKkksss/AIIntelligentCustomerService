@@ -29,6 +29,8 @@ def node_of(messages: list[BaseMessage]) -> str:
         return "condense"
     if first.startswith("判断以下资料是否足以回答问题"):
         return "judge"
+    if "用户刚才只是在寒暄" in first:
+        return "chitchat"
     return "generate"
 
 
@@ -144,6 +146,8 @@ class FakeKB:
         self.chunks = {c.chunk_id: c for c in chunks}
         self.rerank_override: dict[str, float] = {}
         self.fail_rerank = False
+        self.search_calls: list[str] = []
+        self.rerank_calls: list[str] = []
 
     def _match(self, question: str) -> list[UUID]:
         return [c.chunk_id for c in self.chunks.values() if any(k in question for k in c.keywords)]
@@ -156,6 +160,7 @@ class FakeKB:
     async def search(
         self, app_id: UUID, question: str, k: int, *, tags: Sequence[str] | None = None
     ) -> list[tuple[UUID, float]]:
+        self.search_calls.append(question)
         hits = self._match(question)
         rest = [c for c in self.chunks if c not in hits]
         return [(c, 0.8) for c in hits][:k] + [(c, 0.3) for c in rest][: max(0, k - len(hits))]
@@ -177,6 +182,7 @@ class FakeKB:
         return {}
 
     async def rerank(self, query: str, docs: list[str], top_n: int) -> list[tuple[int, float]]:
+        self.rerank_calls.append(query)
         if self.fail_rerank:
             raise RuntimeError("rerank down")
         hits = {self.chunks[c].text for c in self._match(query)}
