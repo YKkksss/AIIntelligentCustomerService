@@ -43,7 +43,7 @@ QUESTION_WORDS: frozenset[str] = frozenset(
     """
     多久 多长 多长时间 多大 多远 多快 几天 几个 几次 几种 几号 几点 是多少 有多少 要多久
     怎么办 怎么弄 怎么回事 怎么处理 咋 咋办 啥 啥时候 什么样 什么时候 哪个 哪种 哪家 哪儿
-    么 嘛 呗 吗 告诉 知道 问 问一下 咨询 一般 大概 大约 具体 到底 究竟 应该 得 会 会不会
+    么 嘛 呗 吗 告诉 知道 问 问一下 咨询 大概 大约 具体 到底 究竟 应该 得 会 会不会
     可不可以 行不行 好不好 算不算 是不是 能够 还是 可能 帮 帮我 麻烦
     what how which when where who whom why whose do does did can could would should will
     i me my we our you your it its be been this that these those with please there any
@@ -92,6 +92,17 @@ def tokenize_for_index(app_id: UUID | str, text: str, custom_dict: Sequence[str]
     return " ".join(t for t in (w.strip() for w in tok.lcut_for_search(text)) if t)
 
 
+def _expand(
+    tok: jieba.Tokenizer, question: str, stopwords: frozenset[str], keep: set[str]
+) -> Iterable[str]:
+    for seg in tok.lcut(question):
+        w = seg.strip().lower()
+        if not w or (w in stopwords and w not in keep):
+            continue
+        subs = tok.lcut_for_search(seg)
+        yield from subs if seg in subs else [*subs, seg]
+
+
 def build_tsquery(
     app_id: UUID | str,
     question: str,
@@ -109,7 +120,10 @@ def build_tsquery(
     tok = get_tokenizer(app_id, custom_dict)
     terms: list[str] = []
     seen: set[str] = set()
-    for raw in tok.lcut_for_search(question or ""):
+    # Stopwords are judged on precise-mode segments, then each kept segment is expanded with
+    # its search-mode sub-words (matching the index side). Filtering search-mode output
+    # directly would leak fragments of dropped phrases (多长时间 → 长时间 / 时间).
+    for raw in _expand(tok, question or "", stopwords, keep):
         w = raw.strip().lower()
         if not w or not _TERM_RE.match(w):
             continue  # 去掉 tsquery 运算符、引号、标点

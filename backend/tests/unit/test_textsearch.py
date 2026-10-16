@@ -110,7 +110,7 @@ def test_question_words_stripped_from_query() -> None:
 
     q = "衣服买了不合适，几天内可以无理由退？退款一般多久到账？"
     new = _terms(build_tsquery(uuid.uuid4(), q))
-    assert not new & {"几天", "多久", "一般", "可以"}
+    assert not new & {"几天", "多久", "可以"}
     assert {"衣服", "理由", "退款"} <= new
     old = _terms(build_tsquery(uuid.uuid4(), q, stopwords=STOPWORDS))
     assert "多久" in old and new < old
@@ -130,4 +130,10 @@ def test_limit_words_kept_and_custom_dict_overrides_stopword() -> None:
 
 
 def test_only_question_words_returns_none() -> None:
-    assert build_tsquery(uuid.uuid4(), "请问一般要多久？怎么办") is None
+    assert build_tsquery(uuid.uuid4(), "请问要多久？怎么办") is None
+
+
+def test_dropped_phrase_leaks_no_fragments_and_domain_words_kept() -> None:
+    assert _terms(build_tsquery(uuid.uuid4(), "专票要在多长时间内申请？")) == {"专票", "申请"}
+    # 一般 is a rule category (一般违规 vs 严重违规), so it is not a stopword
+    assert "一般" in _terms(build_tsquery(uuid.uuid4(), "一般违规扣满 12 分"))
