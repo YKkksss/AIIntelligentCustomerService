@@ -19,6 +19,7 @@ from aics.core.config import Settings, get_settings
 from aics.core.errors import AppError, ValidationAppError
 from aics.db.models import App, Document
 from aics.modules.apps.repository import AppRepository
+from aics.modules.apps.system_settings import SystemSettingsService
 from aics.rag.config import (
     PLATFORM_DEFAULT_SESSION,
     AppRagConfig,
@@ -118,11 +119,18 @@ class AppService:
         settings: Settings | None = None,
         platform_session: EffectiveSessionConfig = PLATFORM_DEFAULT_SESSION,
     ) -> None:
-        # platform_session：M2.1 起由 system_settings.default_session_config 提供
+        # platform_session: from system_settings.default_session_config since M2.1;
+        # use `AppService.load(session)` to get an instance with the stored platform default.
         self.session = session
         self.repo = AppRepository(session)
         self.settings = settings or get_settings()
         self.platform_session = platform_session
+
+    @classmethod
+    async def load(cls, session: AsyncSession, *, settings: Settings | None = None) -> AppService:
+        """Instance whose platform session default comes from `system_settings` (M2.1)."""
+        platform = await SystemSettingsService(session).get_default_session_config()
+        return cls(session, settings=settings, platform_session=platform)
 
     # ------------------------------------------------------------ 校验
     def build_config(
