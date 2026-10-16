@@ -49,6 +49,7 @@ def test_defaults_match_design() -> None:
     assert d["rerank_threshold"] == 0.5 and d["judge_gray_upper"] == 0.8
     assert d["history_token_budget"] == 3000 and d["compact_trigger_tokens"] == 6000
     assert d["llm_model"] is None and d["max_tokens"] == 800
+    assert d["enable_facts"] is True and d["enable_history_recall"] is False
     assert d["intent"]["enabled_intents"] == list(INTENTS)
     assert d["intent"]["vector_threshold"] == 0.9
     h = HandoffConfig().model_dump()

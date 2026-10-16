@@ -85,7 +85,7 @@ class RagResult(BaseModel):
 class RagState(TypedDict, total=False):
     input: RagInput                   # 含 app_id、conversation_id、question、config、run_mode
     history: list[BaseMessage]        # load_context 产出的近期原文（按 token 预算）
-    facts: dict[str, str]             # 关键事实（enable_facts）
+    facts: dict[str, str]             # 关键事实（enable_facts，默认 true；按 importance 排序固定注入）
     summary: ConversationSummary | None
     recalled: list[RecalledSnippet]   # 按需回查片段（enable_history_recall）
     context_usage: dict[str, int]     # 各部分 token
@@ -123,7 +123,7 @@ class RagState(TypedDict, total=False):
 | rerank | qwen3.7-text-rerank 打分，取前 `rerank_top_n` | `rerank_top_n`=5、`enable_rerank` | 见下"rerank 失败规则" |
 | judge | 有 rerank 分数时：最高分 < `rerank_threshold` → 不可答；最高分 ≥ `judge_gray_upper` → 可答；处于灰区 `[rerank_threshold, judge_gray_upper)` 且 `judge_with_llm=true` 时让 LLM 输出 `{"answerable": bool}`（`judge_with_llm=false` 时灰区按可答）。无 rerank 分数时（rerank 关闭或失败）一律由 LLM 判断 | `rerank_threshold`=0.5、`judge_gray_upper`=0.8、`judge_with_llm` | LLM 判断超时/解析失败 → **按不可答处理**（`decision_reason="judge_failed"`，记 degraded `judge_failed`），走 refuse / handoff |
 | generate | 带编号上下文生成，流式输出 | `temperature`=0.2、`max_tokens`=800、`llm_model` | 上游错误 → 抛出，由 chat.service 写 `answer_type=error` |
-| postprocess | 解析 `[n]` 标号 → 引用；标号越界删除；输出检查（安全设计 §3.4）；无任何引用时 `degraded += ["no_citation"]`（仅 kb_qa 分支经过本节点） | — | — |
+| postprocess | 解析 `[n]` 标号 → 引用；标号越界删除；输出检查（安全设计 §3.4）；无任何引用时 `degraded += ["no_citation"]`（仅 kb_qa 分支经过本节点）；**标识符一致性护栏**（M2.5，设计讨论 0002）：回答中匹配订单号（`[A-Za-z0-9-]{8,32}` 且含 ≥ 6 位数字）/ 手机号（`1[3-9]\d{9}`）样式的字符串，若不等于当前 facts 中同类键（`order_no` / `phone`，未撤回）的值、也不出现在本轮用户消息与送入生成的资料中，则 `degraded += ["identifier_mismatch"]`、计数 `aics_identifier_mismatch_total`、trace 记录（脱敏）；只检测与告警，不阻断、不改写（流式输出已发送） | — | — |
 | refuse / handoff | 返回兜底话术 / 转人工话术，设置 `answer_type` 与 `handoff_reason` | `fallback_text`、`handoff.text` | — |
 
 **rerank 失败规则（与非功能需求一致，唯一规则）**：rerank 调用超时或出错（含重试后）→ 按 RRF 顺序取前 `rerank_top_n`，记 `degraded += ["rerank_failed"]`；因 RRF 分数与 rerank 阈值不可比，judge 改由 LLM 判断（不看 `judge_with_llm` 开关）；LLM 判断也失败 → 不可答。`enable_rerank=false` 时同样走 LLM 判断，但不记 degraded。

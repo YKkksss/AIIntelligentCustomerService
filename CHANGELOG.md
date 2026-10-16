@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### 设计（设计讨论 0002 对话记忆方案，2026-10-16）
+- 新增设计讨论 0002（参考 Mem0、Zep、Letta、LangGraph、ChatGPT 记忆的分层记忆架构）与 ADR-0014（修订 ADR-0006 第 4 条）。
+- 关键事实 `enable_facts` 默认改为 `true`（`rag/config.py`），`conversation_facts` 由 M5 提前到 M2.1（表）/ M2.5（逻辑）；事实增加 `category`、`importance`、`source`、`version`、`retracted_at`，新增追加写的 `conversation_fact_history`，对账 ADD / UPDATE / NOOP / RETRACT。
+- postprocess 增加订单号 / 手机号一致性护栏（M2.5，`identifier_mismatch`，只检测告警）；会话内回查（M5）排序改为 RRF + 时近度衰减。
+- 评测新增保持率、更新正确率、混淆率；M2.5 计划 `history_token_budget` 3000 / 8000 / 16000 对比（参数默认值表标“待 M2.5 评测”）。
+- 不采纳：跨会话长期记忆（列入范围定义 v2）、Agent 工具自管理记忆、知识图谱、衰减与冷热分层。
+- 同步：对话上下文管理、RAG 流程设计、数据库设计、开发计划、功能需求 FR-CHAT-12（P1→P0）/13、术语表、模块划分、管理接口示例、评测指南。
+
 ### 测试（M1 第二轮检索评测，2026-10-16）
 - `scripts/e2e_m1/build_eval_r2.py`（general 应用 + 02 法规文档带文档级 legal 预设）；`eval_retrieval.py` 支持 `--apps/--variants/--rerank/--out`，重排改为按 (问题, 文档) 缓存。
 - 测试报告新增 §8 第二轮：文档级 legal 使法规题向量 Hit@1 0.56 → 0.89、整体 0.882 → 0.941；PDF 行合并指标不变；阈值 0.5 / 0.8 复测维持。参数默认值表新增文档级 chunk_config 与 PDF 行合并两行；待复验清单新增真实 PDF 样本。

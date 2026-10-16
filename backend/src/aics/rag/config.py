@@ -111,7 +111,7 @@ class AppRagConfig(_Cfg):
     history_token_budget: int = Field(3000, ge=500, le=16000)
     compact_trigger_tokens: int = Field(6000, le=64000)
     keep_recent_turns: int = Field(4, ge=1, le=20)
-    enable_facts: bool = False
+    enable_facts: bool = True
     enable_history_recall: bool = False
     summary_model: str | None = None
     openai_temp_summary: bool = True
