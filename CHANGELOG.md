@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### 新增（M2.5 对话记忆，2026-10-16）
+- `memory.context`：按 token 预算组装上下文——关键事实固定注入（按重要度，≤ 300 token）→ 滚动摘要 → 近期原文按轮填充 → 保底 `keep_recent_turns` 轮（超长单条截断）→ `history_gap`；拒答压成"（已拒答）"；无状态请求同算法裁剪 + 临时摘要钩子。`MemoryService.load_context` 与适配器 `modules.chat.memory_port.MemoryPortAdapter`；rag trace 新增 `context`（事实脱敏）。
+- `memory.facts`：值规范化（NFKC、手机号去 +86 与分隔符）、ADD / UPDATE / NOOP / RETRACT 对账、同批冲突裁决、过期写丢弃（压缩不回滚新槽位值）、乐观锁冲突重试；`MemoryService.capture_slots` / `write_facts`。
+- `memory.compactor`：滚动摘要与事实抽取（提示词 `compact_summary` / `extract_facts` v1）、Redis 锁 `aics:lock:compact:{conv_id}`、> 8000 token 分批、校验失败重试 1 次、`summary_version` 乐观写入；`maybe_compact` / `compact_now`；Celery 任务 `aics.compact_conversation`（队列 `context`）。
+- `rag.identifiers`：postprocess 标识符一致性护栏（`identifier_mismatch` + `aics_identifier_mismatch_total`，不阻断）。
+- `core.masking`（手机号 / 订单号脱敏）、`core.metrics`（进程内计数器，M6.3 导出）、`core.tokens.truncate_tokens`、`core.prompts.render_prompt`。
+- 长对话记忆评测 `scripts/e2e_m2/eval_m25.py` + `memory_cases`（11 段 24–60 轮）；`history_token_budget` 评测后保持 3000（M1 测试报告 §13，设计讨论 0006）。
+
 ### 新增（M2.4 意图识别，2026-10-16）
 - `rag.intent` 规则层：归一化、AC 自动机词表匹配、敏感词 / 转人工词 / 连续拒答 / 寒暄完全匹配与模板（内置 4 类 32 词，可被应用覆盖；greeting 用应用开场白 `AppProfile.greeting`）；`next_refusal_streak` 供 M2.6。
 - guard 节点与分支：`blocked_reply`（敏感词）、规则转人工（`rule:keyword` / `rule:max_refusals`）、寒暄模板与 LLM 寒暄回复（提示词 `chitchat` v1，失败回落模板）。
