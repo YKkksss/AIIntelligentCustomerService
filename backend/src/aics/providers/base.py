@@ -48,5 +48,6 @@ class RerankProvider(Protocol):
 
 @runtime_checkable
 class LLMProvider(Protocol):
-    # 返回 LangChain BaseChatModel（M2.2 引入 langchain 后收紧类型）
+    # Returns a LangChain BaseChatModel (kept as Any so that importing the protocol does not
+    # require langchain; the OpenAI-compatible implementation returns ChatOpenAI).
     def chat_model(self, **overrides: Any) -> Any: ...
