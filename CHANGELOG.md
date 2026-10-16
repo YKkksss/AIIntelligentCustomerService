@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### 新增（M2.7 会话生命周期，2026-10-17）
+- `chat.lifecycle.sweep()`：按应用生效 `session_config` 发空闲提醒（`system/idle_notice`）并关闭空闲会话（`close_reason=idle`，`system/idle_closed`）。条件单行更新，重复 / 并发执行幂等；排除 eval 与暂停状态（accepted、wait 模式的 pending）；不补发过期提醒；配置无效回落平台默认；跳过 deleting 应用；有批量上限与事件钩子（设计讨论 0008）。
+- Celery 任务 `aics.idle_sweep`（maintenance 队列），beat 每 30 秒（`expires` 25 秒）；`aics-cli sweep-idle`。
+- M2 里程碑验收脚本 `scripts/e2e_m2/e2e_m27_milestone.py`、真实 worker 计时脚本 `scripts/e2e_m2/e2e_m27_worker.py`。
+
+### 修复（M2.7）
+- `chat.service` 准备阶段对会话行加锁，消除"刚读到 active 就被扫描关闭，写 user 消息时 409"的竞态。
+
 ### 新增（M2.6 对话编排与接口，2026-10-16）
 - 开放接口鉴权（M3.1 核心提前）：迁移 `0009` `api_keys`；`modules.apikeys`（`aics_` 密钥只显示一次、HMAC-SHA256 + pepper、过期 / 吊销 / scope、Redis 缓存 60 s、分钟窗口限流 + 每日配额、`X-RateLimit-*` / `Retry-After`）；`core.security`（`Principal`、`require_scope`）；`aics-cli apikey create/revoke`。
 - `chat.service`：`start_turn` / `handle_turn`，生成前落 user 消息、按转人工状态分派、组装 `RagInput` / `RagPorts`，每轮在独立任务中运行（断线仍会落库，`interrupted`）、error 落库、`refusal_streak` 与 handoff → pending，每轮调用 `capture_slots` / `maybe_compact`。
