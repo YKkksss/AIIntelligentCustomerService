@@ -93,6 +93,7 @@ def test_every_app_scoped_table_has_scoped_repository() -> None:
         "documents",
         "chunks",
         "chunk_parents",
+        "chunk_questions",
         "jobs",
         "conversations",
         "messages",

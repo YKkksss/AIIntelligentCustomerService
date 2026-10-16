@@ -23,12 +23,17 @@ from sqlalchemy import (
 from sqlalchemy import (
     text as sa_text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from aics.db.base import Base, CreatedAtMixin, SoftDeleteMixin, TimestampMixin, new_id
 
 DOCUMENT_STATUSES = ("queued", "parsing", "indexing", "done", "failed", "deleting")
+QUESTION_STATUSES = ("active", "pending")
+QUESTION_SOURCES = ("manual", "llm")
+QUESTION_MAX_CHARS = 200
+TAG_MAX_CHARS = 50
+MAX_TAGS = 20
 
 
 class Document(TimestampMixin, SoftDeleteMixin, Base):
@@ -49,6 +54,7 @@ class Document(TimestampMixin, SoftDeleteMixin, Base):
         ),
         Index("ix_documents_app_status", "app_id", "status"),
         Index("ix_documents_app_created", "app_id", sa_text("created_at DESC")),
+        Index("ix_documents_tags", "tags", postgresql_using="gin"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_id)
@@ -76,6 +82,10 @@ class Document(TimestampMixin, SoftDeleteMixin, Base):
     embed_model: Mapped[str | None] = mapped_column(Text)
     # 生效版本向量化时使用的标题（上下文增强前缀）；≠ title 时后台提示重建
     indexed_title: Mapped[str | None] = mapped_column(Text)
+    # Metadata tags for filtered retrieval (M2.2b); mirrored into Qdrant payload `tags`
+    tags: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, server_default=sa_text("'{}'")
+    )
     metadata_: Mapped[dict[str, Any]] = mapped_column(
         "metadata", JSONB, nullable=False, server_default=sa_text("'{}'")
     )
@@ -147,3 +157,41 @@ class Chunk(CreatedAtMixin, Base):
     flag_reason: Mapped[str | None] = mapped_column(Text)
     reviewed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ChunkQuestion(CreatedAtMixin, Base):
+    """Supplementary question for a chunk (M2.2b, 数据库设计 §3.7.2, 设计讨论 0003).
+
+    Each row is embedded on its own (Qdrant point id = this id, payload `kind=question`,
+    `chunk_id` = the chunk it answers). On a document rebuild the row is re-attached to the
+    new build's chunk with the same text hash (`anchor_hash`); when none matches it becomes
+    `pending` with `chunk_id` NULL and its point is removed until an admin re-attaches it.
+    """
+
+    __tablename__ = "chunk_questions"
+    __table_args__ = (
+        CheckConstraint("status IN ('active', 'pending')", name="status"),
+        CheckConstraint("source IN ('manual', 'llm')", name="source"),
+        CheckConstraint(
+            f"char_length(question) BETWEEN 1 AND {QUESTION_MAX_CHARS}", name="question_len"
+        ),
+        CheckConstraint("status = 'pending' OR chunk_id IS NOT NULL", name="active_has_chunk"),
+        Index("ix_chunk_questions_chunk", "chunk_id"),
+        Index("ix_chunk_questions_doc", "app_id", "document_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_id)
+    app_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    # SET NULL (not CASCADE): old-build cleanup must not silently drop operator work
+    chunk_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("chunks.id", ondelete="SET NULL")
+    )
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=sa_text("'active'"))
+    source: Mapped[str] = mapped_column(Text, nullable=False, server_default=sa_text("'manual'"))
+    anchor_ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    anchor_hash: Mapped[str] = mapped_column(CHAR(64), nullable=False)  # sha256(chunk text)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))

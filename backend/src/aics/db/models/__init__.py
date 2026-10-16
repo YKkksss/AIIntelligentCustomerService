@@ -4,13 +4,14 @@ from aics.db.models.app import App, UserAppRole
 from aics.db.models.conversation import Conversation, Message, SystemSetting
 from aics.db.models.fact import ConversationFact, ConversationFactHistory
 from aics.db.models.job import Job
-from aics.db.models.knowledge import Chunk, ChunkParent, Document
+from aics.db.models.knowledge import Chunk, ChunkParent, ChunkQuestion, Document
 from aics.db.models.user import Role, User
 
 __all__ = [
     "App",
     "Chunk",
     "ChunkParent",
+    "ChunkQuestion",
     "Conversation",
     "ConversationFact",
     "ConversationFactHistory",

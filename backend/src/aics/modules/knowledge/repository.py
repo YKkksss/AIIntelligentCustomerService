@@ -2,9 +2,16 @@
 
 from aics.ingest.repository import (
     ChunkParentRepository,
+    ChunkQuestionRepository,
     ChunkRepository,
     DocumentRepository,
     JobRepository,
 )
 
-__all__ = ["ChunkParentRepository", "ChunkRepository", "DocumentRepository", "JobRepository"]
+__all__ = [
+    "ChunkParentRepository",
+    "ChunkQuestionRepository",
+    "ChunkRepository",
+    "DocumentRepository",
+    "JobRepository",
+]

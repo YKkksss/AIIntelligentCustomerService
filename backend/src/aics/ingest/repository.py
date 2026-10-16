@@ -1,4 +1,4 @@
-"""documents、chunks、chunk_parents、jobs 的 repository（均继承 AppScopedRepository）。
+"""documents、chunks、chunk_parents、chunk_questions、jobs 的 repository（均继承 AppScopedRepository）。
 
 放在 ingest（L2）中：入库流水线与 knowledge 模块共用；knowledge.repository 重新导出。
 """
@@ -9,7 +9,7 @@ from uuid import UUID
 
 from sqlalchemy import delete, func, select, update
 
-from aics.db.models import Chunk, ChunkParent, Document, Job
+from aics.db.models import Chunk, ChunkParent, ChunkQuestion, Document, Job
 from aics.db.scoped import AppScopedRepository
 
 
@@ -129,6 +129,39 @@ class ChunkParentRepository(AppScopedRepository[ChunkParent]):
             return {}
         stmt = self._scoped(app_id).where(ChunkParent.id.in_(ids))
         return {p.id: p for p in (await self.session.execute(stmt)).scalars()}
+
+
+class ChunkQuestionRepository(AppScopedRepository[ChunkQuestion]):
+    model = ChunkQuestion
+
+    async def list_for_document(
+        self, app_id: UUID, document_id: UUID, *, status: str | None = None
+    ) -> list[ChunkQuestion]:
+        stmt = self._scoped(app_id).where(ChunkQuestion.document_id == document_id)
+        if status is not None:
+            stmt = stmt.where(ChunkQuestion.status == status)
+        stmt = stmt.order_by(ChunkQuestion.anchor_ordinal, ChunkQuestion.created_at)
+        return list((await self.session.execute(stmt)).scalars())
+
+    async def list_for_chunk(self, app_id: UUID, chunk_id: UUID) -> list[ChunkQuestion]:
+        stmt = (
+            self._scoped(app_id)
+            .where(ChunkQuestion.chunk_id == chunk_id)
+            .order_by(ChunkQuestion.created_at)
+        )
+        return list((await self.session.execute(stmt)).scalars())
+
+    async def count_for_chunk(self, app_id: UUID, chunk_id: UUID) -> int:
+        stmt = select(func.count()).where(
+            ChunkQuestion.app_id == app_id, ChunkQuestion.chunk_id == chunk_id
+        )
+        return int((await self.session.execute(stmt)).scalar_one())
+
+    async def delete_one(self, app_id: UUID, question_id: UUID) -> bool:
+        stmt = delete(ChunkQuestion).where(
+            ChunkQuestion.app_id == app_id, ChunkQuestion.id == question_id
+        )
+        return ((await self.session.execute(stmt)).rowcount or 0) > 0  # type: ignore[attr-defined]
 
 
 class JobRepository(AppScopedRepository[Job]):
