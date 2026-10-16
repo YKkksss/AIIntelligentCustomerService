@@ -1,1 +1,18 @@
-{}
+{
+  "rag/prompts/condense.md": {
+    "version": 1,
+    "sha256": "82a76d5f2bb663d67e4a002ad39c3f60e1daa7bfc78f78819b3aa3bedf398fa4"
+  },
+  "rag/prompts/condense_classify.md": {
+    "version": 1,
+    "sha256": "0b1f11a4915c0e5b6eb13a1021801bcdf403db53439d3a6bc9f3de1f6cd6536e"
+  },
+  "rag/prompts/generate.md": {
+    "version": 1,
+    "sha256": "ee1376361bc05ce4435ed46c2738e8cdb610eec326b29bdfd4764380935af45b"
+  },
+  "rag/prompts/judge.md": {
+    "version": 1,
+    "sha256": "2d1f4d0a5886a03ae80437a04943b792f550266ea74124a397c15b01b2427f41"
+  }
+}

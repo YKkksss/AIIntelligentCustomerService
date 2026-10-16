@@ -28,6 +28,7 @@ dependencies = [
     "charset-normalizer>=3.3",
     "langchain-openai>=0.3",
     "langchain-core>=0.3",
+    "langgraph>=1.0",
 ]
 
 [project.scripts]
