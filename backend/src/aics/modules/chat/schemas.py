@@ -6,6 +6,7 @@ as the database CHECK constraints (fail fast with VALIDATION_ERROR instead of In
 
 from __future__ import annotations
 
+import json
 from typing import Any, Literal
 from uuid import UUID
 
@@ -114,4 +115,30 @@ class NewMessage(_Model):
             and (self.interrupted or self.answer_type in ("error", "handoff"))
         ):
             raise ValueError("content must not be empty")
+        return self
+
+
+# ---------------------------------------------------------------- open API (开放接口参考 §1)
+QUESTION_MAX_CHARS = 2000
+REQUEST_METADATA_MAX_BYTES = 4096
+
+
+class ChatRequest(BaseModel):
+    """`POST /api/v1/apps/{app_id}/chat` body. Unknown fields are ignored (forward compatible)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    question: str = Field(min_length=1, max_length=QUESTION_MAX_CHARS)
+    conversation_id: UUID | None = None
+    user_id: str | None = Field(default=None, min_length=1, max_length=EXTERNAL_USER_ID_MAX_CHARS)
+    stream: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _checks(self) -> ChatRequest:
+        if not self.question.strip():
+            raise ValueError("question must not be blank")
+        size = len(json.dumps(self.metadata, ensure_ascii=False).encode())
+        if size > REQUEST_METADATA_MAX_BYTES:
+            raise ValueError(f"metadata exceeds {REQUEST_METADATA_MAX_BYTES} bytes ({size})")
         return self

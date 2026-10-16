@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, tuple_, update
 
 from aics.core.errors import AppError, ConversationNotFoundError
 from aics.core.textsearch import tokenize_for_index
@@ -193,6 +193,34 @@ class MessageRepository(AppScopedRepository[Message]):
         rows = list((await self.session.execute(stmt)).scalars())
         rows.reverse()
         return rows
+
+    async def page_for_conversation(
+        self, app_id: UUID, conversation_id: UUID, *, limit: int, before: UUID | None = None
+    ) -> tuple[list[Message], bool]:
+        """Open-API cursor page: the `limit` newest messages strictly before `before`
+        (ordered by `(created_at, id)`), returned oldest → newest, plus whether older exist."""
+        stmt = self._scoped(app_id).where(Message.conversation_id == conversation_id)
+        if before is not None:
+            anchor = (
+                select(Message.created_at, Message.id)
+                .where(
+                    Message.app_id == app_id,
+                    Message.conversation_id == conversation_id,
+                    Message.id == before,
+                )
+                .subquery()
+            )
+            stmt = stmt.where(
+                tuple_(Message.created_at, Message.id)
+                < select(anchor.c.created_at, anchor.c.id).scalar_subquery()
+            )
+        size = min(max(limit, 1), MAX_PAGE_SIZE)
+        stmt = stmt.order_by(Message.created_at.desc(), Message.id.desc()).limit(size + 1)
+        rows = list((await self.session.execute(stmt)).scalars())
+        more = len(rows) > size
+        rows = rows[:size]
+        rows.reverse()
+        return rows, more
 
     async def last_assistant(self, app_id: UUID, conversation_id: UUID) -> Message | None:
         """Latest assistant message (clarify follow-up detection, 意图识别 §5.2.2)."""

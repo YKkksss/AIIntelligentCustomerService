@@ -160,3 +160,72 @@ async def test_authenticate_missing_header() -> None:
     with pytest.raises(AppError) as ei:
         await auth.authenticate(None, app_id=APP, any_scope=("chat",))
     assert ei.value.code == "UNAUTHENTICATED"
+
+
+@pytest.mark.parametrize(
+    "kw,field",
+    [
+        ({"name": " ", "scopes": ["chat"]}, "name"),
+        ({"name": "k", "scopes": []}, "scopes"),
+        ({"name": "k", "scopes": ["admin"]}, "scopes"),
+        ({"name": "k", "scopes": ["chat"], "rpm_limit": 0}, "rpm_limit"),
+        ({"name": "k", "scopes": ["chat"], "daily_quota": 0}, "daily_quota"),
+    ],
+)
+async def test_create_validation(kw: dict[str, Any], field: str) -> None:
+    from aics.modules.apikeys.service import ApiKeyService
+
+    svc = ApiKeyService(None, pepper=PEPPER)  # type: ignore[arg-type]
+    with pytest.raises(AppError) as ei:
+        await svc.create(APP, **kw)
+    assert ei.value.code == "VALIDATION_ERROR"
+    assert [e["loc"] for e in ei.value.details["errors"]] == [[field]]
+
+
+async def test_lookup_falls_back_to_db_and_caches() -> None:
+    from types import SimpleNamespace
+
+    from aics.modules.apikeys import service as svc_mod
+
+    k = keys.generate_key()
+    row = SimpleNamespace(
+        id=KEY_ID,
+        app_id=APP,
+        key_hash=keys.hash_key(k, PEPPER),
+        scopes=["chat"],
+        rpm_limit=5,
+        daily_quota=None,
+        expires_at=None,
+        revoked_at=None,
+    )
+
+    class Repo:
+        def __init__(self, s: Any) -> None:
+            pass
+
+        async def get_by_prefix_all_apps(self, prefix: str) -> Any:
+            return (row, "active") if prefix == k[:12] else None
+
+    class Sessions:
+        def __call__(self) -> Any:
+            return self
+
+        async def __aenter__(self) -> Any:
+            return None
+
+        async def __aexit__(self, *a: object) -> None:
+            return None
+
+    orig = svc_mod.ApiKeyRepository
+    svc_mod.ApiKeyRepository = Repo  # type: ignore[misc]
+    try:
+        r = FakeRedis()
+        auth = ApiKeyAuthenticator(Sessions(), pepper=PEPPER, redis=r)  # type: ignore[arg-type]
+        p = await auth.authenticate(f"Bearer {k}", app_id=APP, any_scope=("chat",))
+        assert p.key_id == KEY_ID and r.ttl[cache_key("aics:", k[:12])] == 60
+        with pytest.raises(AppError):
+            await auth.authenticate("Bearer aics_" + "Q" * 32, app_id=APP, any_scope=("chat",))
+        down = ApiKeyAuthenticator(Sessions(), pepper=PEPPER, redis=FakeRedis(fail=True))  # type: ignore[arg-type]
+        assert (await down.authenticate(f"Bearer {k}", app_id=APP, any_scope=("chat",))).key_id
+    finally:
+        svc_mod.ApiKeyRepository = orig  # type: ignore[misc]

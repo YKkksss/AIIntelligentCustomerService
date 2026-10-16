@@ -2,26 +2,74 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from uuid import UUID
 
 import redis.asyncio as aioredis
 import structlog
 import uvicorn
+from celery import Celery
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from aics import __version__
-from aics.core.config import get_settings
+from aics.core.config import Settings, get_settings
 from aics.core.errors import AppError, error_body
 from aics.core.logging import RequestLogMiddleware, configure_logging
 from aics.db.engine import dispose_engine, get_sessionmaker
 from aics.health import router as health_router
+from aics.memory.compactor import CompactParams
+from aics.memory.service import COMPACT_TASK, MemoryService
+from aics.memory.units import pg_units
 from aics.modules.apikeys.service import ApiKeyAuthenticator
+from aics.modules.chat.router import router as chat_router
+from aics.modules.chat.runtime import ChatRuntime
+from aics.modules.knowledge.chunk_search import PgChunkSearch
+from aics.providers import get_embedder, get_llm, get_reranker
+from aics.rag.retrieval import EmbeddingVectorSearch
+from aics.vectorstore import get_vector_store
 
 log = structlog.get_logger()
+
+
+def build_chat_runtime(s: Settings) -> ChatRuntime:
+    """Composition root of chat.service: PG keyword search, Qdrant vectors, rerank, LLM and
+    memory (online compaction is enqueued to the `context` queue by task name)."""
+    sessions = get_sessionmaker()
+    broker = Celery("aics-api", broker=s.celery_broker_url)
+
+    def send(app_id: UUID, conversation_id: UUID, version: int, params: CompactParams) -> None:
+        try:
+            broker.send_task(
+                COMPACT_TASK,
+                args=[str(app_id), str(conversation_id), version, params.model_dump()],
+                queue="context",
+                routing_key="context",
+                exchange="aics",
+                retry=True,
+                retry_policy={"max_retries": 2, "interval_start": 0.2, "interval_step": 0.5},
+            )
+        except Exception as e:  # compaction is best-effort; the next turn re-checks
+            log.warning("chat.compact_enqueue_failed", error_type=type(e).__name__)
+
+    def enqueue(app_id: UUID, conversation_id: UUID, version: int, params: CompactParams) -> None:
+        # Publishing is blocking network I/O: keep it off the event loop.
+        asyncio.get_running_loop().run_in_executor(
+            None, send, app_id, conversation_id, version, params
+        )
+
+    return ChatRuntime(
+        sessions=sessions,
+        chunk_search=PgChunkSearch(sessions),
+        vector=EmbeddingVectorSearch(get_embedder(), get_vector_store()),
+        reranker=get_reranker(),
+        llm=get_llm(),
+        memory=MemoryService(pg_units(sessions), enqueue_compaction=enqueue),
+    )
 
 
 @asynccontextmanager
@@ -35,8 +83,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         redis=redis,
         redis_prefix=s.redis_prefix,
     )
+    if getattr(app.state, "chat_runtime", None) is None:  # tests may install their own
+        app.state.chat_runtime = build_chat_runtime(s)
     log.info("app.started", env=s.env, version=__version__)
     yield
+    await app.state.chat_runtime.drain()
     await redis.aclose()
     await dispose_engine()
     log.info("app.stopped")
@@ -92,6 +143,7 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(health_router)
+    app.include_router(chat_router)
     return app
 
 
