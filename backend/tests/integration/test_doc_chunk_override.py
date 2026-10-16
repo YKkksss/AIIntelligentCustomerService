@@ -146,7 +146,13 @@ async def test_app_rag_update_checks_doc_override_window(env: dict[str, Any]) ->
     app_id = env["app_id"]
     big = {"mode": "parent_child", "parent_mode": "full_doc", "full_doc_max_tokens": 10000}
     await h.call("upload_file", app_id, MD_A, "a.md", chunk_config=big)
+    await h.call("upload_file", app_id, MD_B, "b.md")  # 无覆盖：必须是 SQL NULL 而非 JSON null
     await h.drain()
+    async with env["sessions"]() as s:
+        n = await s.scalar(
+            select(func.count()).select_from(Document).where(Document.chunk_config.is_(None))
+        )
+    assert n == 1
     reg = ModelRegistry.model_validate(
         [
             {**m.model_dump(), "context_window": 128_000} if m.kind == "chat" else m.model_dump()

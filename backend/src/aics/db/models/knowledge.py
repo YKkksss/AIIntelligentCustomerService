@@ -72,7 +72,7 @@ class Document(TimestampMixin, SoftDeleteMixin, Base):
     chunk_config_version: Mapped[int | None] = mapped_column(Integer)
     # 文档级切块配置覆盖（M1.7）：保存时已与应用配置合并并经 ChunkConfig 校验的完整配置；
     # NULL = 跟随应用 chunk_config。应用 chunk_config 变化不影响有覆盖的文档。
-    chunk_config: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    chunk_config: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
     embed_model: Mapped[str | None] = mapped_column(Text)
     # 生效版本向量化时使用的标题（上下文增强前缀）；≠ title 时后台提示重建
     indexed_title: Mapped[str | None] = mapped_column(Text)

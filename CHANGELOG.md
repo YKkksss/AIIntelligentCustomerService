@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### 修复
+- `documents.chunk_config` 未设置时存为 JSON `null` 而非 SQL NULL，导致按 `IS NULL` 区分“跟随应用”的查询（应用 `rag_config` 窗口校验、统计）把所有文档当成有覆盖；列改为 `JSONB(none_as_null=True)`（真实 worker 构建第二轮评测应用时发现）。
+
 ### 改进（M1.7 PDF 行合并，2026-10-16）
 - PDF 逐行文本块按字体字号、行距、是否排满、首行缩进、列表项合并成段（中文直接拼接、英文加空格、连字符断词拼回）；双栏页按栏阅读顺序；保留纯空格 span（修复“Storage1.8”式丢词间距）。合成语料 PDF 段落数：论文 162 → 54、合同 122 → 30。
 
