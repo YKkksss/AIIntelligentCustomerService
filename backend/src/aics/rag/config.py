@@ -189,9 +189,17 @@ class ChunkConfig(_Cfg):
     split_by_heading: bool = True
     keep_tables: bool = True
     mode: ChunkMode = "general"
+    parent_mode: Literal["paragraph", "full_doc"] = "paragraph"
     parent_size: int = Field(1024, ge=300, le=4000)
+    full_doc_max_tokens: int = Field(10000, ge=1000, le=10000)
     child_size: int = Field(200, ge=50, le=1000)
     child_overlap: int = Field(20, ge=0)
+    child_separators: list[str] = Field(default_factory=list, max_length=10)
+    # 预处理（设计讨论 0001 / 文档处理流水线 §3 第 2.5 步）
+    normalize_whitespace: bool = True
+    remove_urls_emails: bool = False
+    # 向量化文本加"文档标题 + 标题路径"前缀（上下文增强，§3 第 6 步）
+    contextual_prefix: bool = True
 
     @model_validator(mode="before")
     @classmethod
@@ -207,7 +215,7 @@ class ChunkConfig(_Cfg):
             raise ValueError(str(e)) from e
         return {**preset.config, **data, "preset": name}
 
-    @field_validator("separators")
+    @field_validator("separators", "child_separators")
     @classmethod
     def _separators(cls, v: list[str]) -> list[str]:
         out: list[str] = []
@@ -229,7 +237,7 @@ class ChunkConfig(_Cfg):
         if self.preset != CUSTOM_PRESET:
             get_chunk_preset(self.preset)
         if self.mode == "parent_child":
-            if self.child_size >= self.parent_size:
+            if self.parent_mode == "paragraph" and self.child_size >= self.parent_size:
                 raise ValueError("child_size 必须小于 parent_size")
             if self.child_overlap * 2 > self.child_size:
                 raise ValueError("child_overlap 不能超过 child_size 的一半")
@@ -238,7 +246,9 @@ class ChunkConfig(_Cfg):
     @property
     def context_chunk_tokens(self) -> int:
         """送入 LLM 的单个检索结果上限：父子模式为父块大小，否则为切块大小（窗口校验用）。"""
-        return self.parent_size if self.mode == "parent_child" else self.chunk_size
+        if self.mode != "parent_child":
+            return self.chunk_size
+        return self.full_doc_max_tokens if self.parent_mode == "full_doc" else self.parent_size
 
 
 # ---------------------------------------------------------------- session
@@ -405,7 +415,11 @@ def validate_app_config(
             + PROMPT_RESERVE_TOKENS
         )
         limit = int(WINDOW_RATIO * llm_window)
-        unit = "parent_size" if chunk.mode == "parent_child" else "chunk_size"
+        unit = (
+            ("full_doc_max_tokens" if chunk.parent_mode == "full_doc" else "parent_size")
+            if chunk.mode == "parent_child"
+            else "chunk_size"
+        )
         if need > limit:
             issues.append(
                 ConfigIssue(

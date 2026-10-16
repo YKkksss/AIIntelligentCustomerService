@@ -144,6 +144,8 @@ name = "Celery 任务只调用 service：不直接用 db / providers / vectorsto
 type = "forbidden"
 source_modules = ["aics.tasks"]
 forbidden_modules = ["aics.db", "aics.providers", "aics.vectorstore", "aics.storage", "sqlalchemy"]
+# 只禁止直接 import：任务经由 service 间接用到这些库是预期行为（合同名“不直接用”）
+allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 name = "auth / apikeys / audit / stats / webhooks / knowledge / apps 不依赖其他业务模块"

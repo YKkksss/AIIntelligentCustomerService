@@ -47,6 +47,7 @@ class ChunkPoint:
     index_version: int
     vector: Sequence[float]
     enabled: bool = True
+    parent_id: UUID | None = None  # 父子模式：子块所属父块
 
 
 @dataclass(frozen=True)
@@ -132,6 +133,7 @@ class QdrantVectorStore:
                         "chunk_id": str(p.chunk_id),
                         "index_version": p.index_version,
                         "enabled": p.enabled,
+                        **({"parent_id": str(p.parent_id)} if p.parent_id else {}),
                     },
                 )
             )

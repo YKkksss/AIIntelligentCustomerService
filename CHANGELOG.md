@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### 新增（M1.4 入库流水线，2026-10-16）
+- `ingest/service.py`：版本化构建 `run_build`（清半成品 → 解析 → 预处理 → 切块 → 写父块 / 切块 → 分批向量化 → 事务切换 → 投递清理）、`run_cleanup`、切块预览 `preview` / `preview_document`（不向量化、不写库）。
+- `ingest/indexer.py`：`build_embed_text`（上下文增强前缀，`chunks.text` 保持原文，向量化文本由此函数统一派生、不单独存储）；Qdrant payload 带 `parent_id`。
+- `ingest/preprocess.py`：`normalize_whitespace` / `remove_urls_emails`；`ChunkConfig` 新增 `parent_mode`（paragraph / full_doc）、`full_doc_max_tokens`、`child_separators`、`contextual_prefix`。
+- Celery 任务 `aics.ingest_document`（ingest）、`aics.cleanup_document`（maintenance）。
+- 迁移 `0004`：`documents.indexed_title`。
+- repository 移至 `aics/ingest/repository.py`（knowledge 模块重新导出）；import-linter“任务只调用 service”合同改为只禁止直接 import。
+
 ### 文档（设计讨论记录，2026-10-16）
 - 新增 `docs/09-design-discussions/`（设计讨论记录目录与索引，今后所有设计讨论在此记录）；首篇 0001《知识库切块与检索设置（参考 Dify）》与 ADR-0013。
 - 结论同步到文档处理流水线、RAG 流程设计 §4.2、数据库设计、Qdrant 设计、管理接口、功能需求 FR-KB-11~20；开发计划扩充 M1.4，新增 M2.2b、M4.3b、M4.6b。

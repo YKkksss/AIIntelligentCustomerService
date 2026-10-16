@@ -24,6 +24,7 @@ from typing import Any, Literal
 
 from aics.core.tokens import count_tokens
 from aics.ingest.parsers.base import Block, ParsedDoc
+from aics.ingest.preprocess import preprocess
 
 HEADING_SEP = " > "
 _SENT = re.compile(r"(?<=[。！？!?；;])|\n")
@@ -55,16 +56,22 @@ class ChunkOptions:
     split_by_heading: bool = True
     keep_tables: bool = True
     mode: Literal["general", "parent_child"] = "general"
+    parent_mode: Literal["paragraph", "full_doc"] = "paragraph"
     parent_size: int = 1024
+    full_doc_max_tokens: int = 10000
     child_size: int = 200
     child_overlap: int = 20
+    child_separators: tuple[str, ...] = ()
+    normalize_whitespace: bool = True
+    remove_urls_emails: bool = False
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> ChunkOptions:
         names = {f.name for f in fields(cls)}
         kw = {k: v for k, v in data.items() if k in names}
-        if "separators" in kw:
-            kw["separators"] = tuple(kw["separators"])
+        for key in ("separators", "child_separators"):
+            if key in kw:
+                kw[key] = tuple(kw[key])
         return cls(**kw)
 
     def validate(self) -> None:
@@ -75,7 +82,7 @@ class ChunkOptions:
         pair(self.chunk_size, self.chunk_overlap)
         if self.mode == "parent_child":
             pair(self.child_size, self.child_overlap)
-            if self.child_size >= self.parent_size:
+            if self.parent_mode == "paragraph" and self.child_size >= self.parent_size:
                 raise ValueError("child_size 必须小于 parent_size")
 
 
@@ -143,7 +150,10 @@ def _split_separators(text: str, seps: tuple[str, ...]) -> list[str]:
     return [p.strip() for p in re.split(pattern, text) if p.strip()]
 
 
-def _events(doc: ParsedDoc, o: ChunkOptions) -> Iterator[_Event]:
+def _events(
+    doc: ParsedDoc, o: ChunkOptions, separators: tuple[str, ...] | None = None
+) -> Iterator[_Event]:
+    seps = o.separators if separators is None else separators
     for blk in doc.blocks:
         if blk.type == "heading":
             yield from _heading_events(blk, o)
@@ -151,7 +161,7 @@ def _events(doc: ParsedDoc, o: ChunkOptions) -> Iterator[_Event]:
         if blk.type == "table":
             yield _Unit(blk.text, blk.page, is_table=o.keep_tables)
             continue
-        for piece in _split_separators(blk.text, o.separators):
+        for piece in _split_separators(blk.text, seps):
             yield from _text_events(piece, blk, o)
 
 
@@ -421,8 +431,8 @@ def _run(events: list[_Event], size: int, overlap: int, split_by_heading: bool) 
     return b.out
 
 
-def _children_events(parent: ChunkDraft) -> list[_Event]:
-    """父块正文 → 子块单元：连续的表格行合为一个表格单元，其余按行。"""
+def _children_events(parent: ChunkDraft, seps: tuple[str, ...] = ()) -> list[_Event]:
+    """父块正文 → 子块单元：连续的表格行合为一个表格单元，其余按行（再按子块分隔符切）。"""
     events: list[_Event] = []
     table: list[str] = []
     for line in parent.text.split("\n"):
@@ -432,16 +442,90 @@ def _children_events(parent: ChunkDraft) -> list[_Event]:
         if table:
             events.append(_Unit("\n".join(table), parent.page_from, is_table=True))
             table = []
-        if line.strip():
-            events.append(_Unit(line, parent.page_from))
+        for piece in _split_separators(line, seps) if line.strip() else []:
+            events.append(_Unit(piece, parent.page_from))
     if table:
         events.append(_Unit("\n".join(table), parent.page_from, is_table=True))
     return events
 
 
+def _strip_overlap(c: ChunkDraft) -> str:
+    """去掉子块开头来自上一块的重叠行，用于拼回父块正文。"""
+    if c.overlap_tokens and "\n" in c.text:
+        return c.text.split("\n", 1)[1]
+    return c.text
+
+
+def _full_doc(doc: ParsedDoc, o: ChunkOptions) -> ChunkResult:
+    """全文父块：先按章节切子块（标题路径准确），再把连续子块装入 ≤ full_doc_max_tokens 的父块。
+
+    与 Dify 截断超长部分不同：超过上限时顺序开新的父块，内容不丢；子块不跨父块，父块内章节变化处插入标题路径行。
+    """
+    seps = o.child_separators or o.separators
+    children = _run(list(_events(doc, o, seps)), o.child_size, o.child_overlap, True)
+    parents: list[ParentDraft] = []
+    chunks: list[ChunkDraft] = []
+    cur: list[ChunkDraft] = []
+    cur_lines: list[str] = []
+
+    def lines_for(c: ChunkDraft, prev_path: str | None) -> list[str]:
+        head = [c.heading_path] if c.heading_path and c.heading_path != prev_path else []
+        return [*head, _strip_overlap(c)]
+
+    def close() -> None:
+        if not cur:
+            return
+        text = "\n".join(cur_lines)
+        pages = [p for c in cur for p in (c.page_from, c.page_to) if p is not None]
+        po = len(parents)
+        parents.append(
+            ParentDraft(
+                po,
+                cur[0].heading_path,
+                text,
+                count_tokens(text),
+                min(pages) if pages else None,
+                max(pages) if pages else None,
+            )
+        )
+        for i, c in enumerate(cur):
+            ov = c.overlap_tokens if i else 0  # 父块内第一个子块不带跨父块重叠
+            chunks.append(
+                ChunkDraft(
+                    len(chunks),
+                    c.heading_path,
+                    c.text if i else _strip_overlap(c),
+                    c.tokens if i else count_tokens(_strip_overlap(c)),
+                    c.page_from,
+                    c.page_to,
+                    ov,
+                    po,
+                )
+            )
+        cur.clear()
+        cur_lines.clear()
+
+    for c in children:
+        prev = cur[-1].heading_path if cur else None
+        add = lines_for(c, prev)
+        if cur and count_tokens("\n".join([*cur_lines, *add])) > o.full_doc_max_tokens:
+            close()
+            add = lines_for(c, None)
+        cur.append(c)
+        cur_lines.extend(add)
+    close()
+    return ChunkResult(chunks=chunks, parents=parents)
+
+
 def split_document(doc: ParsedDoc, options: ChunkOptions | None = None) -> ChunkResult:
+    """预处理 → 按策略切块（→ 父子模式）。入库与预览共用此入口，保证预览结果与入库一致。"""
     o = options or ChunkOptions()
     o.validate()
+    doc = preprocess(
+        doc, normalize_whitespace=o.normalize_whitespace, remove_urls_emails=o.remove_urls_emails
+    )
+    if o.mode == "parent_child" and o.parent_mode == "full_doc":
+        return _full_doc(doc, o)
     events = list(_events(doc, o))
     if o.mode != "parent_child":
         return ChunkResult(chunks=_run(events, o.chunk_size, o.chunk_overlap, o.split_by_heading))
@@ -453,7 +537,7 @@ def split_document(doc: ParsedDoc, options: ChunkOptions | None = None) -> Chunk
         parents.append(
             ParentDraft(p.ordinal, p.heading_path, p.text, p.tokens, p.page_from, p.page_to)
         )
-        for c in _run(_children_events(p), o.child_size, o.child_overlap, True):
+        for c in _run(_children_events(p, o.child_separators), o.child_size, o.child_overlap, True):
             chunks.append(
                 ChunkDraft(
                     ordinal=len(chunks),

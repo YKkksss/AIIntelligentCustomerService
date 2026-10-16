@@ -71,6 +71,8 @@ class Document(TimestampMixin, SoftDeleteMixin, Base):
     pending_index_version: Mapped[int | None] = mapped_column(Integer)
     chunk_config_version: Mapped[int | None] = mapped_column(Integer)
     embed_model: Mapped[str | None] = mapped_column(Text)
+    # 生效版本向量化时使用的标题（上下文增强前缀）；≠ title 时后台提示重建
+    indexed_title: Mapped[str | None] = mapped_column(Text)
     metadata_: Mapped[dict[str, Any]] = mapped_column(
         "metadata", JSONB, nullable=False, server_default=sa_text("'{}'")
     )

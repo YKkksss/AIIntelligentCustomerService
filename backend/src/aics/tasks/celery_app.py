@@ -40,7 +40,12 @@ def create_celery() -> Celery:
         beat_schedule={},
         broker_connection_retry_on_startup=True,
     )
-    # 任务模块随里程碑加入：app.autodiscover_tasks(["aics.tasks.ingest", ...])
+    # 任务模块随里程碑加入
+    app.conf.include = ["aics.tasks.ingest", "aics.tasks.maintenance"]
+    app.conf.task_routes = {
+        "aics.ingest_document": {"queue": "ingest", "routing_key": "ingest"},
+        "aics.cleanup_document": {"queue": "maintenance", "routing_key": "maintenance"},
+    }
     return app
 
 
