@@ -1,0 +1,117 @@
+{
+  "parsed": {
+    "title": null,
+    "blocks": [
+      {
+        "type": "heading",
+        "text": "售后服务政策",
+        "level": 1,
+        "page": null
+      },
+      {
+        "type": "paragraph",
+        "text": "本政策适用于小优商城自营商品。如与活动页面说明不一致，以活动页面为准。",
+        "level": null,
+        "page": null
+      },
+      {
+        "type": "heading",
+        "text": "退货规则",
+        "level": 2,
+        "page": null
+      },
+      {
+        "type": "paragraph",
+        "text": "签收后 7 天内，商品完好且不影响二次销售的，可申请无理由退货。定制类、生鲜类商品除外。",
+        "level": null,
+        "page": null
+      },
+      {
+        "type": "paragraph",
+        "text": "因质量问题退货的，运费由商家承担；非质量问题退货的，退回运费由买家承担。",
+        "level": null,
+        "page": null
+      },
+      {
+        "type": "heading",
+        "text": "换货规则",
+        "level": 2,
+        "page": null
+      },
+      {
+        "type": "paragraph",
+        "text": "签收后 15 天内出现性能故障，可申请换货。换货商品发出后，原商品需在 7 天内寄回。",
+        "level": null,
+        "page": null
+      },
+      {
+        "type": "table",
+        "text": "| 商品类别 | 退货时限 | 换货时限 |\n| --- | --- | --- |\n| 数码家电 | 7 天 | 15 天 |\n| 服饰鞋包 | 7 天 | 30 天 |",
+        "level": null,
+        "page": null
+      },
+      {
+        "type": "heading",
+        "text": "退款时效",
+        "level": 2,
+        "page": null
+      },
+      {
+        "type": "paragraph",
+        "text": "仓库签收退货后 1 个工作日内审核，审核通过后原路退款，到账时间以银行为准，一般为 1–5 个工作日。",
+        "level": null,
+        "page": null
+      },
+      {
+        "type": "list",
+        "text": "- 联系客服：在线客服 9:00–21:00\n- 客服电话：400-000-0000",
+        "level": null,
+        "page": null
+      },
+      {
+        "type": "paragraph",
+        "text": "# 这不是标题",
+        "level": null,
+        "page": null
+      }
+    ]
+  },
+  "chunks_120_30": [
+    {
+      "heading_path": "售后服务政策",
+      "text": "本政策适用于小优商城自营商品。如与活动页面说明不一致，以活动页面为准。",
+      "tokens": 36,
+      "pages": [
+        null,
+        null
+      ]
+    },
+    {
+      "heading_path": "售后服务政策 > 退货规则",
+      "text": "签收后 7 天内，商品完好且不影响二次销售的，可申请无理由退货。定制类、生鲜类商品除外。\n因质量问题退货的，运费由商家承担；非质量问题退货的，退回运费由买家承担。",
+      "tokens": 89,
+      "pages": [
+        null,
+        null
+      ]
+    },
+    {
+      "heading_path": "售后服务政策 > 换货规则",
+      "text": "签收后 15 天内出现性能故障，可申请换货。换货商品发出后，原商品需在 7 天内寄回。\n| 商品类别 | 退货时限 | 换货时限 |\n| --- | --- | --- |\n| 数码家电 | 7 天 | 15 天 |\n| 服饰鞋包 | 7 天 | 30 天 |",
+      "tokens": 105,
+      "pages": [
+        null,
+        null
+      ]
+    },
+    {
+      "heading_path": "售后服务政策 > 退款时效",
+      "text": "仓库签收退货后 1 个工作日内审核，审核通过后原路退款，到账时间以银行为准，一般为 1–5 个工作日。\n- 联系客服：在线客服 9:00–21:00\n- 客服电话：400-000-0000\n# 这不是标题",
+      "tokens": 90,
+      "pages": [
+        null,
+        null
+      ]
+    }
+  ]
+}

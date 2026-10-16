@@ -1,0 +1,90 @@
+{
+  "parsed": {
+    "title": null,
+    "blocks": [
+      {
+        "type": "paragraph",
+        "text": "售后服务政策",
+        "level": null,
+        "page": null
+      },
+      {
+        "type": "paragraph",
+        "text": "本政策适用于小优商城自营商品。如与活动页面说明不一致，以活动页面为准。",
+        "level": null,
+        "page": null
+      },
+      {
+        "type": "paragraph",
+        "text": "退货规则",
+        "level": null,
+        "page": null
+      },
+      {
+        "type": "paragraph",
+        "text": "签收后 7 天内，商品完好且不影响二次销售的，可申请无理由退货。定制类、生鲜类商品除外。",
+        "level": null,
+        "page": null
+      },
+      {
+        "type": "paragraph",
+        "text": "因质量问题退货的，运费由商家承担；非质量问题退货的，退回运费由买家承担。",
+        "level": null,
+        "page": null
+      },
+      {
+        "type": "paragraph",
+        "text": "换货规则",
+        "level": null,
+        "page": null
+      },
+      {
+        "type": "paragraph",
+        "text": "签收后 15 天内出现性能故障，可申请换货。换货商品发出后，原商品需在 7 天内寄回。",
+        "level": null,
+        "page": null
+      },
+      {
+        "type": "paragraph",
+        "text": "退款时效",
+        "level": null,
+        "page": null
+      },
+      {
+        "type": "paragraph",
+        "text": "仓库签收退货后 1 个工作日内审核，审核通过后原路退款，到账时间以银行为准，一般为 1–5 个工作日。",
+        "level": null,
+        "page": null
+      }
+    ]
+  },
+  "chunks_120_30": [
+    {
+      "heading_path": "",
+      "text": "售后服务政策\n本政策适用于小优商城自营商品。如与活动页面说明不一致，以活动页面为准。\n退货规则\n签收后 7 天内，商品完好且不影响二次销售的，可申请无理由退货。定制类、生鲜类商品除外。",
+      "tokens": 97,
+      "pages": [
+        null,
+        null
+      ]
+    },
+    {
+      "heading_path": "",
+      "text": "定制类、生鲜类商品除外。\n因质量问题退货的，运费由商家承担；非质量问题退货的，退回运费由买家承担。\n换货规则\n签收后 15 天内出现性能故障，可申请换货。换货商品发出后，原商品需在 7 天内寄回。\n退款时效",
+      "tokens": 107,
+      "pages": [
+        null,
+        null
+      ]
+    },
+    {
+      "heading_path": "",
+      "text": "退款时效\n仓库签收退货后 1 个工作日内审核，审核通过后原路退款，到账时间以银行为准，一般为 1–5 个工作日。",
+      "tokens": 56,
+      "pages": [
+        null,
+        null
+      ]
+    }
+  ]
+}

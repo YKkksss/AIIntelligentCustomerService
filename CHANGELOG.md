@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### 新增（M1.3 解析与切块，2026-10-16）
+- `ingest/parsers/`：`ParsedDoc` / `Block`；PDF（PyMuPDF：字号推断标题、去页眉页脚、表格识别、跨页段落合并）、DOCX（标题样式、列表、表格、zip 炸弹防护）、Markdown、TXT（编码检测，GBK 按 GB18030）、HTML（trafilatura）、URL 导入（重定向逐跳校验、15s / 10MB 限制）；扩展名白名单 + 魔数校验。
+- `core/netguard.py`：出站 URL SSRF 校验（私网 / 回环 / 链路本地 / 元数据地址、IPv6 内嵌 IPv4、整数 IP、端口限制、`AICS_URL_FETCH_ALLOWLIST`、对端 IP 复核），供 URL 导入与后续 Webhook 共用。
+- `ingest/chunker.py`：标题路径、按 token（`core.tokens`）累加、句子级重叠、表格整块 / 超长按行拆分并重复表头。
+- 测试：5 种格式样例文件与解析 / 切块快照；切块长度与重叠性质测试；SSRF 与 URL 抓取测试。
+- 依赖：pymupdf、python-docx、trafilatura、charset-normalizer。
+
 ### 新增（M1.2 数据表与应用配置，2026-10-16）
 - 迁移 `0002`：apps、user_app_roles、documents、chunks（`tsv` 生成列 + GIN）、jobs；ORM 模型与 repository（`AppRepository`、`MemberRepository`、`DocumentRepository`、`ChunkRepository`、`JobRepository`，均继承 `AppScopedRepository`）。
 - `rag/config.py`：`AppRagConfig`、`IntentConfig`、`HandoffConfig`（含 `ServiceHours`）、`ChunkConfig`、`SessionConfig`/`EffectiveSessionConfig`、`WebhookConfig` 唯一定义；`validate_app_config` 做模型注册表、80% 窗口、压缩模型窗口、消息向量开关、排队超时 < 空闲关闭等跨对象校验。
