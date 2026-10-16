@@ -5,8 +5,9 @@ Corpus / questions: the M1 main corpus and scripts/e2e_m1/questions.json (same a
 (cached), real DeepSeek chat through `run_rag` with a response cache keyed by
 (model, overrides, messages, kwargs) so re-runs are free.
 
-Variants differ only in `rag_config.llm_thinking` (generate with / without reasoning);
-classify / judge always run without thinking and are shared between variants via the cache.
+Variants: `off` / `on` = `rag_config.llm_thinking` (generate with / without reasoning);
+`norerank` = `enable_rerank=false`, so every kb_qa question goes through the LLM judge.
+Classify / judge always run without thinking and are shared between variants via the cache.
 
 Checks per question: answerable → answer_type=answer, ≥ 1 citation, and a cited source matches
 the expected document + evidence (M1 hit rule); unanswerable → refused (or handoff).
@@ -222,7 +223,9 @@ async def main() -> None:
     profile = AppProfile(name="星河优选", description=SCOPES[args.scope], fallback_text=FALLBACK)
     report: dict[str, Any] = {"n": len(questions), "scope": args.scope, "variants": {}}
     for variant in args.variants.split(","):
-        cfg = AppRagConfig(llm_thinking=variant == "on")
+        # off / on: generate thinking; norerank: rerank disabled → every question is judged
+        # by the LLM judge (exercises the judge prompt live).
+        cfg = AppRagConfig(llm_thinking=variant == "on", enable_rerank=variant != "norerank")
         rows = []
         for q in questions:
             if llm.spend.yuan > args.budget_yuan:
