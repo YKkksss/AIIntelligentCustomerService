@@ -19,7 +19,7 @@ import structlog
 from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from aics.core.config import get_settings
 from aics.core.errors import AppError, NotFoundError, ValidationAppError
@@ -29,13 +29,14 @@ from aics.ingest.parsers import MIME_TYPES, detect_file_type, parse_bytes
 from aics.ingest.parsers.url import FetchedUrl, fetch_url
 from aics.ingest.questions import QuestionTarget, text_hash, upsert_question_points
 from aics.ingest.service import OVERRIDE_KEY
+from aics.modules.knowledge.chunk_search import PgChunkSearch
 from aics.modules.knowledge.repository import (
     ChunkQuestionRepository,
     ChunkRepository,
     DocumentRepository,
     JobRepository,
 )
-from aics.providers.base import EmbeddingProvider
+from aics.providers.base import EmbeddingProvider, RerankProvider
 from aics.rag.config import (
     AppRagConfig,
     ChunkConfig,
@@ -43,6 +44,7 @@ from aics.rag.config import (
     check_chunk_window,
     merge_chunk_config,
 )
+from aics.rag.retrieval import Candidate, EmbeddingVectorSearch, run_retrieval
 from aics.storage import Storage
 from aics.storage.base import document_key
 from aics.vectorstore import QdrantVectorStore
@@ -77,6 +79,8 @@ class QuestionNotFoundError(NotFoundError):
 
 
 MAX_QUESTIONS_PER_CHUNK = 20
+HIT_TEST_MAX_CHARS = 500
+HIT_TEST_PREVIEW_CHARS = 300
 
 
 def normalize_questions(questions: Sequence[str]) -> list[str]:
@@ -726,6 +730,90 @@ class KnowledgeService:
             raise
         await self.session.commit()
         return q
+
+    # ------------------------------------------------------------------ 命中测试（M2.2b）
+    async def hit_test(
+        self,
+        app_id: UUID,
+        query: str,
+        *,
+        reranker: RerankProvider | None,
+        overrides: Mapping[str, Any] | None = None,
+        filters: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Run retrieve → fuse → rerank only (RAG 流程设计 §4.2): no LLM, no conversation,
+        no message or statistics writes. `overrides = {"rag_config": {...}}` is merged over
+        the app's rag_config and validated like a save; `filters = {"tags": [...]}`."""
+        q = (query or "").strip()
+        if not q:
+            raise ValidationAppError(message="query 不能为空")
+        if len(q) > HIT_TEST_MAX_CHARS:
+            raise ValidationAppError(message=f"query 最多 {HIT_TEST_MAX_CHARS} 字")
+        unknown = set(overrides or {}) - {"rag_config"}
+        if unknown:
+            raise ValidationAppError(message=f"不支持的 overrides：{', '.join(sorted(unknown))}")
+        bad_filters = set(filters or {}) - {"tags"}
+        if bad_filters:
+            raise ValidationAppError(message=f"不支持的 filters：{', '.join(sorted(bad_filters))}")
+        embedder, store = self._need_vectors()
+        app = await self._app(app_id)
+        merged = {**(app.rag_config or {}), **dict((overrides or {}).get("rag_config") or {})}
+        try:
+            cfg = AppRagConfig.model_validate(merged)
+        except ValidationError as e:
+            raise ValidationAppError(details={"errors": e.errors(include_url=False)}) from e
+        tags = normalize_tags((filters or {})["tags"]) if filters and "tags" in filters else None
+        res = await run_retrieval(
+            app_id,
+            q,
+            cfg,
+            vector=EmbeddingVectorSearch(embedder, store),
+            chunk_search=PgChunkSearch(
+                async_sessionmaker(self.session.bind, expire_on_commit=False)
+            ),
+            reranker=reranker,
+            tags=tags,
+        )
+
+        def unit(c: Candidate) -> dict[str, Any]:
+            return {
+                **c.trace(),
+                "document_title": c.chunk.document_title,
+                "heading_path": c.heading_path,
+                "text": c.text[:HIT_TEST_PREVIEW_CHARS],
+            }
+
+        return {
+            "query": q,
+            "rag_config": cfg.model_dump(
+                include={
+                    "retrieval_mode",
+                    "fusion",
+                    "vector_weight",
+                    "vector_score_threshold",
+                    "vector_top_k",
+                    "keyword_top_k",
+                    "fuse_top_k",
+                    "rerank_top_n",
+                    "enable_rerank",
+                    "rerank_threshold",
+                }
+            ),
+            "tags": res.tags,
+            "vector": [
+                {"chunk_id": str(h.chunk_id), "score": h.score, "rank": h.rank}
+                for h in res.vector_hits
+            ],
+            "keyword": [
+                {"chunk_id": str(h.chunk_id), "score": h.score, "rank": h.rank}
+                for h in res.keyword_hits
+            ],
+            "fused": [unit(c) for c in res.fused],
+            "reranked": [unit(c) for c in res.reranked],
+            "rerank_applied": res.rerank_applied,
+            "degraded": res.degraded,
+            "timings": res.timings,
+        }
 
     # ------------------------------------------------------------------ 删除
     async def delete_document(

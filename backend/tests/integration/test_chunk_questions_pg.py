@@ -214,3 +214,52 @@ async def test_validation(env: Env, pg: dict[str, Any]) -> None:
             await ks.add_chunk_questions(env.app, uuid.uuid4(), ["x"])
         with pytest.raises(ChunkNotFoundError):  # other app cannot touch this chunk
             await ks.add_chunk_questions(pg["app_b"], chunk.id, ["x"])
+
+
+class NeedleReranker:
+    model = "fake"
+
+    async def rerank(self, query: str, docs: list[str], top_n: int) -> list[tuple[int, float]]:
+        return sorted(
+            [(i, 0.95 if NEEDLE in d else 0.1) for i, d in enumerate(docs)], key=lambda x: -x[1]
+        )[:top_n]
+
+
+async def test_hit_test(env: Env) -> None:
+    from sqlalchemy import func
+
+    from aics.db.models import App, Conversation, Message
+
+    async with env.pg["sessions"]() as s:
+        before = (await s.get(App, env.app)).config_version
+        ks = env.ks(s)
+        r = await ks.hit_test(env.app, "退货运费谁承担", reranker=NeedleReranker())
+        assert r["vector"] and r["keyword"]
+        assert {"chunk_id", "score", "rank"} <= set(r["vector"][0])
+        assert r["rerank_applied"] and NEEDLE in r["reranked"][0]["text"]
+        assert r["reranked"][0]["rerank"] == 0.95 and r["rag_config"]["fusion"] == "rrf"
+        w = await ks.hit_test(
+            env.app,
+            "退货运费谁承担",
+            reranker=None,
+            overrides={"rag_config": {"retrieval_mode": "fulltext", "fusion": "weighted"}},
+        )
+        assert w["vector"] == [] and w["keyword"] and not w["rerank_applied"]
+        assert w["rag_config"]["retrieval_mode"] == "fulltext"
+        nf = await ks.hit_test(env.app, "退货", reranker=None, filters={"tags": ["nope"]})
+        assert nf["fused"] == [] and nf["tags"] == ["nope"]
+        for kw in (
+            {"overrides": {"rag_config": {"vector_weight": 2}}},
+            {"overrides": {"llm": {}}},
+            {"filters": {"doc": 1}},
+        ):
+            with pytest.raises(ValidationAppError):
+                await ks.hit_test(env.app, "退货", reranker=None, **kw)
+        with pytest.raises(ValidationAppError):
+            await ks.hit_test(env.app, "  ", reranker=None)
+        # read-only: no conversation / message rows, app config untouched
+        for m in (Conversation, Message):
+            n = await s.scalar(select(func.count()).select_from(m).where(m.app_id == env.app))
+            assert n == 0
+        await s.refresh(await s.get(App, env.app))
+        assert (await s.get(App, env.app)).config_version == before
