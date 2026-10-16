@@ -214,3 +214,86 @@ async def test_fuse_top_k_and_empty() -> None:
     assert empty.fused == [] and empty.reranked == [] and not empty.rerank_applied
     with pytest.raises(ValueError):
         await run_retrieval(APP, " ", CFG, vector=FakeVector([]), chunk_search=ch, reranker=None)
+
+
+# ---------------------------------------------------------------- M2.2b settings
+def test_weighted_scores_minmax() -> None:
+    from aics.rag.retrieval import RouteHit, weighted_scores
+
+    v = [RouteHit(C[0], 0.9, 1), RouteHit(C[1], 0.5, 2)]
+    k = [RouteHit(C[1], 3.0, 1), RouteHit(C[2], 1.0, 2)]
+    s = weighted_scores(v, k, 0.7)
+    assert s[C[0]] == pytest.approx(0.7) and s[C[1]] == pytest.approx(0.3)
+    assert s[C[2]] == pytest.approx(0.0)
+    assert weighted_scores([RouteHit(C[3], 0.2, 1)], [], 0.5) == {C[3]: 0.5}
+    with pytest.raises(ValueError):
+        weighted_scores(v, k, 1.5)
+
+
+async def test_weighted_fusion_switchable() -> None:
+    # vector: C0 > C1 (scores 0.90, 0.89); keyword: C1 > C2
+    vec, kw = FakeVector([C[0], C[1]]), FakeChunks([C[1], C[2]], set(C))
+    rrf = await run_retrieval(APP, "q", CFG, vector=vec, chunk_search=kw, reranker=None)
+    assert rrf.fusion == "rrf" and rrf.fused[0].chunk.chunk_id == C[1]  # in both routes
+    w = AppRagConfig(fusion="weighted", vector_weight=0.9)
+    res = await run_retrieval(APP, "q", w, vector=vec, chunk_search=kw, reranker=None)
+    assert res.fusion == "weighted" and res.trace()["fusion"] == "weighted"
+    # C0 = 0.9·1, C1 = 0.9·0 + 0.1·1 → vector-heavy weighting puts C0 first
+    assert [c.chunk.chunk_id for c in res.fused] == [C[0], C[1], C[2]]
+    assert res.fused[0].score == pytest.approx(0.9)
+
+
+@pytest.mark.parametrize(("mode", "expect"), [("vector", [C[0], C[1]]), ("fulltext", [C[2], C[3]])])
+async def test_single_route_modes(mode: str, expect: list[UUID]) -> None:
+    calls: list[str] = []
+
+    class V(FakeVector):
+        async def search(self, app_id: UUID, question: str, k: int) -> list[tuple[UUID, float]]:
+            calls.append("v")
+            return await super().search(app_id, question, k)
+
+    class K(FakeChunks):
+        async def keyword_search(self, app_id: UUID, question: str, k: int) -> list[KeywordHit]:
+            calls.append("k")
+            return await super().keyword_search(app_id, question, k)
+
+    cfg = AppRagConfig(retrieval_mode=mode)
+    res = await run_retrieval(
+        APP, "q", cfg, vector=V([C[0], C[1]]), chunk_search=K([C[2], C[3]], set(C)), reranker=None
+    )
+    assert [c.chunk.chunk_id for c in res.fused] == expect
+    assert calls == (["v"] if mode == "vector" else ["k"])
+
+
+async def test_single_route_failure_raises() -> None:
+    with pytest.raises(RetrievalUnavailableError):
+        await run_retrieval(
+            APP,
+            "q",
+            AppRagConfig(retrieval_mode="vector"),
+            vector=FakeVector([], fail=True),
+            chunk_search=FakeChunks([C[0]], set(C)),
+            reranker=None,
+        )
+
+
+async def test_vector_score_threshold_drops_low_hits() -> None:
+    # FakeVector scores: 0.90, 0.89, 0.88 …
+    cfg = AppRagConfig(retrieval_mode="vector", vector_score_threshold=0.885)
+    res = await run_retrieval(
+        APP,
+        "q",
+        cfg,
+        vector=FakeVector(C[:5]),
+        chunk_search=FakeChunks([], set(C)),
+        reranker=None,
+    )
+    assert [h.chunk_id for h in res.vector_hits] == [C[0], C[1]]
+
+
+def test_rag_config_validation() -> None:
+    from pydantic import ValidationError
+
+    for bad in ({"retrieval_mode": "bm25"}, {"fusion": "max"}, {"vector_weight": 1.1}):
+        with pytest.raises(ValidationError):
+            AppRagConfig(**bad)
