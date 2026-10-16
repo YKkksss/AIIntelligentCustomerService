@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 
 from aics.db.models import Chunk, ChunkParent, Document, Job
 from aics.db.scoped import AppScopedRepository
@@ -21,6 +21,16 @@ class DocumentRepository(AppScopedRepository[Document]):
             Document.content_hash == content_hash, Document.deleted_at.is_(None)
         )
         return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def get_for_update(self, app_id: UUID, document_id: UUID) -> Document | None:
+        stmt = self._scoped(app_id).where(Document.id == document_id).with_for_update()
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def list_not_deleting(self, app_id: UUID) -> list[Document]:
+        stmt = (
+            self._scoped(app_id).where(Document.status != "deleting").order_by(Document.created_at)
+        )
+        return list((await self.session.execute(stmt)).scalars())
 
 
 def _version_filter(
@@ -41,6 +51,14 @@ class ChunkRepository(AppScopedRepository[Chunk]):
             raise ValueError("切块的 app_id 与参数不一致")
         self.session.add_all(rows)
         await self.session.flush()
+
+    async def disable_document(self, app_id: UUID, document_id: UUID) -> int:
+        stmt = (
+            update(Chunk)
+            .where(Chunk.app_id == app_id, Chunk.document_id == document_id, Chunk.enabled)
+            .values(enabled=False)
+        )
+        return int((await self.session.execute(stmt)).rowcount)  # type: ignore[attr-defined]
 
     async def count_for_build(self, app_id: UUID, document_id: UUID, index_version: int) -> int:
         stmt = (

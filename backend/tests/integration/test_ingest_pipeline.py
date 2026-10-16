@@ -6,103 +6,20 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import uuid
-from collections.abc import AsyncIterator
-from pathlib import Path
 from typing import Any
 
 import pytest
-from alembic import command
-from alembic.config import Config
-from qdrant_client import AsyncQdrantClient
+from ingest_support import DIM, MD, FakeEmbedder
 from qdrant_client.http import models as qm
-from sqlalchemy import delete, func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy import func, select
 
 from aics.core.config import get_settings
-from aics.db.models import App, Chunk, ChunkParent, Document, Job, User
+from aics.db.models import App, Chunk, ChunkParent, Document, Job
 from aics.ingest.service import IngestService
 from aics.modules.apps.service import AppService
-from aics.storage.local import LocalStorage
-from aics.vectorstore import QdrantVectorStore
 
 pytestmark = pytest.mark.integration
-DB = os.environ.get("AICS_TEST_DB_URL")
-QURL = os.environ.get("AICS_TEST_QDRANT_URL")
-QKEY = os.environ.get("AICS_TEST_QDRANT_API_KEY")
-DIM = 8
-MD = ("# 售后\n\n## 退货\n\n" + "签收后七天内可无理由退货，运费规则见下。\n\n" * 40).encode()
-
-
-class FakeEmbedder:
-    model, dim = "fake", DIM
-
-    def __init__(self, fail_on_call: int | None = None) -> None:
-        self.calls = 0
-        self.fail_on_call = fail_on_call
-        self.texts: list[str] = []
-
-    async def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        self.calls += 1
-        if self.fail_on_call == self.calls:
-            raise RuntimeError("embedding upstream down")
-        self.texts += texts
-        out = []
-        for t in texts:
-            h = hashlib.sha256(t.encode()).digest()
-            out.append([b / 255 + 0.01 for b in h[:DIM]])
-        return out
-
-    async def embed_query(self, text: str) -> list[float]:
-        return (await self.embed_documents([text]))[0]
-
-
-@pytest.fixture
-def migrated(monkeypatch: pytest.MonkeyPatch) -> str:
-    if not (DB and QURL):
-        pytest.skip("未设置 AICS_TEST_DB_URL / AICS_TEST_QDRANT_URL")
-    monkeypatch.setenv("AICS_DB_URL", DB)
-    monkeypatch.setenv("AICS_EMBED_BATCH", "2")
-    get_settings.cache_clear()
-    command.upgrade(Config(str(Path(__file__).resolve().parents[2] / "alembic.ini")), "head")
-    return DB
-
-
-@pytest.fixture
-async def env(migrated: str, tmp_path: Path) -> AsyncIterator[dict[str, Any]]:
-    engine = create_async_engine(migrated)
-    sessions = async_sessionmaker(engine, expire_on_commit=False)
-    client = AsyncQdrantClient(url=QURL, api_key=QKEY, check_compatibility=False, timeout=10)
-    store = QdrantVectorStore(
-        client, prefix="aics_test_", embed_model=f"it-{uuid.uuid4().hex[:8]}", dim=DIM
-    )
-    storage = LocalStorage(tmp_path)
-    async with sessions() as s:
-        u = User(email=f"u{uuid.uuid4().hex[:8]}@x.io", display_name="u", password_hash="h")
-        s.add(u)
-        await s.flush()
-        app = await AppService(s).create_app(name=f"it-{uuid.uuid4().hex[:6]}", created_by=u.id)
-        await s.commit()
-        app_id, user_id = app.id, u.id
-    ctx: dict[str, Any] = {
-        "sessions": sessions,
-        "store": store,
-        "storage": storage,
-        "app_id": app_id,
-    }
-    try:
-        yield ctx
-    finally:
-        async with sessions() as s:
-            for m in (Chunk, ChunkParent, Job, Document):
-                await s.execute(delete(m).where(m.app_id == app_id))
-            await s.execute(delete(App).where(App.id == app_id))
-            await s.execute(delete(User).where(User.id == user_id))
-            await s.commit()
-        await store.drop_chunks_collection()
-        await client.close()
-        await engine.dispose()
 
 
 def _svc(

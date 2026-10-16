@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+### 新增（M1.6 知识库服务、对账与兜底，2026-10-16；M1 里程碑本地验收通过）
+- `KnowledgeService`：`upload_file`、`import_url`（导入即抓取存快照，按内容 SHA-256 去重）、`replace_file`（FR-KB-08 三条哈希规则）、`rebuild_document` / `rebuild_app`、`delete_document`（立即不可检索 → `cleanup_document`）、`request_reconcile`。
+- `IngestService.run_reconcile` / `reconcile_app`（逐文档对账，区分 mismatch / orphan）、`run_sweep`（超时删除、遗留旧版本、孤儿点）；删除清理覆盖全部文件版本并更新 job 状态。
+- `QdrantVectorStore.set_document_enabled`、`count_by_document`（facet 精确计数）。
+- Celery：`aics.reconcile`、`aics.sweep_knowledge` 及 beat（每日 03:30 对账、每小时兜底）。
+- `aics-cli reindex` / `reconcile`（`--inline` 本进程执行；否则按任务名经 broker 投递）。
+- 集成测试共用 fixture 移至 `tests/integration/conftest.py` 与 `ingest_support.py`。
+- 开发计划：M1.6 ✅、M1 里程碑状态（tag `v0.2.0` 待服务器复验），待复验清单新增 M1 真实 worker 验收与 URL 真实抓取。
+
 ### 新增（M1.5 分词、注入检测与去重，2026-10-16）
 - `ingest/injection.py` + `injection_patterns.yaml`：入库注入检测（中英文规则、NFKC / 空白 / 零宽字符归一化）；命中切块 `review_status=flagged`、`flag_reason`，Qdrant payload `enabled=false`；父子模式父块命中则其子块全部待复核。
 - `IngestService.run_retokenize` 与任务 `aics.retokenize_app`（队列 ingest）：`custom_dict` 变化后分批只重算 `search_text`，不重新向量化；被新词典取代时自动让位；构建期间词典变化在切换时补算。

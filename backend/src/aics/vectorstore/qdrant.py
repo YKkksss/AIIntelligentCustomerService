@@ -23,6 +23,9 @@ SEARCH_HNSW_EF = 128
 log = structlog.get_logger()
 
 
+FACET_LIMIT = 100_000  # 单应用文档数上限远小于此
+
+
 class VectorStoreError(Exception):
     pass
 
@@ -154,6 +157,24 @@ class QdrantVectorStore:
             wait=True,
         )
 
+    async def set_document_enabled(self, app_id: UUID, document_id: UUID, enabled: bool) -> None:
+        """整篇文档的点（全部构建号）改 enabled：删除文档时先让其立即不可检索。"""
+        if not await self.client.collection_exists(self.chunks_collection):
+            return
+        await self.client.set_payload(
+            self.chunks_collection,
+            payload={"enabled": enabled},
+            points=qm.Filter(
+                must=[
+                    _app(app_id),
+                    qm.FieldCondition(
+                        key="document_id", match=qm.MatchValue(value=str(document_id))
+                    ),
+                ]
+            ),
+            wait=True,
+        )
+
     # ---------------- 读取 ----------------
     async def search_chunks(
         self, app_id: UUID, vector: Sequence[float], limit: int, *, enabled_only: bool = True
@@ -200,6 +221,24 @@ class QdrantVectorStore:
             self.chunks_collection, count_filter=qm.Filter(must=must), exact=True
         )
         return res.count
+
+    async def count_by_document(
+        self, app_id: UUID, *, enabled_only: bool = True, limit: int = FACET_LIMIT
+    ) -> dict[UUID, int]:
+        """按 document_id 精确分组计数（Qdrant facet，exact=True）；对账与孤儿点清理用。"""
+        if not await self.client.collection_exists(self.chunks_collection):
+            return {}
+        must: list[qm.Condition] = [_app(app_id)]
+        if enabled_only:
+            must.append(qm.FieldCondition(key="enabled", match=qm.MatchValue(value=True)))
+        res = await self.client.facet(
+            self.chunks_collection,
+            key="document_id",
+            facet_filter=qm.Filter(must=must),
+            limit=limit,
+            exact=True,
+        )
+        return {UUID(str(h.value)): int(h.count) for h in res.hits}
 
     # ---------------- 删除 ----------------
     async def delete_document(

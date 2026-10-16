@@ -44,7 +44,8 @@ PREVIEW_DEFAULT_LIMIT = 50
 PREVIEW_MAX_LIMIT = 200
 PROGRESS_SPLIT_DONE = 30  # 解析 + 切块完成；30→100 为向量化
 EMBED_PROGRESS_BATCHES = 4
-RETOKENIZE_BATCH = 500  # 每个进度批包含 embed_batch × 4 条（嵌入器内部再按 embed_batch 拆）
+RETOKENIZE_BATCH = 500
+SWEEP_STALE_AFTER_S = 3600  # 每个进度批包含 embed_batch × 4 条（嵌入器内部再按 embed_batch 拆）
 
 CleanupEnqueuer = Callable[[UUID, int, str | None], Awaitable[None] | None]
 
@@ -536,8 +537,22 @@ class IngestService:
         *,
         below_index_version: int | None = None,
         old_storage_key: str | None = None,
+        job_id: UUID | None = None,
     ) -> str:
-        """清理旧版本；文档处于 deleting 时删除全部数据与文档行（文档处理流水线 §6）。"""
+        """清理旧版本；文档处于 deleting 时删除全部数据、文件与文档行（文档处理流水线 §6）。"""
+        try:
+            result = await self._cleanup(document_id, below_index_version, old_storage_key)
+        except Exception as exc:
+            if job_id is not None:
+                await self._finish_job(job_id, "failed", f"{type(exc).__name__}: {exc}"[:1000])
+            raise
+        if job_id is not None:
+            await self._finish_job(job_id, "done", None)
+        return result
+
+    async def _cleanup(
+        self, document_id: UUID, below_index_version: int | None, old_storage_key: str | None
+    ) -> str:
         async with self.sessions() as s:
             doc = await s.get(Document, document_id)
             if doc is None:
@@ -549,12 +564,13 @@ class IngestService:
                 await ChunkRepository(s).delete_versions(app_id, document_id)
                 await ChunkParentRepository(s).delete_versions(app_id, document_id)
                 doc = await s.get(Document, document_id)
-                keys = [k for k in (doc.storage_key if doc else None, old_storage_key) if k]
                 if doc is not None:
                     await s.delete(doc)
                 await s.commit()
-            for k in keys:
-                await self.storage.delete(k)
+            # 全部文件版本（v1、替换后的 v2…）都在 {app_id}/{document_id}/ 下
+            await self.storage.delete_prefix(f"{app_id}/{document_id}/")
+            # 构建任务可能在删点之后才写入：再删一次（剩余孤儿点由每小时 sweep 兜底）
+            await self.store.delete_document(app_id, document_id)
             return "deleted"
         if below_index_version is None:
             return "skipped"
@@ -572,6 +588,116 @@ class IngestService:
         if old_storage_key:
             await self.storage.delete(old_storage_key)
         return "cleaned"
+
+    # ------------------------------------------------------------------ 对账与兜底
+    async def _app_ids(self, app_id: UUID | None) -> list[UUID]:
+        async with self.sessions() as s:
+            stmt = select(App.id).where(App.status != "deleting").order_by(App.id)
+            if app_id is not None:
+                stmt = stmt.where(App.id == app_id)
+            return list((await s.execute(stmt)).scalars())
+
+    async def _doc_states(self, s: AsyncSession, app_id: UUID) -> dict[UUID, Document]:
+        rows = (await s.execute(select(Document).where(Document.app_id == app_id))).scalars()
+        return {d.id: d for d in rows}
+
+    @staticmethod
+    async def _stale_docs(s: AsyncSession, app_id: UUID) -> set[UUID]:
+        """有低于生效构建号的切块（等待清理旧版本）的文档。"""
+        stmt = (
+            select(Chunk.document_id)
+            .join(Document, Document.id == Chunk.document_id)
+            .where(Chunk.app_id == app_id, Chunk.index_version < Document.index_version)
+            .distinct()
+        )
+        return set((await s.execute(stmt)).scalars())
+
+    async def reconcile_app(self, app_id: UUID) -> dict[str, Any]:
+        """Qdrant 设计 §5：逐文档比较 PG 可检索切块数与 Qdrant enabled 点数。
+
+        构建中、删除中、等待清理旧版本的文档跳过；Qdrant 中有点但 PG 无对应文档的记为 orphan。
+        """
+        async with self.sessions() as s:
+            docs = await self._doc_states(s, app_id)
+            stale = await self._stale_docs(s, app_id)
+            pg_rows = await s.execute(
+                select(Chunk.document_id, func.count())
+                .join(Document, Document.id == Chunk.document_id)
+                .where(
+                    Chunk.app_id == app_id,
+                    Chunk.enabled,
+                    Chunk.review_status != "flagged",
+                    Chunk.index_version == Document.index_version,
+                    Document.status != "deleting",
+                )
+                .group_by(Chunk.document_id)
+            )
+            pg = {d: int(n) for d, n in pg_rows.all()}
+        skipped = {
+            d.id
+            for d in docs.values()
+            if d.pending_index_version is not None
+            or d.status in ("queued", "parsing", "indexing", "deleting")
+        } | stale
+        qd = await self.store.count_by_document(app_id, enabled_only=True)
+        diffs = []
+        for doc_id in sorted(set(pg) | set(qd), key=str):
+            if doc_id in skipped:
+                continue
+            p, q = pg.get(doc_id, 0), qd.get(doc_id, 0)
+            if p != q:
+                kind = "orphan" if doc_id not in docs else "mismatch"
+                diffs.append({"document_id": str(doc_id), "pg": p, "qdrant": q, "kind": kind})
+        return {
+            "app_id": str(app_id),
+            "pg": sum(v for k, v in pg.items() if k not in skipped),
+            "qdrant": sum(v for k, v in qd.items() if k not in skipped),
+            "skipped_documents": len(skipped),
+            "diffs": diffs,
+        }
+
+    async def run_reconcile(
+        self, app_id: UUID | None = None, job_id: UUID | None = None
+    ) -> dict[str, Any]:
+        """对账一个或全部应用；只报告差异，不自动修复（修复用重建或 sweep）。"""
+        reports = [await self.reconcile_app(a) for a in await self._app_ids(app_id)]
+        result = {"apps": reports, "diff_count": sum(len(r["diffs"]) for r in reports)}
+        if result["diff_count"]:
+            log.warning("reconcile.diff", extra={"diff_count": result["diff_count"]})
+        if job_id is not None:
+            async with self.sessions() as s:
+                job = await s.get(Job, job_id)
+                if job is not None:
+                    job.status, job.progress, job.finished_at = "done", 100, _now()
+                    job.payload = {**(job.payload or {}), "result": result}
+                    await s.commit()
+        return result
+
+    async def run_sweep(self, *, stale_after_s: int = SWEEP_STALE_AFTER_S) -> dict[str, int]:
+        """每小时兜底（流水线 §6）：
+
+        1. `deleting` 超过 `stale_after_s` 仍未清理完的文档 → 重新执行删除清理；
+        2. 已切换但旧版本未清理（cleanup 任务丢失）的文档 → 清理低于生效构建号的数据；
+        3. Qdrant 中无对应 PG 文档的点（孤儿点）→ 删除。
+        """
+        counts = {"deleted": 0, "old_versions": 0, "orphans": 0}
+        cutoff = _now().timestamp() - stale_after_s
+        for app_id in await self._app_ids(None):
+            async with self.sessions() as s:
+                docs = await self._doc_states(s, app_id)
+                stale = await self._stale_docs(s, app_id)
+            for d in docs.values():
+                if d.status == "deleting" and d.deleted_at and d.deleted_at.timestamp() < cutoff:
+                    await self.run_cleanup(d.id)
+                    counts["deleted"] += 1
+                elif d.id in stale and d.pending_index_version is None and d.status != "deleting":
+                    await self.run_cleanup(d.id, below_index_version=d.index_version)
+                    counts["old_versions"] += 1
+            for doc_id in await self.store.count_by_document(app_id, enabled_only=False):
+                if doc_id not in docs:
+                    await self.store.delete_document(app_id, doc_id)
+                    counts["orphans"] += 1
+        return counts
 
 
 # ---------------------------------------------------------------------- 任务入口
@@ -617,9 +743,27 @@ async def run_retokenize_job(app_id: UUID, job_id: UUID) -> str:
 
 
 async def run_cleanup_job(
-    document_id: UUID, below_index_version: int | None, old_storage_key: str | None
+    document_id: UUID,
+    below_index_version: int | None,
+    old_storage_key: str | None,
+    job_id: UUID | None = None,
 ) -> str:
     async with ingest_runtime() as svc:
         return await svc.run_cleanup(
-            document_id, below_index_version=below_index_version, old_storage_key=old_storage_key
+            document_id,
+            below_index_version=below_index_version,
+            old_storage_key=old_storage_key,
+            job_id=job_id,
         )
+
+
+async def run_reconcile_job(
+    app_id: UUID | None = None, job_id: UUID | None = None
+) -> dict[str, Any]:
+    async with ingest_runtime() as svc:
+        return await svc.run_reconcile(app_id, job_id)
+
+
+async def run_sweep_job() -> dict[str, int]:
+    async with ingest_runtime() as svc:
+        return await svc.run_sweep()

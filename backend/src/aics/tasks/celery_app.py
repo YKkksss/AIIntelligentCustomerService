@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 from celery import Celery
+from celery.schedules import crontab
 from kombu import Exchange, Queue
 
 from aics.core.config import CELERY_QUEUES, get_settings
@@ -37,7 +38,14 @@ def create_celery() -> Celery:
         timezone="Asia/Shanghai",
         enable_utc=True,
         worker_hijack_root_logger=False,
-        beat_schedule={},
+        beat_schedule={
+            # M1：每小时兜底清理、每日对账（时区 Asia/Shanghai）
+            "sweep-knowledge-hourly": {
+                "task": "aics.sweep_knowledge",
+                "schedule": crontab(minute=17),
+            },
+            "reconcile-daily": {"task": "aics.reconcile", "schedule": crontab(hour=3, minute=30)},
+        },
         broker_connection_retry_on_startup=True,
     )
     # 任务模块随里程碑加入
@@ -46,6 +54,8 @@ def create_celery() -> Celery:
         "aics.ingest_document": {"queue": "ingest", "routing_key": "ingest"},
         "aics.retokenize_app": {"queue": "ingest", "routing_key": "ingest"},
         "aics.cleanup_document": {"queue": "maintenance", "routing_key": "maintenance"},
+        "aics.reconcile": {"queue": "maintenance", "routing_key": "maintenance"},
+        "aics.sweep_knowledge": {"queue": "maintenance", "routing_key": "maintenance"},
     }
     return app
 
