@@ -43,6 +43,7 @@ def tag(text: str, name: str) -> str:
 class FakeChatModel(BaseChatModel):
     responder: Any
     delay_s: float = 0.0
+    stream_delay_s: float = 0.0  # pause between streamed chunks (disconnect tests)
     calls: list[dict[str, Any]] = []
 
     @property
@@ -84,6 +85,8 @@ class FakeChatModel(BaseChatModel):
     ) -> AsyncIterator[ChatGenerationChunk]:
         text = self._reply(messages, kwargs)
         for i in range(0, len(text), 4):
+            if self.stream_delay_s:
+                await asyncio.sleep(self.stream_delay_s)
             yield ChatGenerationChunk(message=AIMessageChunk(content=text[i : i + 4]))
         yield ChatGenerationChunk(
             message=AIMessageChunk(content="", usage_metadata=self._usage(messages, text))  # type: ignore[arg-type]
@@ -95,12 +98,15 @@ class FakeLLMProvider:
     responder: Responder
     default_model: str = "fake-chat"
     delay_s: float = 0.0
+    stream_delay_s: float = 0.0
     overrides: list[dict[str, Any]] = field(default_factory=list)
     calls: list[dict[str, Any]] = field(default_factory=list)
 
     def chat_model(self, **overrides: Any) -> FakeChatModel:
         self.overrides.append(overrides)
-        m = FakeChatModel(responder=self.responder, delay_s=self.delay_s)
+        m = FakeChatModel(
+            responder=self.responder, delay_s=self.delay_s, stream_delay_s=self.stream_delay_s
+        )
         m.calls = self.calls
         return m
 

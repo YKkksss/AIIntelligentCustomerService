@@ -125,12 +125,14 @@ class MessageRepository(AppScopedRepository[Message]):
         *,
         custom_dict: Sequence[str] = (),
         allow_closed: bool = False,
+        message_id: UUID | None = None,
     ) -> Message:
         """Insert one message and update the conversation counters in the same transaction.
 
         `token_count` (core.tokens) and `search_text` (the app's jieba tokenizer, `custom_dict`
         = apps.custom_dict) are always computed here; callers cannot pass them.
         The conversation row is locked so that concurrent appends keep counters consistent.
+        `message_id` lets chat.service announce the reply id (SSE `start`) before generation.
         """
         conv_repo = ConversationRepository(self.session)
         conv = await conv_repo.get_for_update(app_id, conversation_id)
@@ -141,6 +143,7 @@ class MessageRepository(AppScopedRepository[Message]):
             raise ConversationClosedError(details={"id": str(conversation_id)})
 
         msg = Message(
+            **({"id": message_id} if message_id is not None else {}),
             app_id=app_id,
             conversation_id=conversation_id,
             token_count=count_tokens(data.content),
@@ -190,6 +193,16 @@ class MessageRepository(AppScopedRepository[Message]):
         rows = list((await self.session.execute(stmt)).scalars())
         rows.reverse()
         return rows
+
+    async def last_assistant(self, app_id: UUID, conversation_id: UUID) -> Message | None:
+        """Latest assistant message (clarify follow-up detection, 意图识别 §5.2.2)."""
+        stmt = (
+            self._scoped(app_id)
+            .where(Message.conversation_id == conversation_id, Message.role == "assistant")
+            .order_by(Message.created_at.desc(), Message.id.desc())
+            .limit(1)
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
 
     async def update(self, app_id: UUID, id: UUID, /, **values: Any) -> int:
         """Messages are immutable except for retention clean-up of the trace."""
