@@ -119,7 +119,9 @@ class RagState(TypedDict, total=False):
 | condense_classify | 一次 LLM 调用输出改写问题 + 意图 JSON；无历史时与 retrieve 并行，非 kb_qa 丢弃检索；`intent.enabled=false` 时退化为纯 condense（无历史透传），意图固定 `kb_qa`/`fallback` | `intent.min_confidence`=0.6、`intent.clarify_threshold`=0.7、`intent.classify_timeout_ms` | 超时/解析失败/低置信 → `kb_qa` + 原问题，`intent_source=fallback` |
 | route_intent | 按意图路由：kb_qa → retrieve；chitchat / out_of_scope / clarify → 话术（无引用，不计入 `refusal_streak`）；human / action(v1) → handoff | `intent.enabled_intents` | — |
 | retrieve | 并行：Qdrant 向量检索（filter `app_id`、`enabled`）+ PG 全文检索（经 `ChunkSearch.keyword_search`，tsquery 构造见[数据库设计 §5](../03-database/01-数据库设计.md)）；向量命中回 PG 取正文时只保留当前生效版本且可检索的切块 | `vector_top_k`=20、`keyword_top_k`=20 | 任一路失败另一路继续，记 `vector_failed` / `keyword_failed`；两路都失败 → 抛出（`UPSTREAM_ERROR` / `SERVICE_UNAVAILABLE`） |
-| fuse | RRF：`Σ 1/(60 + rank)`，按 chunk 去重，取前 `fuse_top_k` | `fuse_top_k`=30 | — |
+| fuse | RRF：`Σ 1/(60 + rank)`，按 chunk 去重；全部候选回 PG 复核可检索性（被过滤后重算名次），同分按向量名次再按 id；父子切块按父块分组（引用该组得分最高的子块），取前 `fuse_top_k`（实现 `rag.retrieval`，M2.2） | `fuse_top_k`=30 | — |
+
+> **关键词查询（M2.2）**：`core.textsearch.build_tsquery` 用 `QUERY_STOPWORDS`（M1 停用词 + 疑问词 / 口语虚词 / 英文疑问词）在精确切分上剔除停用词，再展开搜索模式子词，OR 连接；应用自定义词典中的词不被剔除。重排输入为 `heading_path + "\n" + text`。加权融合（`fusion=weighted`）在 M2.2b 引入，评测见 M1 测试报告 §9。
 | rerank | qwen3.7-text-rerank 打分，取前 `rerank_top_n` | `rerank_top_n`=5、`enable_rerank` | 见下"rerank 失败规则" |
 | judge | 有 rerank 分数时：最高分 < `rerank_threshold` → 不可答；最高分 ≥ `judge_gray_upper` → 可答；处于灰区 `[rerank_threshold, judge_gray_upper)` 且 `judge_with_llm=true` 时让 LLM 输出 `{"answerable": bool}`（`judge_with_llm=false` 时灰区按可答）。无 rerank 分数时（rerank 关闭或失败）一律由 LLM 判断 | `rerank_threshold`=0.5、`judge_gray_upper`=0.8、`judge_with_llm` | LLM 判断超时/解析失败 → **按不可答处理**（`decision_reason="judge_failed"`，记 degraded `judge_failed`），走 refuse / handoff |
 | generate | 带编号上下文生成，流式输出 | `temperature`=0.2、`max_tokens`=800、`llm_model` | 上游错误 → 抛出，由 chat.service 写 `answer_type=error` |

@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### 新增（M2.2 检索链路，2026-10-16）
+- `providers.llm.OpenAICompatibleLLM`（DeepSeek，LangChain `ChatOpenAI`）与 `providers.rerank`（`DashScopeReranker`、`LlamaCppReranker`、`NoopReranker`），工厂 `build_llm` / `build_reranker`。
+- `rag.ports`（`ChunkSearch`、`MemoryPort`、`RagPorts` 与数据类型）；`knowledge.chunk_search.PgChunkSearch`（OR tsquery 关键词检索、可检索条件过滤取切块 / 父块）。
+- `rag.retrieval`：retrieve（向量 + 关键词并行）→ fuse（RRF k=60、PG 可检索性复核、父子分组）→ rerank（失败降级 `rerank_failed`），带分步耗时与 trace。
+- `core.textsearch.QUERY_STOPWORDS`：查询去疑问词 / 口语虚词（精确切分判定、自定义词典优先）。
+- 评测脚本 `scripts/e2e_m2/eval_m22.py`（真实百炼、缓存、内存 Qdrant）；结果见 M1 测试报告 §9。
+
 ### 新增（M2.1 会话与消息数据模型，2026-10-16）
 - 迁移 `0006`：`conversations`（状态 / 空闲计时 / 转人工 / 待回访 / 事件序号 / `summary*`）、`messages`（四种角色、`kind`、`token_count`、`search_text` + 生成列 `tsv` 与 GIN 索引、意图与回答字段、`prompt_version`、`citations`）、`system_settings`（种子 `default_session_config`）；CHECK 约束覆盖枚举、system 专属 `kind`、assistant 专属回答字段。
 - 迁移 `0007`：`conversation_facts`（`category`、`importance`、`source`、`version`、`retracted_at`，key 白名单 CHECK，`UNIQUE(conversation_id, key)`）与追加写的 `conversation_fact_history`（操作形状 CHECK、BEFORE UPDATE 触发器拒绝更新）。
