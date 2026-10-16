@@ -3,16 +3,21 @@
 rag never imports aics.db / aics.modules / aics.memory. Implementations:
 - `ChunkSearch` → `aics.modules.knowledge.chunk_search.PgChunkSearch`
 - `MemoryPort`  → `aics.memory` (M2.5; structural typing, memory does not import rag)
+- `RagPorts.llm / vector / reranker` → `aics.providers` + `rag.retrieval.EmbeddingVectorSearch`
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    from aics.providers.base import LLMProvider, RerankProvider
+    from aics.rag.retrieval import VectorSearch
 
 
 # ---------------------------------------------------------------- knowledge
@@ -117,8 +122,15 @@ class MemoryPort(Protocol):
 
 @dataclass
 class RagPorts:
-    """Everything run_rag needs from the outside world (M2.3 adds llm etc.)."""
+    """Everything run_rag needs from the outside world (built by chat.service / eval).
+
+    `llm` is required by run_rag; `vector` may be None only for `retrieval_mode="fulltext"`;
+    `reranker` None (or a noop reranker) means judge falls back to the LLM.
+    """
 
     chunk_search: ChunkSearch
     memory: MemoryPort | None = None
+    llm: LLMProvider | None = None
+    vector: VectorSearch | None = None
+    reranker: RerankProvider | None = None
     extras: dict[str, Any] = field(default_factory=dict)
