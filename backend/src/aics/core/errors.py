@@ -30,6 +30,16 @@ class NotFoundError(AppError):
     code, status, message = "NOT_FOUND", 404, "资源不存在"
 
 
+class ConversationNotFoundError(NotFoundError):
+    """Conversation missing or not owned by the app (open API: 404 CONVERSATION_NOT_FOUND)."""
+
+    code, message = "CONVERSATION_NOT_FOUND", "会话不存在"
+
+
+class ConflictError(AppError):
+    code, status, message = "CONFLICT", 409, "资源状态冲突"
+
+
 class ValidationAppError(AppError):
     code, status, message = "VALIDATION_ERROR", 422, "参数校验失败"
 

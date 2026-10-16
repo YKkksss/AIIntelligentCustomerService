@@ -79,6 +79,7 @@ def test_basic_field_checks() -> None:
 def test_every_app_scoped_table_has_scoped_repository() -> None:
     """所有带 app_id 的表都有继承 AppScopedRepository 的 repository，且签名合规。"""
     import aics.db.models  # noqa: F401
+    import aics.memory.repository  # noqa: F401
     import aics.modules.apps.repository  # noqa: F401
     import aics.modules.chat.repository  # noqa: F401
     import aics.modules.knowledge.repository  # noqa: F401
@@ -98,9 +99,7 @@ def test_every_app_scoped_table_has_scoped_repository() -> None:
         "conversation_facts",
         "conversation_fact_history",
     }
-    # Tables whose repositories land in a later M2.1 sub-step.
-    pending = {"conversation_facts", "conversation_fact_history"}
-    assert tenant_tables - pending <= covered
+    assert tenant_tables <= covered
     for r in repos:
         assert unscoped_methods(r) == [], r
 

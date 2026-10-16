@@ -14,16 +14,20 @@ from uuid import UUID
 
 from sqlalchemy import func, select, update
 
-from aics.core.errors import AppError, NotFoundError
+from aics.core.errors import AppError, ConversationNotFoundError
 from aics.core.textsearch import tokenize_for_index
 from aics.core.tokens import count_tokens
 from aics.db.models import Conversation, Message
 from aics.db.scoped import MAX_PAGE_SIZE, AppScopedRepository
 from aics.modules.chat.schemas import TITLE_MAX_CHARS, NewConversation, NewMessage
 
-
-class ConversationNotFoundError(NotFoundError):
-    code, message = "CONVERSATION_NOT_FOUND", "会话不存在"
+__all__ = [
+    "ConversationClosedError",
+    "ConversationNotFoundError",
+    "ConversationRepository",
+    "MessageRepository",
+    "message_search_text",
+]
 
 
 class ConversationClosedError(AppError):
