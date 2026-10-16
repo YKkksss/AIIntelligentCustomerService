@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### 改进（M1.7 PDF 行合并，2026-10-16）
+- PDF 逐行文本块按字体字号、行距、是否排满、首行缩进、列表项合并成段（中文直接拼接、英文加空格、连字符断词拼回）；双栏页按栏阅读顺序；保留纯空格 span（修复“Storage1.8”式丢词间距）。合成语料 PDF 段落数：论文 162 → 54、合同 122 → 30。
+
 ### 新增（M1.7 文档级切块配置，2026-10-16）
 - 迁移 `0005`：`documents.chunk_config`（文档级覆盖，保存合并校验后的完整快照，NULL = 跟随应用）。
 - `KnowledgeService`：`upload_file` / `import_url` / `replace_file` / `rebuild_document` 可带 `chunk_config`（替换 / 重建另有 `reset_chunk_config`）；`set_document_chunk_config`；生效配置变化只重建该文档，构建成功切换时写入；`rebuild_app` 默认跳过有覆盖的文档（`skipped_override`，`include_overridden` 全量）。
