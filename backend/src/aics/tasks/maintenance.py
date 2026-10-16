@@ -7,6 +7,7 @@ from typing import Any
 from uuid import UUID
 
 from aics.ingest.service import run_cleanup_job, run_reconcile_job, run_sweep_job
+from aics.modules.chat.lifecycle import IDLE_SWEEP_TASK, run_idle_sweep_job
 from aics.tasks.celery_app import celery_app
 
 
@@ -40,3 +41,9 @@ def reconcile(app_id: str | None = None, job_id: str | None = None) -> dict[str,
 def sweep_knowledge() -> dict[str, int]:
     """每小时兜底：超时的删除、遗留旧版本、Qdrant 孤儿点。"""
     return asyncio.run(run_sweep_job())
+
+
+@celery_app.task(name=IDLE_SWEEP_TASK, queue="maintenance")
+def idle_sweep() -> dict[str, Any]:
+    """Every 30 s (beat): idle notice and idle close (会话生命周期 §2.2); idempotent."""
+    return asyncio.run(run_idle_sweep_job())

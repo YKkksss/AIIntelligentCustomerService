@@ -285,3 +285,20 @@ async def test_sweep_waits_for_turn_holding_row_lock(pg: dict[str, Any]) -> None
         await chat_s.commit()
     assert await task is False
     assert (await conv_of(pg, a, cid)).status == "active"
+
+
+async def test_run_idle_sweep_job_uses_its_own_engine(pg: dict[str, Any], pg_migrated: str) -> None:
+    """Task body: real DB clock; a conversation idle for 11 minutes gets closed."""
+    from types import SimpleNamespace
+
+    a = pg["app_a"]
+    cid = await new_conv(pg, a)
+    async with pg["sessions"]() as s:
+        await s.execute(
+            update(Conversation)
+            .where(Conversation.id == cid)
+            .values(last_activity_at=Conversation.last_activity_at - 11 * M)
+        )
+        await s.commit()
+    out = await lifecycle.run_idle_sweep_job(SimpleNamespace(db_url=pg_migrated))
+    assert out["closed"] >= 1 and (await conv_of(pg, a, cid)).status == "closed"

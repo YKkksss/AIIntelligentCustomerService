@@ -200,3 +200,24 @@ async def _sweep_app(
         if notify is not None:
             await notify("conversation.closed", app_id, cid)
     return noticed, closed
+
+
+IDLE_SWEEP_TASK = "aics.idle_sweep"
+IDLE_SWEEP_INTERVAL_S = 30.0  # beat period (§2.2: notice / close accurate to ≤ 30 s)
+
+
+async def run_idle_sweep_job(settings: Any = None) -> dict[str, Any]:
+    """Body of the Celery task / `aics-cli sweep-idle`: a NullPool engine per run, because
+    each task runs in its own event loop (asyncio.run)."""
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    from aics.core.config import get_settings
+
+    s = settings or get_settings()
+    engine = create_async_engine(s.db_url, poolclass=NullPool)
+    try:
+        res = await sweep(async_sessionmaker(engine, expire_on_commit=False))
+    finally:
+        await engine.dispose()
+    return res.as_dict()

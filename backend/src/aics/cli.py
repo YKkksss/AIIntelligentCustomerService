@@ -178,6 +178,7 @@ def main(argv: list[str] | None = None) -> int:
     r = ak.add_parser("revoke", help="吊销 Key")
     r.add_argument("--app", required=True, type=UUID)
     r.add_argument("--id", required=True, type=UUID)
+    sub.add_parser("sweep-idle", help="立即执行一次空闲提醒 / 关闭扫描（本进程）")
     for name, help_ in PLANNED.items():
         sub.add_parser(name, help=help_)
     args = parser.parse_args(argv)
@@ -192,6 +193,11 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_reconcile(args.app, args.inline))
     if args.cmd == "apikey":
         return asyncio.run(_apikey(args))
+    if args.cmd == "sweep-idle":
+        from aics.modules.chat.lifecycle import run_idle_sweep_job
+
+        print(json.dumps(asyncio.run(run_idle_sweep_job())))
+        return 0
     print(f"{args.cmd}: 尚未实现（{PLANNED[args.cmd]}）", file=sys.stderr)
     return 2
 

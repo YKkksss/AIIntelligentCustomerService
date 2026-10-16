@@ -16,6 +16,8 @@ from kombu import Exchange, Queue
 from aics.core.config import CELERY_QUEUES, get_settings
 from aics.core.logging import configure_logging
 
+IDLE_SWEEP_INTERVAL_S = 30.0  # = chat.lifecycle.IDLE_SWEEP_INTERVAL_S (tests keep them equal)
+
 
 def create_celery() -> Celery:
     s = get_settings()
@@ -45,6 +47,13 @@ def create_celery() -> Celery:
                 "schedule": crontab(minute=17),
             },
             "reconcile-daily": {"task": "aics.reconcile", "schedule": crontab(hour=3, minute=30)},
+            # M2.7：空闲提醒 / 关闭（会话生命周期 §2.2）。expires：worker 积压时丢弃过期的
+            # 一轮，不排队补跑（下一轮会处理同样的会话，条件更新保证幂等）。
+            "idle-sweep": {
+                "task": "aics.idle_sweep",
+                "schedule": IDLE_SWEEP_INTERVAL_S,
+                "options": {"expires": IDLE_SWEEP_INTERVAL_S - 5},
+            },
         },
         broker_connection_retry_on_startup=True,
     )
@@ -57,6 +66,7 @@ def create_celery() -> Celery:
         "aics.reconcile": {"queue": "maintenance", "routing_key": "maintenance"},
         "aics.sweep_knowledge": {"queue": "maintenance", "routing_key": "maintenance"},
         "aics.compact_conversation": {"queue": "context", "routing_key": "context"},
+        "aics.idle_sweep": {"queue": "maintenance", "routing_key": "maintenance"},
     }
     return app
 

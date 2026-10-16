@@ -1,0 +1,8 @@
+{
+ "notice_after_s": 81.554546,
+ "close_after_s": 141.435642,
+ "notice_ok": true,
+ "close_ok": true,
+ "status": "closed",
+ "close_reason": "idle"
+}
