@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### 新增（M2.4 意图识别，2026-10-16）
+- `rag.intent` 规则层：归一化、AC 自动机词表匹配、敏感词 / 转人工词 / 连续拒答 / 寒暄完全匹配与模板（内置 4 类 32 词，可被应用覆盖；greeting 用应用开场白 `AppProfile.greeting`）；`next_refusal_streak` 供 M2.6。
+- guard 节点与分支：`blocked_reply`（敏感词）、规则转人工（`rule:keyword` / `rule:max_refusals`）、寒暄模板与 LLM 寒暄回复（提示词 `chitchat` v1，失败回落模板）。
+- 无历史时意图分类与检索并行，非 kb_qa 取消检索。
+- 超范围误判兜底 `scope_check`：`intent.out_of_scope_check`（默认 true）、`out_of_scope_override_score`（默认 0.8），强重排证据改判 kb_qa（设计讨论 0005）。
+- 意图评测 `scripts/e2e_m2/eval_m24.py` + 57 条用例（M1 测试报告 §12）。
+
 ### 新增（M2.3 RAG 图（单轮），2026-10-16）
 - 依赖 `langgraph`；`rag.graph.run_rag(RagInput, RagPorts)`：guard → load_context → condense_classify → route → retrieve → fuse → rerank → judge → generate / refuse / handoff → postprocess，非 kb_qa 意图走固定话术分支；流事件 trace（debug）→ citations → delta → `RagResult`；`run_rag_collect` 供阻塞接口 / 评测。
 - `rag.schemas`：`RunMode`、`RagInput`（含 `AppProfile`、`HandoffConfig`、`tags`）、`RagResult`、`Citation`、`IntentInfo`、`TokenUsage`；`RagPorts` 新增 `llm` / `vector` / `reranker`。

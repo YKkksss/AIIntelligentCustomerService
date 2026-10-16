@@ -135,6 +135,8 @@ class RagState(TypedDict, total=False):
 
 **judge 的 `decision_reason` 取值（M2.3）**：`no_candidates`（无候选，不调用 LLM）、`below_threshold`、`above_gray_upper`、`gray_answerable`（灰区且 `judge_with_llm=false`）、`judge_llm_yes` / `judge_llm_no`、`judge_failed`；postprocess 另有 `output_filtered`（输出检查替换为兜底话术，`answer_type=refused`）与 `empty_answer`。分类 / 改写 / judge 调用固定关闭模型推理（`thinking=false`），generate 按 `rag_config.llm_thinking`（默认 false）。LLM 熔断在节点层（`rag.llm.LlmGateway`）：分类熔断 → 兜底 kb_qa（`upstream_error`），judge 熔断 → `judge_failed`，generate 熔断 → 抛 `UPSTREAM_UNAVAILABLE`。
 
+**M2.4 意图分支（设计讨论 0005）**：guard（规则层）→ 敏感词 `blocked_reply`（`sensitive_keyword`）/ 规则转人工 `handoff`（`rule:keyword`、`rule:max_refusals`）/ 寒暄模板 `chitchat_reply`，否则进入 load_context → condense_classify。无历史时分类与原问题检索并行，kb_qa 直接进 rerank，其他意图取消检索。LLM 判 `out_of_scope` 且 `intent.out_of_scope_check=true`、`enable_rerank=true` 时经 `scope_check` 复核：最高重排分 ≥ `out_of_scope_override_score`（0.8）改判 kb_qa 进 judge，否则超范围话术（不生成、不引用）。
+
 **rerank 失败规则（与非功能需求一致，唯一规则）**：rerank 调用超时或出错（含重试后）→ 按 RRF 顺序取前 `rerank_top_n`，记 `degraded += ["rerank_failed"]`；因 RRF 分数与 rerank 阈值不可比，judge 改由 LLM 判断（不看 `judge_with_llm` 开关）；LLM 判断也失败 → 不可答。`enable_rerank=false` 时同样走 LLM 判断，但不记 degraded。
 
 > 阈值 0.5 / 0.8 来自 M1 评测（合成语料，原初值 0.35 / 0.5），待服务器真实数据复验；每个应用仍应用其评测集校准（见评测指南）。默认值及依据唯一来源：[参数默认值与依据](../06-development/09-参数默认值与依据.md)。
