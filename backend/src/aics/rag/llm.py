@@ -9,7 +9,12 @@ call with `call_with_resilience`, so the breaker lives here and counts one *node
   records a failure; caller-side errors (400 / auth / bugs) raise without counting; a
   successful call (even if its output later fails JSON validation — a model-quality issue,
   not an outage) records success;
-- cancellation (client disconnect) records nothing.
+- cancellation (client disconnect) records nothing;
+- a call that runs into its own *node budget* (`timeout_s`, e.g. classify 2 s with a kb_qa
+  fallback) is a slow call, not an outage: it raises TimeoutError but records nothing. A slow
+  upstream otherwise opens the model-wide breaker from classify alone and turns every
+  following generate into 503 (design discussion 0007 D8; resilience4j keeps slow calls apart
+  from failures for the same reason).
 
 Short structured calls (classify / condense / judge) request `thinking=False`: on hybrid
 reasoning models (registry `thinking: toggle`) this halves output tokens and latency
@@ -48,6 +53,10 @@ class LlmCallError(AppError):
 
 
 _BREAKERS: dict[str, CircuitBreaker] = {}
+
+
+# An exception this close to the node budget is the budget expiring (SDK timeout = budget).
+BUDGET_HIT_RATIO = 0.95
 
 
 def breaker_for(model: str) -> CircuitBreaker:
@@ -159,12 +168,17 @@ class LlmGateway:
         except asyncio.CancelledError:
             raise
         except TimeoutError:
-            b.record(False)
+            if timeout_s is None:  # no node budget: a transport-level timeout is an outage
+                b.record(False)
             log.warning("rag.llm_timeout", node=node, model=name, timeout_s=timeout_s)
             raise
         except AppError:
             raise
         except Exception as e:
+            if timeout_s is not None and time.perf_counter() - t0 >= timeout_s * BUDGET_HIT_RATIO:
+                # The SDK's own timeout (set to the same budget) fired first: same slow call.
+                log.warning("rag.llm_timeout", node=node, model=name, timeout_s=timeout_s)
+                raise TimeoutError(f"{node} exceeded {timeout_s}s") from e
             if is_upstream_failure(e):
                 b.record(False)
             log.warning("rag.llm_failed", node=node, model=name, error_type=type(e).__name__)

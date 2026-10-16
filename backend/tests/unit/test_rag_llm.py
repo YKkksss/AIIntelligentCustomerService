@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import httpx
 import pytest
 from langchain_core.messages import HumanMessage
@@ -67,12 +69,25 @@ async def test_breaker_opens_half_opens_and_closes() -> None:
     assert g.breaker("fake-chat").allow()
 
 
-async def test_timeout_counts_as_failure() -> None:
+async def test_node_budget_timeout_does_not_open_breaker() -> None:
+    """0007 D8: classify running into its 2 s budget is a slow call, not an outage."""
     g, _ = gw(lambda m, k: "late", delay_s=0.2)
-    with pytest.raises(TimeoutError):
-        await g.complete(MSG, node="classify", timeout_s=0.01)
+    for _ in range(15):
+        with pytest.raises(TimeoutError):
+            await g.complete(MSG, node="classify", timeout_s=0.01)
     b = g.breaker("fake-chat")
-    assert list(b._calls)[-1][1] is False
+    assert not b._calls and b.allow()
+
+
+async def test_sdk_timeout_at_budget_is_a_slow_call() -> None:
+    def r(m, k):  # type: ignore[no-untyped-def]
+        time.sleep(0.03)
+        raise httpx.ConnectTimeout("budget")
+
+    g, _ = gw(r)
+    with pytest.raises(TimeoutError):
+        await g.complete(MSG, node="classify", timeout_s=0.02)
+    assert not g.breaker("fake-chat")._calls
 
 
 def test_model_name() -> None:
