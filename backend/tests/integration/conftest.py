@@ -74,7 +74,12 @@ async def pg(pg_migrated: str) -> AsyncIterator[dict[str, Any]]:
 async def env(ingest_migrated: str, tmp_path: Path) -> AsyncIterator[dict[str, Any]]:
     engine = create_async_engine(ingest_migrated)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
-    client = AsyncQdrantClient(url=QURL, api_key=QKEY, check_compatibility=False, timeout=10)
+    # AICS_TEST_QDRANT_URL=":memory:" → qdrant-client local mode (dev boxes without a server)
+    client = (
+        AsyncQdrantClient(location=":memory:")
+        if QURL == ":memory:"
+        else AsyncQdrantClient(url=QURL, api_key=QKEY, check_compatibility=False, timeout=10)
+    )
     store = QdrantVectorStore(
         client, prefix="aics_test_", embed_model=f"it-{uuid.uuid4().hex[:8]}", dim=DIM
     )

@@ -20,8 +20,8 @@ KEY = os.environ.get("AICS_TEST_QDRANT_API_KEY")
 
 
 async def test_roundtrip_on_real_qdrant() -> None:
-    if not URL:
-        pytest.skip("未设置 AICS_TEST_QDRANT_URL")
+    if not URL or URL == ":memory:":
+        pytest.skip("未设置服务器 AICS_TEST_QDRANT_URL（:memory: 本地模式不跑共用实例测试）")
     client = AsyncQdrantClient(url=URL, api_key=KEY, check_compatibility=False, timeout=10)
     model = f"it-{uuid.uuid4().hex[:8]}"
     st = QdrantVectorStore(client, prefix="aics_test_", embed_model=model, dim=8)

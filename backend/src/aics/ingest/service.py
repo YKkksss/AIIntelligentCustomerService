@@ -33,6 +33,7 @@ from aics.ingest.injection import detect_injection
 from aics.ingest.parsers import detect_file_type, parse_bytes
 from aics.ingest.parsers.base import ParsedDoc, ParseError
 from aics.ingest.parsers.url import fetch_url
+from aics.ingest.questions import migrate_document_questions
 from aics.ingest.repository import ChunkParentRepository, ChunkRepository
 from aics.providers.base import EmbeddingProvider
 from aics.storage import Storage, build_storage
@@ -442,7 +443,12 @@ class IngestService:
         """Post-switch sync that must not fail the (already committed) build.
 
         Tags edited while the build ran are re-mirrored onto the new points; any failure is
-        logged and repaired by the next tag edit / rebuild (PG stays the source of truth)."""
+        logged and repaired by the next tag edit / rebuild (PG stays the source of truth).
+        Supplementary questions are re-attached to the new build's chunks (M2.2b)."""
+        try:
+            await migrate_document_questions(self.sessions, self.store, app_id, document_id)
+        except Exception:  # noqa: BLE001 - re-run (idempotently) before old-build cleanup
+            log.exception("question migration failed", extra={"document_id": str(document_id)})
         if build_tags == live_tags:
             return
         try:
@@ -612,6 +618,8 @@ class IngestService:
             return "deleted"
         if below_index_version is None:
             return "skipped"
+        # Questions must leave the old chunks before those are deleted (idempotent)
+        await migrate_document_questions(self.sessions, self.store, app_id, document_id)
         await self.store.delete_document(
             app_id, document_id, below_index_version=below_index_version
         )

@@ -23,12 +23,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from aics.core.config import get_settings
 from aics.core.errors import AppError, NotFoundError, ValidationAppError
-from aics.db.models import App, Document, Job
-from aics.db.models.knowledge import MAX_TAGS, TAG_MAX_CHARS
+from aics.db.models import App, Chunk, ChunkQuestion, Document, Job
+from aics.db.models.knowledge import MAX_TAGS, QUESTION_MAX_CHARS, QUESTION_SOURCES, TAG_MAX_CHARS
 from aics.ingest.parsers import MIME_TYPES, detect_file_type, parse_bytes
 from aics.ingest.parsers.url import FetchedUrl, fetch_url
+from aics.ingest.questions import QuestionTarget, text_hash, upsert_question_points
 from aics.ingest.service import OVERRIDE_KEY
-from aics.modules.knowledge.repository import ChunkRepository, DocumentRepository, JobRepository
+from aics.modules.knowledge.repository import (
+    ChunkQuestionRepository,
+    ChunkRepository,
+    DocumentRepository,
+    JobRepository,
+)
+from aics.providers.base import EmbeddingProvider
 from aics.rag.config import (
     AppRagConfig,
     ChunkConfig,
@@ -59,6 +66,31 @@ class DocumentBusyError(AppError):
 
 class DuplicateDocumentError(AppError):
     code, status, message = "DUPLICATE_DOCUMENT", 409, "新文件与本应用另一文档内容相同"
+
+
+class ChunkNotFoundError(NotFoundError):
+    code, message = "CHUNK_NOT_FOUND", "切块不存在或不属于当前生效版本"
+
+
+class QuestionNotFoundError(NotFoundError):
+    code, message = "QUESTION_NOT_FOUND", "补充问题不存在"
+
+
+MAX_QUESTIONS_PER_CHUNK = 20
+
+
+def normalize_questions(questions: Sequence[str]) -> list[str]:
+    """Strip, collapse inner whitespace, drop empties, dedup; each 1..QUESTION_MAX_CHARS."""
+    if isinstance(questions, str):
+        raise ValidationAppError(message="questions 必须是字符串数组")
+    out = list(
+        dict.fromkeys(" ".join(q.split()) for q in questions if isinstance(q, str) and q.strip())
+    )
+    if not out:
+        raise ValidationAppError(message="至少需要一个非空问题")
+    if any(len(q) > QUESTION_MAX_CHARS for q in out):
+        raise ValidationAppError(message=f"单个问题最多 {QUESTION_MAX_CHARS} 字")
+    return out
 
 
 class DocumentNotFoundError(NotFoundError):
@@ -122,8 +154,10 @@ class KnowledgeService:
         store: QdrantVectorStore | None = None,
         enqueue: Enqueue | None = None,
         fetcher: Fetcher | None = None,
+        embedder: EmbeddingProvider | None = None,
     ) -> None:
         self.session = session
+        self.embedder = embedder  # needed only for supplementary questions (M2.2b)
         self.storage = storage
         self.store = store
         self.enqueue = enqueue
@@ -131,6 +165,7 @@ class KnowledgeService:
         self.docs = DocumentRepository(session)
         self.chunks = ChunkRepository(session)
         self.jobs = JobRepository(session)
+        self.questions = ChunkQuestionRepository(session)
 
     # ------------------------------------------------------------------ 公共
     @staticmethod
@@ -550,6 +585,147 @@ class KnowledgeService:
             except Exception:  # noqa: BLE001
                 log.warning("knowledge.tag_sync_failed", document_id=str(doc.id))
         return doc
+
+    # ------------------------------------------------------------------ 补充问题（M2.2b）
+    async def _live_chunk(self, app_id: UUID, chunk_id: UUID) -> tuple[Chunk, Document]:
+        row = (
+            await self.session.execute(
+                select(Chunk, Document)
+                .join(Document, Document.id == Chunk.document_id)
+                .where(
+                    Chunk.app_id == app_id,
+                    Chunk.id == chunk_id,
+                    Chunk.index_version == Document.index_version,
+                    Document.deleted_at.is_(None),
+                )
+            )
+        ).first()
+        if row is None:
+            raise ChunkNotFoundError()
+        chunk, doc = row
+        if doc.status == "deleting":
+            raise DocumentBusyError(message="文档正在删除")
+        return chunk, doc
+
+    def _need_vectors(self) -> tuple[EmbeddingProvider, QdrantVectorStore]:
+        if self.embedder is None or self.store is None:
+            raise RuntimeError("KnowledgeService needs embedder and store for questions")
+        return self.embedder, self.store
+
+    @staticmethod
+    def _target(chunk: Chunk, doc: Document) -> QuestionTarget:
+        return QuestionTarget(
+            chunk_id=chunk.id,
+            document_id=doc.id,
+            index_version=chunk.index_version,
+            parent_id=chunk.parent_id,
+            enabled=chunk.enabled and chunk.review_status != "flagged",
+            tags=list(doc.tags or []),
+        )
+
+    async def add_chunk_questions(
+        self,
+        app_id: UUID,
+        chunk_id: UUID,
+        questions: Sequence[str],
+        *,
+        source: str = "manual",
+        created_by: UUID | None = None,
+    ) -> list[ChunkQuestion]:
+        """Attach questions to a live chunk; each is embedded as its own point.
+
+        Order: rows flushed → points upserted → commit; an upsert failure rolls back the
+        rows, a commit failure deletes the new points (best effort)."""
+        if source not in QUESTION_SOURCES:
+            raise ValidationAppError(message=f"source 必须是 {'/'.join(QUESTION_SOURCES)}")
+        clean = normalize_questions(questions)
+        embedder, store = self._need_vectors()
+        await self._app(app_id)
+        chunk, doc = await self._live_chunk(app_id, chunk_id)
+        existing = {q.question for q in await self.questions.list_for_chunk(app_id, chunk.id)}
+        new = [q for q in clean if q not in existing]
+        if len(existing) + len(new) > MAX_QUESTIONS_PER_CHUNK:
+            raise ValidationAppError(message=f"每个切块最多 {MAX_QUESTIONS_PER_CHUNK} 个补充问题")
+        if not new:
+            return []
+        rows = [
+            ChunkQuestion(
+                app_id=app_id,
+                document_id=doc.id,
+                chunk_id=chunk.id,
+                question=q,
+                source=source,
+                anchor_ordinal=chunk.ordinal,
+                anchor_hash=text_hash(chunk.text),
+                created_by=created_by,
+            )
+            for q in new
+        ]
+        for r in rows:
+            await self.questions.add(app_id, r)
+        target = self._target(chunk, doc)
+        try:
+            await upsert_question_points(
+                app_id, [(r.id, r.question) for r in rows], target, embedder=embedder, store=store
+            )
+        except Exception:
+            await self.session.rollback()
+            raise
+        try:
+            await self.session.commit()
+        except Exception:
+            await store.delete_points(app_id, [r.id for r in rows])
+            raise
+        return rows
+
+    async def list_chunk_questions(self, app_id: UUID, chunk_id: UUID) -> list[ChunkQuestion]:
+        await self._app(app_id)
+        return await self.questions.list_for_chunk(app_id, chunk_id)
+
+    async def list_document_questions(
+        self, app_id: UUID, document_id: UUID, *, status: str | None = None
+    ) -> list[ChunkQuestion]:
+        await self._app(app_id)
+        await self._doc(app_id, document_id)
+        return await self.questions.list_for_document(app_id, document_id, status=status)
+
+    async def delete_chunk_question(self, app_id: UUID, question_id: UUID) -> None:
+        await self._app(app_id)
+        if not await self.questions.delete_one(app_id, question_id):
+            raise QuestionNotFoundError()
+        await self.session.commit()
+        if self.store is not None:
+            try:
+                await self.store.delete_points(app_id, [question_id])
+            except Exception:  # noqa: BLE001 - orphan point maps to a chunk; harmless, logged
+                log.warning("knowledge.question_point_delete_failed", question_id=str(question_id))
+
+    async def reattach_chunk_question(
+        self, app_id: UUID, question_id: UUID, chunk_id: UUID
+    ) -> ChunkQuestion:
+        """Point a (typically pending) question at a live chunk and re-embed it."""
+        embedder, store = self._need_vectors()
+        await self._app(app_id)
+        q = await self.questions.get(app_id, question_id)
+        if q is None:
+            raise QuestionNotFoundError()
+        chunk, doc = await self._live_chunk(app_id, chunk_id)
+        q.chunk_id, q.document_id, q.status = chunk.id, doc.id, "active"
+        q.anchor_ordinal, q.anchor_hash = chunk.ordinal, text_hash(chunk.text)
+        await self.session.flush()
+        try:
+            await upsert_question_points(
+                app_id,
+                [(q.id, q.question)],
+                self._target(chunk, doc),
+                embedder=embedder,
+                store=store,
+            )
+        except Exception:
+            await self.session.rollback()
+            raise
+        await self.session.commit()
+        return q
 
     # ------------------------------------------------------------------ 删除
     async def delete_document(

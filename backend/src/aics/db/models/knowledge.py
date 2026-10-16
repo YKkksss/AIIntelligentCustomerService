@@ -175,7 +175,6 @@ class ChunkQuestion(CreatedAtMixin, Base):
         CheckConstraint(
             f"char_length(question) BETWEEN 1 AND {QUESTION_MAX_CHARS}", name="question_len"
         ),
-        CheckConstraint("status = 'pending' OR chunk_id IS NOT NULL", name="active_has_chunk"),
         Index("ix_chunk_questions_chunk", "chunk_id"),
         Index("ix_chunk_questions_doc", "app_id", "document_id"),
     )

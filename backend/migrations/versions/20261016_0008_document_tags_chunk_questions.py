@@ -52,10 +52,6 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "char_length(question) BETWEEN 1 AND 200", name=op.f("ck_chunk_questions_question_len")
         ),
-        sa.CheckConstraint(
-            "status = 'pending' OR chunk_id IS NOT NULL",
-            name=op.f("ck_chunk_questions_active_has_chunk"),
-        ),
         sa.ForeignKeyConstraint(
             ["chunk_id"],
             ["chunks.id"],

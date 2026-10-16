@@ -79,7 +79,7 @@ def update_pending(qid: Any) -> Any:
 
 @pytest.mark.parametrize(
     "kw",
-    [{"q": ""}, {"q": "长" * 201}, {"status": "bogus"}, {"source": "x"}, {"no_chunk": True}],
+    [{"q": ""}, {"q": "长" * 201}, {"status": "bogus"}, {"source": "x"}],
 )
 async def test_question_constraints(pg: dict[str, Any], kw: dict[str, Any]) -> None:
     app = pg["app_a"]
@@ -87,8 +87,7 @@ async def test_question_constraints(pg: dict[str, Any], kw: dict[str, Any]) -> N
         d, c = await _doc_chunk(s, app)
         did = d.id
         await s.commit()
-        no_chunk = kw.pop("no_chunk", False)
-        s.add(_q(app, d, None if no_chunk else c, **kw))
+        s.add(_q(app, d, c, **kw))
         with pytest.raises(IntegrityError):
             await s.commit()
         await s.rollback()
