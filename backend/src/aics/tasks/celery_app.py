@@ -44,6 +44,7 @@ def create_celery() -> Celery:
     app.conf.include = ["aics.tasks.ingest", "aics.tasks.maintenance"]
     app.conf.task_routes = {
         "aics.ingest_document": {"queue": "ingest", "routing_key": "ingest"},
+        "aics.retokenize_app": {"queue": "ingest", "routing_key": "ingest"},
         "aics.cleanup_document": {"queue": "maintenance", "routing_key": "maintenance"},
     }
     return app

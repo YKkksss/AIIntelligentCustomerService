@@ -15,4 +15,6 @@ def test_ingest_tasks_registered_and_routed() -> None:
     routes = celery_app.conf.task_routes
     assert routes["aics.ingest_document"]["queue"] == "ingest"
     assert routes["aics.cleanup_document"]["queue"] == "maintenance"
+    assert routes["aics.retokenize_app"]["queue"] == "ingest"
+    assert "aics.retokenize_app" in celery_app.tasks
     assert "aics.tasks.ingest" in celery_app.conf.include

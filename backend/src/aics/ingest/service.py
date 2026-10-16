@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -28,6 +29,7 @@ from aics.db.base import new_id
 from aics.db.models import App, Chunk, ChunkParent, Document, Job
 from aics.ingest.chunker import ChunkOptions, ChunkResult, split_document
 from aics.ingest.indexer import EmbedItem, build_embed_text, embed_and_upsert
+from aics.ingest.injection import detect_injection
 from aics.ingest.parsers import detect_file_type, parse_bytes
 from aics.ingest.parsers.base import ParsedDoc, ParseError
 from aics.ingest.parsers.url import fetch_url
@@ -41,7 +43,8 @@ log = logging.getLogger(__name__)
 PREVIEW_DEFAULT_LIMIT = 50
 PREVIEW_MAX_LIMIT = 200
 PROGRESS_SPLIT_DONE = 30  # 解析 + 切块完成；30→100 为向量化
-EMBED_PROGRESS_BATCHES = 4  # 每个进度批包含 embed_batch × 4 条（嵌入器内部再按 embed_batch 拆）
+EMBED_PROGRESS_BATCHES = 4
+RETOKENIZE_BATCH = 500  # 每个进度批包含 embed_batch × 4 条（嵌入器内部再按 embed_batch 拆）
 
 CleanupEnqueuer = Callable[[UUID, int, str | None], Awaitable[None] | None]
 
@@ -66,6 +69,13 @@ def _embed_text_for(
     return build_embed_text(
         title, heading, text, contextual_prefix=bool(chunk_config.get("contextual_prefix", True))
     )
+
+
+def search_text_for(
+    app_id: UUID, heading_path: str | None, text: str, custom_dict: list[str]
+) -> str:
+    """`chunks.search_text` 的唯一生成方式：入库与 `retokenize_app` 共用。"""
+    return tokenize_for_index(app_id, f"{heading_path or ''} {text}".strip(), custom_dict)
 
 
 def _clamp_limit(limit: int) -> int:
@@ -262,7 +272,7 @@ class IngestService:
                 before_batch=before_batch,
             )
             old_key = await self._switch(
-                document_id, job_id, n, len(items), cfg_version, title, payload
+                document_id, job_id, n, len(items), cfg_version, title, payload, custom_dict
             )
         except _Cancelled:
             await self._safe_purge(app_id, document_id, n)
@@ -311,11 +321,19 @@ class IngestService:
             )
             for p in result.parents
         ]
+        # 父子模式送入模型的是父块正文：父块命中则其全部子块待复核
+        parent_hits = {}
+        for p in result.parents:
+            hit = detect_injection(f"{p.heading_path}\n{p.text}")
+            if hit is not None:
+                parent_hits[p.ordinal] = f"父块 {hit.reason}"
         chunks: list[Chunk] = []
         items: list[EmbedItem] = []
         for c in result.chunks:
             cid = new_id()
             pid = parent_ids.get(c.parent_ordinal) if c.parent_ordinal is not None else None
+            own = detect_injection(f"{c.heading_path}\n{c.text}")
+            reason = own.reason if own is not None else parent_hits.get(c.parent_ordinal)  # type: ignore[arg-type]
             chunks.append(
                 Chunk(
                     id=cid,
@@ -326,15 +344,23 @@ class IngestService:
                     parent_id=pid,
                     heading_path=c.heading_path or None,
                     text=c.text,
-                    search_text=tokenize_for_index(
-                        app_id, f"{c.heading_path} {c.text}".strip(), custom_dict
-                    ),
+                    search_text=search_text_for(app_id, c.heading_path, c.text, custom_dict),
                     tokens=c.tokens,
                     page_from=c.page_from,
                     page_to=c.page_to,
+                    review_status="flagged" if reason else "none",
+                    flag_reason=reason,
                 )
             )
-            items.append(EmbedItem(cid, pid, _embed_text_for(title, cfg, c.heading_path, c.text)))
+            # flagged 切块照常向量化但 payload enabled=false：复核通过只改 payload，不重新向量化
+            items.append(
+                EmbedItem(
+                    cid,
+                    pid,
+                    _embed_text_for(title, cfg, c.heading_path, c.text),
+                    enabled=not reason,
+                )
+            )
         async with self.sessions() as s:
             if parents:
                 await ChunkParentRepository(s).add_many(app_id, parents)
@@ -351,12 +377,20 @@ class IngestService:
         cfg_version: int,
         title: str,
         payload: Mapping[str, Any],
+        custom_dict: list[str],
     ) -> str | None:
         """一个事务内切换生效版本；返回需要清理的旧文件 key（替换文件时）。"""
         async with self.sessions() as s:
             doc = await s.get(Document, document_id, with_for_update=True)
             if doc is None or doc.status == "deleting" or doc.pending_index_version != n:
                 raise _Cancelled()
+            app = await s.get(App, doc.app_id)
+            current = list(app.custom_dict or []) if app is not None else custom_dict
+            if current != custom_dict:
+                # 构建期间词典变了：本构建切块按新词典重算（retokenize_app 可能已跑过、没覆盖到它们）
+                await self._retokenize_rows(
+                    s, doc.app_id, current, document_id=document_id, index_version=n
+                )
             old_key: str | None = None
             if payload.get("storage_key"):
                 old_key = doc.storage_key
@@ -402,6 +436,98 @@ class IngestService:
             if job is not None:
                 job.status, job.error, job.finished_at = "failed", msg, _now()
             await s.commit()
+
+    # ------------------------------------------------------------------ 重新分词
+    @staticmethod
+    async def _retokenize_rows(
+        s: AsyncSession,
+        app_id: UUID,
+        custom_dict: list[str],
+        *,
+        document_id: UUID | None = None,
+        index_version: int | None = None,
+        after_id: UUID | None = None,
+        limit: int | None = None,
+    ) -> tuple[int, UUID | None]:
+        """按 id 顺序重算一批切块的 search_text（tsv 为生成列自动更新）；返回（行数, 最后 id）。"""
+        stmt = select(Chunk.id, Chunk.heading_path, Chunk.text, Chunk.search_text).where(
+            Chunk.app_id == app_id
+        )
+        if document_id is not None:
+            stmt = stmt.where(Chunk.document_id == document_id)
+        if index_version is not None:
+            stmt = stmt.where(Chunk.index_version == index_version)
+        if after_id is not None:
+            stmt = stmt.where(Chunk.id > after_id)
+        stmt = stmt.order_by(Chunk.id)
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        rows = (await s.execute(stmt)).all()
+        changed = [
+            {"id": r.id, "search_text": new}
+            for r in rows
+            if (new := search_text_for(app_id, r.heading_path, r.text, custom_dict))
+            != r.search_text
+        ]
+        if changed:
+            await s.execute(update(Chunk), changed)  # ORM 按主键批量更新（id 已按 app_id 取得）
+        return len(rows), (rows[-1].id if rows else None)
+
+    async def run_retokenize(self, app_id: UUID, job_id: UUID) -> str:
+        """`custom_dict` 变化后只重算该应用全部切块（含构建中版本）的 search_text；不向量化、不改构建号。
+
+        每批开始重读词典：若已被更新的任务取代（词典又变了），本任务以 cancelled 结束，由新任务完成。
+        messages 的 search_text 在 M2 引入 messages 表后加入。
+        """
+        async with self.sessions() as s:
+            job = await s.get(Job, job_id)
+            app = await s.get(App, app_id)
+            if job is None or job.status in ("done", "failed", "cancelled"):
+                return "skipped"
+            if app is None or app.status == "deleting":
+                job.status, job.finished_at = "cancelled", _now()
+                await s.commit()
+                return "cancelled"
+            snapshot = list(app.custom_dict or [])
+            total = (
+                await s.execute(
+                    select(func.count()).select_from(Chunk).where(Chunk.app_id == app_id)
+                )
+            ).scalar_one()
+            job.status, job.started_at, job.progress, job.error = "running", _now(), 0, None
+            await s.commit()
+        done, last = 0, None
+        try:
+            while True:
+                async with self.sessions() as s:
+                    app = await s.get(App, app_id)
+                    if (
+                        app is None
+                        or app.status == "deleting"
+                        or list(app.custom_dict or []) != snapshot
+                    ):
+                        await self._finish_job(job_id, "cancelled", "词典已更新，由新任务处理")
+                        return "cancelled"
+                    n, last = await self._retokenize_rows(
+                        s, app_id, snapshot, after_id=last, limit=RETOKENIZE_BATCH
+                    )
+                    done += n
+                    job = await s.get(Job, job_id)
+                    if job is not None:
+                        job.progress = min(99, 100 * done // max(total, 1))
+                    await s.commit()
+                if n < RETOKENIZE_BATCH:
+                    break
+        except Exception as exc:  # noqa: BLE001
+            await self._finish_job(job_id, "failed", f"{type(exc).__name__}: {exc}"[:1000])
+            return "failed"
+        async with self.sessions() as s:
+            job = await s.get(Job, job_id)
+            if job is not None:
+                job.status, job.progress, job.finished_at = "done", 100, _now()
+                job.payload = {**(job.payload or {}), "chunks": done}
+                await s.commit()
+        return "done"
 
     # ------------------------------------------------------------------ 清理
     async def run_cleanup(
@@ -483,6 +609,11 @@ async def run_ingest_job(
 ) -> str:
     async with ingest_runtime(enqueue_cleanup=enqueue_cleanup) as svc:
         return await svc.run_build(document_id, job_id)
+
+
+async def run_retokenize_job(app_id: UUID, job_id: UUID) -> str:
+    async with ingest_runtime() as svc:
+        return await svc.run_retokenize(app_id, job_id)
 
 
 async def run_cleanup_job(

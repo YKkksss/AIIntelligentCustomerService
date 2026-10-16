@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### 新增（M1.5 分词、注入检测与去重，2026-10-16）
+- `ingest/injection.py` + `injection_patterns.yaml`：入库注入检测（中英文规则、NFKC / 空白 / 零宽字符归一化）；命中切块 `review_status=flagged`、`flag_reason`，Qdrant payload `enabled=false`；父子模式父块命中则其子块全部待复核。
+- `IngestService.run_retokenize` 与任务 `aics.retokenize_app`（队列 ingest）：`custom_dict` 变化后分批只重算 `search_text`，不重新向量化；被新词典取代时自动让位；构建期间词典变化在切换时补算。
+- `modules/knowledge/service.py`：`upload_file`（同应用 SHA-256 去重，并发上传由唯一索引兜底，删除中返回 `409 DOCUMENT_BUSY`）、`request_retokenize`。
+- 开发计划新增"待复验清单"（M1.4 真实 worker + 百炼端到端、M1.5 retokenize 真实 worker，服务器联调时补做）。
+
 ### 新增（M1.4 入库流水线，2026-10-16）
 - `ingest/service.py`：版本化构建 `run_build`（清半成品 → 解析 → 预处理 → 切块 → 写父块 / 切块 → 分批向量化 → 事务切换 → 投递清理）、`run_cleanup`、切块预览 `preview` / `preview_document`（不向量化、不写库）。
 - `ingest/indexer.py`：`build_embed_text`（上下文增强前缀，`chunks.text` 保持原文，向量化文本由此函数统一派生、不单独存储）；Qdrant payload 带 `parent_id`。

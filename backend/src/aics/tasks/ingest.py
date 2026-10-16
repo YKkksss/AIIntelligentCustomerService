@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from uuid import UUID
 
-from aics.ingest.service import run_ingest_job
+from aics.ingest.service import run_ingest_job, run_retokenize_job
 from aics.tasks.celery_app import celery_app
 
 INGEST_TASK = "aics.ingest_document"
@@ -28,3 +28,9 @@ def ingest_document(document_id: str, job_id: str) -> str:
     return asyncio.run(
         run_ingest_job(UUID(document_id), UUID(job_id), enqueue_cleanup=_enqueue_cleanup)
     )
+
+
+@celery_app.task(name="aics.retokenize_app", queue="ingest")
+def retokenize_app(app_id: str, job_id: str) -> str:
+    """custom_dict 变化后只重新分词（重算 search_text），不重新向量化。"""
+    return asyncio.run(run_retokenize_job(UUID(app_id), UUID(job_id)))
