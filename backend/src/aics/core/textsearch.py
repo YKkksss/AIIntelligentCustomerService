@@ -36,6 +36,21 @@ STOPWORDS: frozenset[str] = frozenset(
     """.split()  # noqa: SIM905 - 词表按行书写便于维护
 )
 
+# Query-only additions (M2.2): interrogatives / colloquial fillers that never carry the
+# answer. Applied to questions only (the index keeps every token), so adding words here
+# needs no rebuild. Quantity/limit words (以内、以上、最多) stay: they often anchor rules.
+QUESTION_WORDS: frozenset[str] = frozenset(
+    """
+    多久 多长 多长时间 多大 多远 多快 几天 几个 几次 几种 几号 几点 是多少 有多少 要多久
+    怎么办 怎么弄 怎么回事 怎么处理 咋 咋办 啥 啥时候 什么样 什么时候 哪个 哪种 哪家 哪儿
+    么 嘛 呗 吗 告诉 知道 问 问一下 咨询 一般 大概 大约 具体 到底 究竟 应该 得 会 会不会
+    可不可以 行不行 好不好 算不算 是不是 能够 还是 可能 帮 帮我 麻烦
+    what how which when where who whom why whose do does did can could would should will
+    i me my we our you your it its be been this that these those with please there any
+    """.split()  # noqa: SIM905 - one line per theme for maintenance
+)
+QUERY_STOPWORDS: frozenset[str] = STOPWORDS | QUESTION_WORDS
+
 _lock = threading.Lock()
 _cache: OrderedDict[tuple[str, str], jieba.Tokenizer] = OrderedDict()
 
@@ -77,8 +92,20 @@ def tokenize_for_index(app_id: UUID | str, text: str, custom_dict: Sequence[str]
     return " ".join(t for t in (w.strip() for w in tok.lcut_for_search(text)) if t)
 
 
-def build_tsquery(app_id: UUID | str, question: str, custom_dict: Sequence[str] = ()) -> str | None:
-    """构造 OR 语义 tsquery 字符串；无可用词返回 None（调用方跳过关键词路，不记 degraded）。"""
+def build_tsquery(
+    app_id: UUID | str,
+    question: str,
+    custom_dict: Sequence[str] = (),
+    *,
+    stopwords: frozenset[str] = QUERY_STOPWORDS,
+) -> str | None:
+    """构造 OR 语义 tsquery 字符串；无可用词返回 None（调用方跳过关键词路，不记 degraded）。
+
+    `stopwords` defaults to QUERY_STOPWORDS (question words stripped, M2.2); the parameter
+    exists for evaluation baselines and must not be overridden in production paths.
+    Custom-dict words are never dropped, even when they collide with a stopword.
+    """
+    keep = {w.strip().lower() for w in custom_dict if w and w.strip()}
     tok = get_tokenizer(app_id, custom_dict)
     terms: list[str] = []
     seen: set[str] = set()
@@ -86,7 +113,7 @@ def build_tsquery(app_id: UUID | str, question: str, custom_dict: Sequence[str] 
         w = raw.strip().lower()
         if not w or not _TERM_RE.match(w):
             continue  # 去掉 tsquery 运算符、引号、标点
-        if w in STOPWORDS or _SINGLE_HAN_RE.match(w):
+        if w not in keep and (w in stopwords or _SINGLE_HAN_RE.match(w)):
             continue
         if w in seen:
             continue

@@ -99,3 +99,35 @@ def test_cache_lru_bound(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_tokenize_for_index() -> None:
     out = tokenize_for_index(APP_A, "我想退货，运费谁承担")
     assert "退货" in out.split() and "  " not in out
+
+
+def _terms(tsq: str | None) -> set[str]:
+    return {t.strip(" '") for t in (tsq or "").split("|")}
+
+
+def test_question_words_stripped_from_query() -> None:
+    from aics.core.textsearch import STOPWORDS
+
+    q = "衣服买了不合适，几天内可以无理由退？退款一般多久到账？"
+    new = _terms(build_tsquery(uuid.uuid4(), q))
+    assert not new & {"几天", "多久", "一般", "可以"}
+    assert {"衣服", "理由", "退款"} <= new
+    old = _terms(build_tsquery(uuid.uuid4(), q, stopwords=STOPWORDS))
+    assert "多久" in old and new < old
+
+
+def test_english_question_words_stripped() -> None:
+    assert _terms(build_tsquery(uuid.uuid4(), "How do I reset my AirPure filter?")) == {
+        "reset",
+        "airpure",
+        "filter",
+    }
+
+
+def test_limit_words_kept_and_custom_dict_overrides_stopword() -> None:
+    assert "以内" in _terms(build_tsquery(uuid.uuid4(), "七天以内能退吗"))
+    assert "多久" in _terms(build_tsquery(uuid.uuid4(), "多久 保修", ["多久"]))
+
+
+def test_only_question_words_returns_none() -> None:
+    assert build_tsquery(uuid.uuid4(), "请问一般要多久？怎么办") is None
