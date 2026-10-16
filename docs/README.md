@@ -36,6 +36,7 @@
 | | [05-配置与环境变量](06-development/05-配置与环境变量.md) | 全部配置项 |
 | | [06-测试策略](06-development/06-测试策略.md) | 单测、集成、E2E |
 | | [07-评测指南](06-development/07-评测指南.md) | 准确率评测怎么做 |
+| | [08-M1端到端测试报告](06-development/08-M1端到端测试报告.md) | M1 真实 worker 端到端与检索质量评测结果 |
 | 07-deployment | [01-服务器准备与共享服务](07-deployment/01-服务器准备与共享服务.md) | 建库、建用户、vhost |
 | | [02-Qdrant部署](07-deployment/02-Qdrant部署.md) | compose 与验证 |
 | | [03-应用部署](07-deployment/03-应用部署.md) | 后端 / Worker / 前端上线 |

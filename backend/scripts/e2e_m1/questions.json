@@ -1,0 +1,666 @@
+[
+ {
+  "id": "q01",
+  "category": "口语",
+  "question": "衣服买了不合适，几天内可以无理由退？",
+  "docs": [
+   "01-",
+   "04-"
+  ],
+  "evidence": [
+   "服装鞋包类商品自签收日起",
+   "服装鞋包签收后 15 天"
+  ]
+ },
+ {
+  "id": "q02",
+  "category": "版本混淆",
+  "question": "2025 年版政策里家具大件无理由退货是几天？",
+  "docs": [
+   "01-"
+  ],
+  "evidence": [
+   "该期限为 3 天"
+  ]
+ },
+ {
+  "id": "q03",
+  "category": "口语",
+  "question": "买的水果到手就烂了，要多久之内申请？",
+  "docs": [
+   "01-",
+   "04-"
+  ],
+  "evidence": [
+   "48 小时内"
+  ]
+ },
+ {
+  "id": "q04",
+  "category": "表格",
+  "question": "沙发上门取件距离 30 公里收多少钱？",
+  "docs": [
+   "01-"
+  ],
+  "evidence": [
+   "20–50 公里"
+  ]
+ },
+ {
+  "id": "q05",
+  "category": "地区混淆",
+  "question": "港澳台地区退货寄回的运费最多报销多少？",
+  "docs": [
+   "01-",
+   "04-"
+  ],
+  "evidence": [
+   "最高报销 60 元"
+  ]
+ },
+ {
+  "id": "q06",
+  "category": "数字",
+  "question": "海外仓直邮的商品退款多久到账？",
+  "docs": [
+   "01-",
+   "04-",
+   "E05-"
+  ],
+  "evidence": [
+   "15 个工作日"
+  ]
+ },
+ {
+  "id": "q07",
+  "category": "表格",
+  "question": "黑卡会员每个月有几张退货运费券？",
+  "docs": [
+   "01-",
+   "04-"
+  ],
+  "evidence": [
+   "黑卡会员"
+  ]
+ },
+ {
+  "id": "q08",
+  "category": "数字",
+  "question": "大促期间买的东西价格保护多少天？",
+  "docs": [
+   "01-",
+   "04-"
+  ],
+  "evidence": [
+   "30 天"
+  ]
+ },
+ {
+  "id": "q09",
+  "category": "数字",
+  "question": "同一个商品最多能申请几次保价？",
+  "docs": [
+   "01-",
+   "04-"
+  ],
+  "evidence": [
+   "3 次"
+  ]
+ },
+ {
+  "id": "q10",
+  "category": "同义",
+  "question": "婴儿奶粉开封了还能退吗？",
+  "docs": [
+   "01-"
+  ],
+  "evidence": [
+   "奶粉"
+  ]
+ },
+ {
+  "id": "q11",
+  "category": "口语",
+  "question": "用了你们的面霜脸过敏了怎么退？",
+  "docs": [
+   "01-"
+  ],
+  "evidence": [
+   "诊断证明"
+  ]
+ },
+ {
+  "id": "q12",
+  "category": "同义",
+  "question": "书籍七天无理由退货寄回邮费怎么算？",
+  "docs": [
+   "01-"
+  ],
+  "evidence": [
+   "首重 8 元"
+  ]
+ },
+ {
+  "id": "q13",
+  "category": "口语",
+  "question": "刻了字的定制商品有质量问题怎么办？",
+  "docs": [
+   "01-"
+  ],
+  "evidence": [
+   "重做"
+  ]
+ },
+ {
+  "id": "q14",
+  "category": "同义",
+  "question": "笔记本电脑开机激活以后还能七天无理由吗？",
+  "docs": [
+   "01-",
+   "04-"
+  ],
+  "evidence": [
+   "激活后"
+  ]
+ },
+ {
+  "id": "q15",
+  "category": "精确条款",
+  "question": "第十二条规定了什么？",
+  "docs": [
+   "02-"
+  ],
+  "evidence": [
+   "第十二条"
+  ]
+ },
+ {
+  "id": "q16",
+  "category": "同义",
+  "question": "注销账号有没有冷静期，多长时间？",
+  "docs": [
+   "02-",
+   "04-"
+  ],
+  "evidence": [
+   "冷静期"
+  ]
+ },
+ {
+  "id": "q17",
+  "category": "数字",
+  "question": "商家虚假发货一次扣几分？",
+  "docs": [
+   "02-"
+  ],
+  "evidence": [
+   "扣 6 分"
+  ]
+ },
+ {
+  "id": "q18",
+  "category": "数字",
+  "question": "商家延迟发货最多赔顾客多少钱？",
+  "docs": [
+   "02-",
+   "04-"
+  ],
+  "evidence": [
+   "500 元"
+  ]
+ },
+ {
+  "id": "q19",
+  "category": "同义",
+  "question": "店铺卖假货会被怎么处罚？",
+  "docs": [
+   "02-"
+  ],
+  "evidence": [
+   "48 分"
+  ]
+ },
+ {
+  "id": "q20",
+  "category": "数字",
+  "question": "一般违规累计扣满 12 分有什么后果？",
+  "docs": [
+   "02-"
+  ],
+  "evidence": [
+   "12 分"
+  ]
+ },
+ {
+  "id": "q21",
+  "category": "精确条款",
+  "question": "第三十五条关于延迟发货的赔付标准是什么？",
+  "docs": [
+   "02-"
+  ],
+  "evidence": [
+   "第三十五条"
+  ]
+ },
+ {
+  "id": "q22",
+  "category": "数字",
+  "question": "商品标题最多可以写多少个字？",
+  "docs": [
+   "02-"
+  ],
+  "evidence": [
+   "60 个"
+  ]
+ },
+ {
+  "id": "q23",
+  "category": "精确条款",
+  "question": "规则里的“以上”“以内”包括本数吗？",
+  "docs": [
+   "02-"
+  ],
+  "evidence": [
+   "本数"
+  ]
+ },
+ {
+  "id": "q24",
+  "category": "数字",
+  "question": "论文里混合召回加重排序的 Hit@1 是多少？",
+  "docs": [
+   "03-"
+  ],
+  "evidence": [
+   "0.741"
+  ]
+ },
+ {
+  "id": "q25",
+  "category": "精确术语",
+  "question": "RRF 融合的常数 k 取多少？",
+  "docs": [
+   "03-"
+  ],
+  "evidence": [
+   "k = 60",
+   "k=60"
+  ]
+ },
+ {
+  "id": "q26",
+  "category": "数字",
+  "question": "实验数据集一共有多少条问答对？",
+  "docs": [
+   "03-"
+  ],
+  "evidence": [
+   "12,480",
+   "12480"
+  ]
+ },
+ {
+  "id": "q27",
+  "category": "英文",
+  "question": "Which method achieved the best Hit@1 in the experiments?",
+  "docs": [
+   "03-"
+  ],
+  "evidence": [
+   "0.741"
+  ]
+ },
+ {
+  "id": "q28",
+  "category": "口语",
+  "question": "货到付款有没有金额上限？",
+  "docs": [
+   "04-"
+  ],
+  "evidence": [
+   "货到付款"
+  ]
+ },
+ {
+  "id": "q29",
+  "category": "同义",
+  "question": "专票要在多长时间内申请？",
+  "docs": [
+   "04-"
+  ],
+  "evidence": [
+   "增值税专用发票"
+  ]
+ },
+ {
+  "id": "q30",
+  "category": "口语",
+  "question": "快递显示签收了但我根本没收到怎么办？",
+  "docs": [
+   "04-"
+  ],
+  "evidence": [
+   "签收"
+  ]
+ },
+ {
+  "id": "q31",
+  "category": "表格",
+  "question": "寄到新疆一般几天能到？",
+  "docs": [
+   "04-",
+   "07-"
+  ],
+  "evidence": [
+   "新疆"
+  ]
+ },
+ {
+  "id": "q32",
+  "category": "口语",
+  "question": "有人打电话自称客服问我要验证码，正常吗？",
+  "docs": [
+   "04-",
+   "01-"
+  ],
+  "evidence": [
+   "验证码"
+  ]
+ },
+ {
+  "id": "q33",
+  "category": "表格",
+  "question": "X5 用什么滤网，多久换一次？",
+  "docs": [
+   "05-"
+  ],
+  "evidence": [
+   "F5"
+  ]
+ },
+ {
+  "id": "q34",
+  "category": "表格",
+  "question": "X7 适合多大面积的房间？",
+  "docs": [
+   "05-"
+  ],
+  "evidence": [
+   "X7"
+  ]
+ },
+ {
+  "id": "q35",
+  "category": "精确术语",
+  "question": "净化器屏幕上显示 E07 是什么意思？",
+  "docs": [
+   "05-"
+  ],
+  "evidence": [
+   "E07"
+  ]
+ },
+ {
+  "id": "q36",
+  "category": "型号混淆",
+  "question": "X3 保修几年？",
+  "docs": [
+   "05-"
+  ],
+  "evidence": [
+   "X3"
+  ]
+ },
+ {
+  "id": "q37",
+  "category": "表格",
+  "question": "F7 滤网单独买多少钱？",
+  "docs": [
+   "05-"
+  ],
+  "evidence": [
+   "F7"
+  ]
+ },
+ {
+  "id": "q38",
+  "category": "口语",
+  "question": "仓库把我们的货弄丢了怎么赔？",
+  "docs": [
+   "06-"
+  ],
+  "evidence": [
+   "100%"
+  ]
+ },
+ {
+  "id": "q39",
+  "category": "数字",
+  "question": "仓储合同里单票赔偿上限是多少？",
+  "docs": [
+   "06-"
+  ],
+  "evidence": [
+   "5,000",
+   "5000"
+  ]
+ },
+ {
+  "id": "q40",
+  "category": "精确术语",
+  "question": "合同 XH-WL-2026-0158 的争议由哪里仲裁？",
+  "docs": [
+   "06-"
+  ],
+  "evidence": [
+   "仲裁委员会"
+  ]
+ },
+ {
+  "id": "q41",
+  "category": "同义",
+  "question": "仓储服务费结算是每月几号付款？",
+  "docs": [
+   "06-"
+  ],
+  "evidence": [
+   "15 日",
+   "15 号"
+  ]
+ },
+ {
+  "id": "q42",
+  "category": "表格",
+  "question": "寄到浙江首重多少钱？",
+  "docs": [
+   "07-"
+  ],
+  "evidence": [
+   "浙江"
+  ]
+ },
+ {
+  "id": "q43",
+  "category": "版本混淆",
+  "question": "最新版星河豆规则里 100 个星河豆抵多少钱？",
+  "docs": [
+   "E01-",
+   "04-"
+  ],
+  "evidence": [
+   "100 星河豆"
+  ]
+ },
+ {
+  "id": "q44",
+  "category": "版本混淆",
+  "question": "星河豆第 3 版规则的有效期是多久？",
+  "docs": [
+   "E01-"
+  ],
+  "evidence": [
+   "第 3 版"
+  ]
+ },
+ {
+  "id": "q45",
+  "category": "表格",
+  "question": "SKU XH-00405 的价格是多少？",
+  "docs": [
+   "E04-"
+  ],
+  "evidence": [
+   "XH-00405"
+  ]
+ },
+ {
+  "id": "q46",
+  "category": "英文",
+  "question": "Are import duties refunded when I return a cross-border order?",
+  "docs": [
+   "E05-"
+  ],
+  "evidence": [
+   "duties",
+   "关税"
+  ]
+ },
+ {
+  "id": "q47",
+  "category": "英文",
+  "question": "How many days do I have to return an overseas order?",
+  "docs": [
+   "E05-",
+   "01-",
+   "04-"
+  ],
+  "evidence": [
+   "days",
+   "天"
+  ]
+ },
+ {
+  "id": "q48",
+  "category": "口语",
+  "question": "星河豆能抵订单的百分之多少？",
+  "docs": [
+   "04-",
+   "E01-"
+  ],
+  "evidence": [
+   "50%"
+  ]
+ },
+ {
+  "id": "q49",
+  "category": "同义",
+  "question": "买完东西降价了能退差价吗？",
+  "docs": [
+   "01-",
+   "04-"
+  ],
+  "evidence": [
+   "保价",
+   "价格保护"
+  ]
+ },
+ {
+  "id": "q50",
+  "category": "同义",
+  "question": "空气净化器滤网怎么复位提醒？",
+  "docs": [
+   "05-"
+  ],
+  "evidence": [
+   "复位"
+  ]
+ },
+ {
+  "id": "q51",
+  "category": "口语",
+  "question": "大件家具退货上门取件要我出钱吗？",
+  "docs": [
+   "01-"
+  ],
+  "evidence": [
+   "上门取件费"
+  ]
+ },
+ {
+  "id": "u01",
+  "category": "无答案",
+  "question": "你们支持用比特币付款吗？",
+  "docs": [],
+  "evidence": []
+ },
+ {
+  "id": "u02",
+  "category": "无答案",
+  "question": "怎么申请成为星河优选的快递员？",
+  "docs": [],
+  "evidence": []
+ },
+ {
+  "id": "u03",
+  "category": "无答案",
+  "question": "AirPure 空气净化器能除甲醛吗，除甲醛效率多少？",
+  "docs": [],
+  "evidence": []
+ },
+ {
+  "id": "u04",
+  "category": "无答案",
+  "question": "AirPure X9 型号多少钱？",
+  "docs": [],
+  "evidence": []
+ },
+ {
+  "id": "u05",
+  "category": "无答案",
+  "question": "今天杭州天气怎么样？",
+  "docs": [],
+  "evidence": []
+ },
+ {
+  "id": "u06",
+  "category": "无答案",
+  "question": "你们公司的 CEO 是谁？",
+  "docs": [],
+  "evidence": []
+ },
+ {
+  "id": "u07",
+  "category": "无答案",
+  "question": "How do I reset my password on the mobile app?",
+  "docs": [],
+  "evidence": []
+ },
+ {
+  "id": "u08",
+  "category": "无答案",
+  "question": "线下门店周末几点关门？",
+  "docs": [],
+  "evidence": []
+ },
+ {
+  "id": "u09",
+  "category": "无答案",
+  "question": "可以用星河豆购买彩票吗？",
+  "docs": [],
+  "evidence": []
+ },
+ {
+  "id": "u10",
+  "category": "无答案",
+  "question": "你们的股票代码是多少？",
+  "docs": [],
+  "evidence": []
+ },
+ {
+  "id": "u11",
+  "category": "无答案",
+  "question": "账号被盗了怎么办？",
+  "docs": [],
+  "evidence": []
+ }
+]

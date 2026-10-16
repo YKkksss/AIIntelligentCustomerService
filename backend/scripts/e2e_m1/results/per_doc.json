@@ -1,0 +1,275 @@
+{
+ "main/01-售后服务政策.md": {
+  "live_chunks": 81,
+  "points": 81,
+  "enabled_points": 81,
+  "flagged": 0,
+  "chunk_count": 81
+ },
+ "main/02-平台交易规则.docx": {
+  "live_chunks": 41,
+  "points": 41,
+  "enabled_points": 41,
+  "flagged": 0,
+  "chunk_count": 41
+ },
+ "main/03-多路召回检索方法研究.pdf": {
+  "live_chunks": 19,
+  "points": 19,
+  "enabled_points": 19,
+  "flagged": 0,
+  "chunk_count": 19
+ },
+ "main/04-常见问题.html": {
+  "live_chunks": 43,
+  "points": 43,
+  "enabled_points": 43,
+  "flagged": 0,
+  "chunk_count": 43
+ },
+ "main/05-AirPure空气净化器手册.docx": {
+  "live_chunks": 24,
+  "points": 24,
+  "enabled_points": 24,
+  "flagged": 0,
+  "chunk_count": 24
+ },
+ "main/06-仓储物流服务合同.pdf": {
+  "live_chunks": 17,
+  "points": 17,
+  "enabled_points": 17,
+  "flagged": 0,
+  "chunk_count": 17
+ },
+ "main/07-区域运费与时效表.txt": {
+  "live_chunks": 11,
+  "points": 11,
+  "enabled_points": 11,
+  "flagged": 0,
+  "chunk_count": 11
+ },
+ "main/E01-星河豆规则历次修订.md": {
+  "live_chunks": 109,
+  "points": 109,
+  "enabled_points": 109,
+  "flagged": 0,
+  "chunk_count": 109
+ },
+ "main/E04-SKU价格总表.md": {
+  "live_chunks": 60,
+  "points": 60,
+  "enabled_points": 60,
+  "flagged": 0,
+  "chunk_count": 60
+ },
+ "main/E05-跨境退货政策.html": {
+  "live_chunks": 4,
+  "points": 4,
+  "enabled_points": 4,
+  "flagged": 0,
+  "chunk_count": 4
+ },
+ "main/E06-供应商协作须知.docx": {
+  "live_chunks": 4,
+  "points": 4,
+  "enabled_points": 2,
+  "flagged": 2,
+  "chunk_count": 4
+ },
+ "noprefix/01-售后服务政策.md": {
+  "live_chunks": 81,
+  "points": 81,
+  "enabled_points": 81,
+  "flagged": 0,
+  "chunk_count": 81
+ },
+ "noprefix/02-平台交易规则.docx": {
+  "live_chunks": 41,
+  "points": 41,
+  "enabled_points": 41,
+  "flagged": 0,
+  "chunk_count": 41
+ },
+ "noprefix/03-多路召回检索方法研究.pdf": {
+  "live_chunks": 19,
+  "points": 19,
+  "enabled_points": 19,
+  "flagged": 0,
+  "chunk_count": 19
+ },
+ "noprefix/04-常见问题.html": {
+  "live_chunks": 43,
+  "points": 43,
+  "enabled_points": 43,
+  "flagged": 0,
+  "chunk_count": 43
+ },
+ "noprefix/05-AirPure空气净化器手册.docx": {
+  "live_chunks": 24,
+  "points": 24,
+  "enabled_points": 24,
+  "flagged": 0,
+  "chunk_count": 24
+ },
+ "noprefix/06-仓储物流服务合同.pdf": {
+  "live_chunks": 17,
+  "points": 17,
+  "enabled_points": 17,
+  "flagged": 0,
+  "chunk_count": 17
+ },
+ "noprefix/07-区域运费与时效表.txt": {
+  "live_chunks": 11,
+  "points": 11,
+  "enabled_points": 11,
+  "flagged": 0,
+  "chunk_count": 11
+ },
+ "noprefix/E01-星河豆规则历次修订.md": {
+  "live_chunks": 109,
+  "points": 109,
+  "enabled_points": 109,
+  "flagged": 0,
+  "chunk_count": 109
+ },
+ "noprefix/E04-SKU价格总表.md": {
+  "live_chunks": 60,
+  "points": 60,
+  "enabled_points": 60,
+  "flagged": 0,
+  "chunk_count": 60
+ },
+ "noprefix/E05-跨境退货政策.html": {
+  "live_chunks": 4,
+  "points": 4,
+  "enabled_points": 4,
+  "flagged": 0,
+  "chunk_count": 4
+ },
+ "noprefix/E06-供应商协作须知.docx": {
+  "live_chunks": 4,
+  "points": 4,
+  "enabled_points": 2,
+  "flagged": 2,
+  "chunk_count": 4
+ },
+ "pc/01-售后服务政策.md": {
+  "live_chunks": 113,
+  "points": 113,
+  "enabled_points": 113,
+  "flagged": 0,
+  "chunk_count": 113
+ },
+ "pc/02-平台交易规则.docx": {
+  "live_chunks": 115,
+  "points": 115,
+  "enabled_points": 115,
+  "flagged": 0,
+  "chunk_count": 115
+ },
+ "pc/03-多路召回检索方法研究.pdf": {
+  "live_chunks": 47,
+  "points": 47,
+  "enabled_points": 47,
+  "flagged": 0,
+  "chunk_count": 47
+ },
+ "pc/04-常见问题.html": {
+  "live_chunks": 64,
+  "points": 64,
+  "enabled_points": 64,
+  "flagged": 0,
+  "chunk_count": 64
+ },
+ "pc/05-AirPure空气净化器手册.docx": {
+  "live_chunks": 37,
+  "points": 37,
+  "enabled_points": 37,
+  "flagged": 0,
+  "chunk_count": 37
+ },
+ "pc/06-仓储物流服务合同.pdf": {
+  "live_chunks": 36,
+  "points": 36,
+  "enabled_points": 36,
+  "flagged": 0,
+  "chunk_count": 36
+ },
+ "pc/07-区域运费与时效表.txt": {
+  "live_chunks": 28,
+  "points": 28,
+  "enabled_points": 28,
+  "flagged": 0,
+  "chunk_count": 28
+ },
+ "pc/E01-星河豆规则历次修订.md": {
+  "live_chunks": 213,
+  "points": 213,
+  "enabled_points": 213,
+  "flagged": 0,
+  "chunk_count": 213
+ },
+ "pc/E04-SKU价格总表.md": {
+  "live_chunks": 217,
+  "points": 217,
+  "enabled_points": 217,
+  "flagged": 0,
+  "chunk_count": 217
+ },
+ "pc/E05-跨境退货政策.html": {
+  "live_chunks": 4,
+  "points": 4,
+  "enabled_points": 4,
+  "flagged": 0,
+  "chunk_count": 4
+ },
+ "pc/E06-供应商协作须知.docx": {
+  "live_chunks": 4,
+  "points": 4,
+  "enabled_points": 2,
+  "flagged": 2,
+  "chunk_count": 4
+ },
+ "legal/02-平台交易规则.docx": {
+  "live_chunks": 78,
+  "points": 78,
+  "enabled_points": 78,
+  "flagged": 0,
+  "chunk_count": 78
+ },
+ "paper/03-多路召回检索方法研究.pdf": {
+  "live_chunks": 18,
+  "points": 18,
+  "enabled_points": 18,
+  "flagged": 0,
+  "chunk_count": 18
+ },
+ "faq/04-常见问题.html": {
+  "live_chunks": 45,
+  "points": 45,
+  "enabled_points": 45,
+  "flagged": 0,
+  "chunk_count": 45
+ },
+ "manual/05-AirPure空气净化器手册.docx": {
+  "live_chunks": 23,
+  "points": 23,
+  "enabled_points": 23,
+  "flagged": 0,
+  "chunk_count": 23
+ },
+ "contract/06-仓储物流服务合同.pdf": {
+  "live_chunks": 17,
+  "points": 17,
+  "enabled_points": 17,
+  "flagged": 0,
+  "chunk_count": 17
+ },
+ "fulldoc/01-售后服务政策.md": {
+  "live_chunks": 113,
+  "points": 113,
+  "enabled_points": 113,
+  "flagged": 0,
+  "chunk_count": 113
+ }
+}

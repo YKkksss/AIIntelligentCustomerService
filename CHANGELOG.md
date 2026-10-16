@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### 测试（M1 端到端测试与检索质量评测，2026-10-16）
+- `backend/scripts/e2e_m1/`：可复现的虚构公司语料（7 份 4k–26k 字主文档 + 超大表 + 15 类边界文件）、37 个端到端场景（真实 worker + 百炼向量化）、61 题检索评测（向量 / 全文 / RRF / RRF+重排，前缀与父子对比）、beat 加速验证。
+- 新增 [M1 端到端测试报告](docs/06-development/08-M1端到端测试报告.md)；待复验清单更新开发机已验证项，新增 M2 拒答阈值复核。
+
+### 修复
+- 文本清洗去除 DEL 与 C1 控制字符；TXT 解码后无法解码字符占比 > 5% 判为乱码并拒绝。
+- 切块缩减重叠时只保留完整句子，避免新块以半句话开头。
+
 ### 新增（M1.6 知识库服务、对账与兜底，2026-10-16；M1 里程碑本地验收通过）
 - `KnowledgeService`：`upload_file`、`import_url`（导入即抓取存快照，按内容 SHA-256 去重）、`replace_file`（FR-KB-08 三条哈希规则）、`rebuild_document` / `rebuild_app`、`delete_document`（立即不可检索 → `cleanup_document`）、`request_reconcile`。
 - `IngestService.run_reconcile` / `reconcile_app`（逐文档对账，区分 mismatch / orphan）、`run_sweep`（超时删除、遗留旧版本、孤儿点）；删除清理覆盖全部文件版本并更新 job 状态。

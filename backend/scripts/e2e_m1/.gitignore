@@ -1,0 +1,5 @@
+out/
+results/apps.json
+results/qvec_cache.json
+results/rerank_cache.json
+__pycache__/
