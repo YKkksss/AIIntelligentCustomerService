@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### 新增（M1.2 数据表与应用配置，2026-10-16）
+- 迁移 `0002`：apps、user_app_roles、documents、chunks（`tsv` 生成列 + GIN）、jobs；ORM 模型与 repository（`AppRepository`、`MemberRepository`、`DocumentRepository`、`ChunkRepository`、`JobRepository`，均继承 `AppScopedRepository`）。
+- `rag/config.py`：`AppRagConfig`、`IntentConfig`、`HandoffConfig`（含 `ServiceHours`）、`ChunkConfig`、`SessionConfig`/`EffectiveSessionConfig`、`WebhookConfig` 唯一定义；`validate_app_config` 做模型注册表、80% 窗口、压缩模型窗口、消息向量开关、排队超时 < 空闲关闭等跨对象校验。
+- `apps.service`：创建 / 读取（`404 APP_NOT_FOUND`）/ 部分更新（`rag_config.intent` 深合并、`config_version` 与 `chunk_config_version` 维护、`custom_dict` 变化标记）；非法配置一次列出全部错误 `422 VALIDATION_ERROR`。
+- 文档：数据库设计补齐 apps DDL 的 `session_config`/`webhook_config` 与各配置取值范围；模块划分说明 apps 的 `app_id` 同义属性。
+
 ### 新增（M1.1 外部依赖封装，2026-10-16）
 - `vectorstore/qdrant.py`：共享 Qdrant 集合命名（前缀须 `aics_`）、建集合（on_disk + int8 量化 + payload 索引，`app_id` 租户索引）、所有读写强制 `app_id`；`qdrant-client` 兼容 1.18。
 - `storage/`：`Storage` 协议与 `LocalStorage`（原子写、路径穿越校验）。

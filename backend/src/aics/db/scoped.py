@@ -38,12 +38,13 @@ class AppScopedRepository[M: Base]:
         return select(self.model).where(self.model.app_id == app_id)  # type: ignore[attr-defined]
 
     def _where_id(self, app_id: UUID, id: UUID) -> list[Any]:
+        """主键条件；复合主键的表（如 user_app_roles）在子类中覆盖。第一个元素必须是 app_id 条件。"""
         m = self.model
         return [m.app_id == app_id, m.id == id]  # type: ignore[attr-defined]
 
     # ---- 通用 CRUD ----
     async def get(self, app_id: UUID, id: UUID) -> M | None:
-        stmt = self._scoped(app_id).where(self.model.id == id)  # type: ignore[attr-defined]
+        stmt = self._scoped(app_id).where(*self._where_id(app_id, id)[1:])
         return (await self.session.execute(stmt)).scalar_one_or_none()
 
     async def list(
