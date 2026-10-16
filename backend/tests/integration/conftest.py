@@ -16,7 +16,7 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from aics.core.config import get_settings
-from aics.db.models import App, Chunk, ChunkParent, Document, Job, User
+from aics.db.models import App, Chunk, ChunkParent, Conversation, Document, Job, User
 from aics.modules.apps.service import AppService
 from aics.storage.local import LocalStorage
 from aics.vectorstore import QdrantVectorStore
@@ -31,6 +31,43 @@ def ingest_migrated(monkeypatch: pytest.MonkeyPatch) -> str:
     get_settings.cache_clear()
     command.upgrade(Config(str(Path(__file__).resolve().parents[2] / "alembic.ini")), "head")
     return DB
+
+
+@pytest.fixture
+def pg_migrated(monkeypatch: pytest.MonkeyPatch) -> str:
+    """PG only (no Qdrant): migrated to head."""
+    if not DB:
+        pytest.skip("未设置 AICS_TEST_DB_URL")
+    monkeypatch.setenv("AICS_DB_URL", DB)
+    get_settings.cache_clear()
+    command.upgrade(Config(str(Path(__file__).resolve().parents[2] / "alembic.ini")), "head")
+    return DB
+
+
+@pytest.fixture
+async def pg(pg_migrated: str) -> AsyncIterator[dict[str, Any]]:
+    """Two fresh apps (A, B) for isolation tests; their conversations are removed afterwards."""
+    engine = create_async_engine(pg_migrated)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    async with sessions() as s:
+        u = User(email=f"u{uuid.uuid4().hex[:8]}@x.io", display_name="u", password_hash="h")
+        s.add(u)
+        await s.flush()
+        svc = AppService(s)
+        a = await svc.create_app(name=f"it-{uuid.uuid4().hex[:6]}", created_by=u.id)
+        b = await svc.create_app(name=f"it-{uuid.uuid4().hex[:6]}", created_by=u.id)
+        await s.commit()
+        ids, user_id = [a.id, b.id], u.id
+    try:
+        yield {"sessions": sessions, "app_a": ids[0], "app_b": ids[1], "user_id": user_id}
+    finally:
+        async with sessions() as s:
+            # messages / facts / fact history cascade from conversations
+            await s.execute(delete(Conversation).where(Conversation.app_id.in_(ids)))
+            await s.execute(delete(App).where(App.id.in_(ids)))
+            await s.execute(delete(User).where(User.id == user_id))
+            await s.commit()
+        await engine.dispose()
 
 
 @pytest.fixture

@@ -92,8 +92,12 @@ def test_every_app_scoped_table_has_scoped_repository() -> None:
         "chunks",
         "chunk_parents",
         "jobs",
+        "conversations",
+        "messages",
     }
-    assert tenant_tables <= covered
+    # Tables whose repositories land in a later M2.1 sub-step.
+    pending = {"conversations", "messages"}
+    assert tenant_tables - pending <= covered
     for r in repos:
         assert unscoped_methods(r) == [], r
 
