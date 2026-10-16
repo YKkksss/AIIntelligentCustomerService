@@ -20,9 +20,12 @@ import structlog
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langgraph.runtime import Runtime
 
+from aics.core import metrics
 from aics.core.errors import AppError
+from aics.core.masking import mask_identifier
 from aics.rag import prompting
 from aics.rag.citations import leaks_instructions, parse_citations
+from aics.rag.identifiers import check_identifiers
 from aics.rag.llm import StreamState
 from aics.rag.retrieval import Candidate
 from aics.rag.schemas import (
@@ -288,12 +291,32 @@ async def postprocess(state: RagState, runtime: Runtime[RagDeps]) -> dict[str, A
     citations = [citation_of(n, cands[n - 1]) for n in parsed.used]
     if not citations:
         degraded.append("no_citation")
+    post: dict[str, Any] = {"cited": parsed.used, "dropped": parsed.dropped}
+    ids = check_identifiers(
+        parsed.text,
+        facts=state.get("facts") or {},
+        question=inp.question,
+        sources=[c.text for c in cands],
+    )
+    if ids.checked:
+        post["identifiers"] = {
+            "checked": ids.checked,
+            "mismatched": [mask_identifier(k, v) for k, v in ids.mismatched],
+        }
+    if ids.mismatch:
+        degraded.append("identifier_mismatch")
+        metrics.inc("aics_identifier_mismatch_total", app_id=str(inp.app_id))
+        log.warning(
+            "rag.identifier_mismatch",
+            app_id=str(inp.app_id),
+            values=[mask_identifier(k, v) for k, v in ids.mismatched],
+        )
     return merged(
         state,
         answer=parsed.text,
         citations=citations,
         degraded=degraded,
-        trace={"postprocess": {"cited": parsed.used, "dropped": parsed.dropped}},
+        trace={"postprocess": post},
     )
 
 
