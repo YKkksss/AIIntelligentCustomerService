@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### 新增（M2.1 会话与消息数据模型，2026-10-16）
+- 迁移 `0006`：`conversations`（状态 / 空闲计时 / 转人工 / 待回访 / 事件序号 / `summary*`）、`messages`（四种角色、`kind`、`token_count`、`search_text` + 生成列 `tsv` 与 GIN 索引、意图与回答字段、`prompt_version`、`citations`）、`system_settings`（种子 `default_session_config`）；CHECK 约束覆盖枚举、system 专属 `kind`、assistant 专属回答字段。
+- 迁移 `0007`：`conversation_facts`（`category`、`importance`、`source`、`version`、`retracted_at`，key 白名单 CHECK，`UNIQUE(conversation_id, key)`）与追加写的 `conversation_fact_history`（操作形状 CHECK、BEFORE UPDATE 触发器拒绝更新）。
+- `chat.repository`：`ConversationRepository`（创建 / 列表 / 幂等关闭）、`MessageRepository.append`（自动计算 `token_count` / `search_text`，锁会话行维护 `message_count`、`last_message_at`、`last_activity_at`、`idle_notice_sent_at`、标题）；输入模型 `NewConversation` / `NewMessage`。
+- `apps.system_settings`：平台默认会话设置读写；`AppService.load()` 使用存储的平台默认。
+- `memory`：`ConversationStore` 接口、`InMemoryConversationStore`、`PgConversationStore`（摘要乐观锁与最近 5 版历史、按轮读取、会话内关键词回查、版本化事实原语与追加写历史）；`core.errors` 新增 `ConversationNotFoundError`、`ConflictError`。
+
 ### 设计（设计讨论 0002 对话记忆方案，2026-10-16）
 - 新增设计讨论 0002（参考 Mem0、Zep、Letta、LangGraph、ChatGPT 记忆的分层记忆架构）与 ADR-0014（修订 ADR-0006 第 4 条）。
 - 关键事实 `enable_facts` 默认改为 `true`（`rag/config.py`），`conversation_facts` 由 M5 提前到 M2.1（表）/ M2.5（逻辑）；事实增加 `category`、`importance`、`source`、`version`、`retracted_at`，新增追加写的 `conversation_fact_history`，对账 ADD / UPDATE / NOOP / RETRACT。
