@@ -29,6 +29,8 @@ def node_of(messages: list[BaseMessage]) -> str:
         return "condense"
     if first.startswith("判断以下资料是否足以回答问题"):
         return "judge"
+    if "用户在询问他自己" in first:
+        return "recall"
     if "用户刚才只是在寒暄" in first:
         return "chitchat"
     return "generate"

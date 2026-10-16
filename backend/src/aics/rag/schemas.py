@@ -17,7 +17,9 @@ from aics.rag.config import AppRagConfig, HandoffConfig
 from aics.rag.ports import ChatTurn
 
 AnswerType = Literal["answer", "refused", "handoff"]
-FinalIntent = Literal["kb_qa", "chitchat", "human", "out_of_scope", "action", "clarify", "blocked"]
+FinalIntent = Literal[
+    "kb_qa", "chitchat", "human", "out_of_scope", "action", "clarify", "recall", "blocked"
+]
 IntentSource = Literal["rule", "vector", "llm", "fallback"]
 
 QUESTION_MAX_CHARS = 4000  # 开放接口单条消息上限（接口规范），rag 再兜底一次

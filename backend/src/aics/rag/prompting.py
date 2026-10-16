@@ -22,6 +22,7 @@ PROMPT_FILES: dict[str, str] = {
     "generate": "rag/prompts/generate.md",
     "judge": "rag/prompts/judge.md",
     "chitchat": "rag/prompts/chitchat.md",
+    "recall": "rag/prompts/recall.md",
 }
 # Fixed order + abbreviation for the `prompt_version` string (e.g. "cc1.gen1.judge1").
 PROMPT_ABBR: tuple[tuple[str, str], ...] = (
@@ -30,6 +31,7 @@ PROMPT_ABBR: tuple[tuple[str, str], ...] = (
     ("judge", "judge"),
     ("generate", "gen"),
     ("chitchat", "chat"),
+    ("recall", "rc"),
 )
 
 ANSWER_STYLES: dict[str, str] = {

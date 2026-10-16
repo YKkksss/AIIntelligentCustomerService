@@ -7,6 +7,7 @@ load_context → condense_classify (no history: ∥ retrieve + fuse) → route_i
                                             ↘ refuse | handoff
   out_of_scope → scope_check ─ strong KB evidence → judge │ else → out_of_scope_reply
   chitchat → chitchat_reply (LLM) │ clarify → clarify_reply │ human / action → handoff
+  recall → recall_reply (answer from conversation facts / summary / history, 设计讨论 0007)
 
 Streaming (§6): nodes push `TraceEvent` (debug only) → `CitationsEvent` (kb_qa answer, before
 the first token) → `DeltaEvent`* through the LangGraph custom stream; `run_rag` yields them and
@@ -47,6 +48,7 @@ def build_graph() -> Any:
     g.add_node("out_of_scope_reply", replies.out_of_scope_reply)
     g.add_node("clarify_reply", replies.clarify_reply)
     g.add_node("blocked_reply", replies.blocked_reply)
+    g.add_node("recall_reply", replies.recall_reply)
     g.add_node("scope_check", classify.scope_check)
 
     g.add_edge(START, "guard")
@@ -75,6 +77,7 @@ def build_graph() -> Any:
         "out_of_scope_reply",
         "clarify_reply",
         "blocked_reply",
+        "recall_reply",
     ):
         g.add_edge(terminal, END)
     return g.compile(name="aics_rag")

@@ -88,6 +88,9 @@ def check_turn(spec: dict[str, Any], res: Any, facts: dict[str, str]) -> dict[st
     out: dict[str, Any] = {}
     if spec.get("rewrite_any"):
         out["rewrite_ok"] = any(s in r for s in spec["rewrite_any"])
+        # M2.6: a recall turn answers from memory instead of rewriting; count the remembered
+        # value in the rewrite *or* the answer (the user-visible outcome).
+        out["memory_ok"] = any(s in r or s in a for s in spec["rewrite_any"])
     if spec.get("answer_any"):
         out["answer_ok"] = res.answer_type == "answer" and any(s in a for s in spec["answer_any"])
     if spec.get("forbid"):
@@ -107,6 +110,9 @@ async def main() -> None:
     ap.add_argument("--budgets", default="3000,8000,16000")
     ap.add_argument("--only", default="")
     ap.add_argument("--max-yuan", type=float, default=2.8)
+    # Quality runs isolate model latency: a slow upstream would otherwise turn classify
+    # timeouts (default 2000 ms) into kb_qa fallbacks and hide prompt changes (M2.6 ④).
+    ap.add_argument("--classify-timeout-ms", type=int, default=2000)
     args = ap.parse_args()
     s = get_settings()
     engine = create_async_engine(s.db_url)
@@ -143,7 +149,11 @@ async def main() -> None:
     report: dict[str, Any] = {"conversations": len(convs), "budgets": {}}
     out_path = RES / f"memory_eval_m25{'_' + args.only.replace(',', '_') if args.only else ''}.json"
     for budget in [int(b) for b in args.budgets.split(",")]:
-        cfg = AppRagConfig(history_token_budget=budget, compact_trigger_tokens=2 * budget)
+        cfg = AppRagConfig(
+            history_token_budget=budget,
+            compact_trigger_tokens=2 * budget,
+            intent={"classify_timeout_ms": args.classify_timeout_ms},
+        )
         params = CompactParams(
             keep_recent_turns=cfg.keep_recent_turns,
             compact_trigger_tokens=cfg.compact_trigger_tokens,
@@ -312,7 +322,7 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
     def passed(r: dict[str, Any]) -> bool:
         return (
-            r.get("rewrite_ok", True)
+            r.get("memory_ok", r.get("rewrite_ok", True))
             and r.get("answer_ok", True)
             and not r.get("forbid_hit")
             and r.get("facts_ok", True)
@@ -325,6 +335,7 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "update_correctness": _rate([passed(r) for r in tagged("update") + tagged("retract")]),
         "confusion_rate": _rate(confused),
         "rewrite_correctness": _rate([r["rewrite_ok"] for r in rows if "rewrite_ok" in r]),
+        "memory_use": _rate([r["memory_ok"] for r in rows if "memory_ok" in r]),
         "answer_quality": _rate([r["answer_ok"] for r in rows if "answer_ok" in r]),
         "fact_accuracy": _rate([r["facts_ok"] for r in rows if "facts_ok" in r]),
         "trap_pass": _rate([passed(r) for r in tagged("trap")]),

@@ -55,7 +55,7 @@ def test_messages_ddl() -> None:
         "USING gin (tsv)",
         "prompt_version TEXT",
         "citations JSONB",
-        "intent IN ('kb_qa', 'chitchat', 'human', 'out_of_scope', 'action', 'clarify', 'blocked')",
+        "intent IN ('kb_qa', 'chitchat', 'human', 'out_of_scope', 'action', 'clarify', 'recall', 'blocked')",
         "intent_confidence BETWEEN 0 AND 1",
         "ON DELETE CASCADE",
         "DEFAULT clock_timestamp()",

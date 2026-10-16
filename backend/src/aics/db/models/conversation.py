@@ -50,7 +50,16 @@ MESSAGE_KINDS = (
     "handoff_idle_closed",
 )
 ANSWER_TYPES = ("answer", "refused", "handoff", "error")
-INTENTS = ("kb_qa", "chitchat", "human", "out_of_scope", "action", "clarify", "blocked")
+INTENTS = (
+    "kb_qa",
+    "chitchat",
+    "human",
+    "out_of_scope",
+    "action",
+    "clarify",
+    "recall",
+    "blocked",
+)
 INTENT_SOURCES = ("rule", "vector", "llm", "fallback")
 
 

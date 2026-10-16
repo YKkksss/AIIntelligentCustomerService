@@ -146,7 +146,7 @@ async def test_twenty_samples(
         assert not any(isinstance(e, CitationsEvent) for e in events)
         assert "generate" not in llm.nodes()
     assert res.intent.name == "kb_qa" and res.intent.source == "llm"
-    assert res.prompt_versions["condense_classify"] == "1"
+    assert res.prompt_versions["condense_classify"] == "2"
     if verdict is not None:
         assert "judge" in llm.nodes()
     elif score is not None:
@@ -425,7 +425,7 @@ async def test_prompt_version_string_and_model() -> None:
     q = "退货需要什么条件"
     llm = FakeLLMProvider(make_responder(judge={q: True}))
     res, _ = await run_rag_collect(inp(q), ports(kb_with({q: 0.7}), llm))
-    assert res.prompt_version == "cc1.judge1.gen1"
+    assert res.prompt_version == "cc2.judge1.gen1"
     assert res.llm_model == "fake-chat"
 
 

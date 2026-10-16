@@ -273,3 +273,18 @@ async def test_maybe_compact_enqueues_online(pg: dict[str, Any]) -> None:
     app_id, cid, version, params = rt.enqueued[0]
     assert (app_id, cid, version) == (a, r.conversation_id, 0)
     assert params.keep_recent_turns == 1 and params.compact_trigger_tokens == 500
+
+
+async def test_recall_answers_from_captured_facts(pg: dict[str, Any]) -> None:
+    """M2.5 known limit: asking back for info given earlier answers from facts (0007)."""
+    a = pg["app_a"]
+    svc = ChatService(make_runtime(pg["sessions"]))
+    first = await svc.handle_turn(ask(a, "订单 2026101400123 退货要几天？"))
+    res = await svc.handle_turn(ask(a, "我刚才给你的订单号是多少？", first.conversation_id))
+    assert res.answer_type == "answer" and res.handoff is False
+    assert res.intent == {"name": "recall", "confidence": 0.95, "source": "llm"}
+    assert "2026101400123" in res.answer and res.citations == []
+    bot = (await messages_of(pg, a, res.conversation_id))[-1]
+    assert bot.intent == "recall" and bot.decision_reason == "intent:recall"
+    conv = await conv_of(pg, a, res.conversation_id)
+    assert conv.refusal_streak == 0 and conv.handoff_status == "none"

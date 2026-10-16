@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-Intent = Literal["kb_qa", "chitchat", "human", "out_of_scope", "action", "clarify"]
+Intent = Literal["kb_qa", "chitchat", "human", "out_of_scope", "action", "clarify", "recall"]
 SLOT_KEYS: tuple[str, ...] = ("order_no", "product", "phone")  # v1 fixed (§5.2.3)
 
 SlotKey = Annotated[str, StringConstraints(pattern=r"^[a-z_]{1,32}$")]

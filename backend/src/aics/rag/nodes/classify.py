@@ -35,7 +35,14 @@ log = structlog.get_logger()
 CLASSIFY_MAX_TOKENS = 200  # 意图识别 §5.2.1
 CONDENSE_MAX_TOKENS = 200
 CONDENSE_TIMEOUT_S = 5.0
-OPTIONAL_INTENTS: tuple[str, ...] = ("chitchat", "human", "out_of_scope", "action", "clarify")
+OPTIONAL_INTENTS: tuple[str, ...] = (
+    "chitchat",
+    "human",
+    "out_of_scope",
+    "action",
+    "clarify",
+    "recall",
+)
 
 
 def _data_vars(state: RagState) -> dict[str, str]:
@@ -197,6 +204,7 @@ ROUTES = {
     "action": "handoff",
     "out_of_scope": "out_of_scope_reply",
     "clarify": "clarify_reply",
+    "recall": "recall_reply",
 }
 
 

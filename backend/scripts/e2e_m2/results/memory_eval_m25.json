@@ -4,40 +4,39 @@
   "3000": {
    "metrics": {
     "run_turns": 56,
-    "retention": 0.882,
-    "update_correctness": 0.909,
+    "retention": 0.941,
+    "update_correctness": 1.0,
     "confusion_rate": 0.0,
     "rewrite_correctness": 0.864,
-    "answer_quality": 1.0,
+    "memory_use": 0.955,
+    "answer_quality": 0.962,
     "fact_accuracy": 1.0,
-    "trap_pass": 0.857,
+    "trap_pass": 1.0,
     "identifier_mismatch_flags": 0,
     "history_gap_turns": 7,
-    "avg_prompt_tokens": 3570,
-    "avg_history_tokens": 1481
+    "avg_prompt_tokens": 4019,
+    "avg_history_tokens": 1544
    },
    "compactions": {
     "success": 9
    },
    "cost": {
     "llm": {
-     "calls": 17,
-     "prompt_tokens": 47212,
-     "cache_hit_tokens": 19584,
-     "completion_tokens": 1836,
-     "yuan_conservative": 0.1091,
-     "yuan_with_cache": 0.0739
+     "calls": 9,
+     "prompt_tokens": 28380,
+     "cache_hit_tokens": 8448,
+     "completion_tokens": 960,
+     "yuan_conservative": 0.0644,
+     "yuan_with_cache": 0.0492
     },
-    "rerank_yuan": 0.0144
+    "rerank_yuan": 0.0054
    },
    "live_first_token_ms": [
-    922,
-    952,
-    957,
-    1046,
-    1115
+    995,
+    1465,
+    2025
    ],
-   "wall_s": 44.2,
+   "wall_s": 30.2,
    "conversations": [
     {
      "conv": "c01",
@@ -71,31 +70,32 @@
      "conv": "c02",
      "summary_version": 1,
      "summary": {
-      "user_goal": "用户咨询星河 X5 空气净化器保养与滤网更换，以及退货、换货、发票、退款、物流、会员、支付等售后与平台规则问题。",
+      "user_goal": "用户咨询星河 X5 空气净化器保养与滤网更换，并询问退货、换货、发票、退款、物流、支付、会员等售后与平台规则。",
       "confirmed_info": [
        "用户购买星河 X5 空气净化器，已使用两个月",
        "X5 使用 F5-HEPA13 滤网，不可水洗",
+       "预滤网每 4 周清水冲洗一次，晾干装回",
        "X5 滤网建议每 8 个月更换，重度污染地区缩短至 5 个月",
        "更换滤网后长按“复位”键 3 秒清除提醒",
-       "预滤网每 4 周用清水冲洗，晾干后装回",
-       "X7 适用面积 45–80 ㎡，40 ㎡客厅够用",
-       "售后申请一般 24 小时内审核，大促可能延长至 48 小时",
-       "货到付款单笔上限 3000 元，部分偏远地区和大件不支持"
+       "X7 适用面积 45–80 ㎡，40 ㎡ 客厅够用",
+       "货到付款单笔上限 3000 元，部分偏远地区和大件不支持",
+       "人工客服服务时间每天 9:00–22:00，智能客服 7×24 小时"
       ],
       "solutions_given": [
        "外包装轻微破损不影响七天无理由退货，严重破损可能扣减退款",
-       "客服不会索要验证码、银行卡密码或要求转账，可通过 App 或官方渠道核实",
-       "平台商品来自品牌授权或官方渠道，支持假一赔四，可提交鉴定申请",
-       "默认开电子普通发票，纸质增值税专用发票需企业提交资质申请",
-       "上门取件未到可在售后单修改取件时间或自行寄回上传运单号",
+       "售后申请一般 24 小时内审核，大促可能延至 48 小时，短信通知",
+       "客服不会索要验证码、银行卡密码或要求转账，可报警",
+       "商品来自品牌授权或官方渠道，支持假一赔四，可申请第三方鉴定",
+       "默认开电子普通发票；纸质增值税专用发票需企业提交资质申请",
+       "上门取件未到可修改取件时间、自行寄回上传运单号或提交投诉",
        "电子发票可在订单详情页申请，填公司名称和税号，24 小时内发邮箱",
-       "赠品需与商品一起退回，缺失或已使用按赠品价值扣减退款",
-       "退款进度可在“我的-售后服务”查看，各节点有短信和站内信通知"
+       "赠品需随商品一起退回，缺失或已使用按赠品价值扣减"
       ],
       "open_issues": [
        "快递显示签收但用户未收到，需联系快递员或提交“未收到货”工单",
-       "用户询问线下门店周末关门时间，已拒答",
-       "用户询问是否支持比特币支付，已拒答"
+       "收货地址填错，未发货可改最多 2 次，已发货需联系快递公司改派",
+       "E07 表示后盖未关闭，需检查后盖卡扣是否扣紧",
+       "黑卡会员权益咨询：每月退货运费券、专属客服、生日礼包、会员价"
       ]
      },
      "fact_history": [
@@ -119,6 +119,13 @@
        "星河 X7",
        "星河 X5",
        "slot"
+      ],
+      [
+       "other:usage_duration",
+       "add",
+       null,
+       "用了两个月",
+       "compaction"
       ],
       [
        "other:filter_model",
@@ -286,33 +293,31 @@
      "conv": "c06",
      "summary_version": 1,
      "summary": {
-      "user_goal": "用户咨询退货、换货、发票、支付、售后审核、退款、物流、星河豆、会员权益、价保、地址修改等售后与平台规则问题，涉及订单2026090100345。",
+      "user_goal": "用户咨询沙发退货（订单号2026090100345，大促购买，家离仓库约30公里），并询问退换货、发票、支付、售后审核、客服时间、星河豆、货到付款、黑卡会员、取消订单、运费险、上门取件等问题。",
       "confirmed_info": [
        "订单号 2026090100345，大促期间购买沙发，家离仓库约 30 公里",
-       "外包装轻微破损不影响七天无理由退货，严重破损可能扣减部分退款",
-       "签收后 15 天内质量问题可换同款同规格，非质量问题需先退货再下单，换货运费平台承担",
-       "专票需订单完成后 90 天内在发票中心提交企业资质，审核后 5–7 个工作日邮寄",
-       "售后申请一般 24 小时内审核，大促可能延长至 48 小时，短信通知",
-       "人工客服服务时间每天 9:00–22:00，智能客服 7×24 小时",
-       "平台商品来自品牌授权或官方渠道，支持假一赔四",
-       "100 星河豆抵扣 1 元，单笔最多抵扣订单金额 50%，过期清零"
+       "家具大件类商品自签收日起 7 天内可申请无理由退货",
+       "大促期间售后审核时效可能顺延 1 至 2 个工作日",
+       "商家应在 48 小时内审核，物流单号须在申请通过后 48 小时内填写",
+       "签收后 15 天内质量问题可换同款同规格，非质量问题需先退货再下单",
+       "增值税专用发票需订单完成后 90 天内在发票中心提交企业资质申请",
+       "电子普通发票下单后在订单详情页申请，一般 24 小时内开具",
+       "星河豆自获得之日起 15 个月内有效，100 星河豆抵扣 1 元，单笔最多抵订单金额 50%"
       ],
       "solutions_given": [
+       "外包装轻微破损不影响七天无理由退货，严重破损可能扣减部分退款",
+       "换货支持，质量问题 15 天内可换同款同规格，换货寄回运费由平台承担",
+       "专票申请需营业执照、开户行及账号、注册地址电话，审核后 5–7 个工作日邮寄",
+       "售后申请一般 24 小时内审核，大促可能延长到 48 小时，结果短信通知",
+       "人工客服服务时间每天 9:00–22:00，智能客服 7×24 小时",
+       "平台商品来自品牌授权或官方渠道，支持假一赔四，可提交鉴定申请",
        "退货可选上门取件或自行寄回，自行寄回需 7 天内在售后单填写运单号",
-       "未发货订单可在订单详情页取消，款项原路退回；已发货可拒收或签收后退货",
-       "退款原路返回：余额即时，支付宝微信 1–3 工作日，银行卡 1–7 工作日",
-       "快递显示签收未收到，先联系快递员，48 小时未找到可提交未收到货工单",
-       "货到付款单笔上限 3000 元，超限需在线支付，部分偏远地区和大件不支持",
-       "电子普通发票可在订单详情页申请，填公司名称和税号，24 小时内发邮箱",
-       "价保：普通商品 7 天，大促商品 30 天，订单详情页申请价保退差价",
-       "未发货订单可修改收货地址，每单最多 2 次；已发货需联系快递改派可能收费"
+       "货到付款单笔上限 3000 元，超限需在线支付，部分偏远地区和大件不支持"
       ],
       "open_issues": [
-       "用户提出退沙发订单 2026090100345，需人工客服办理，正在转接",
-       "约好上门取件但快递员一直没来，待处理",
-       "用户询问星河豆第 3 版规则有效期，该版本已于 2020 年废止",
-       "用户询问线下门店周末几点关门，已拒答",
-       "用户询问是否支持比特币支付，已拒答"
+       "家离仓库 30 公里是否影响取件或运费，资料中无相关内容",
+       "约好上门取件但快递员一直没来，可修改取件时间、改自行寄回或提交投诉",
+       "用户曾接到冒充客服索要验证码的电话，已提醒勿透露并核实官方渠道"
       ]
      },
      "fact_history": [
@@ -331,6 +336,13 @@
        "slot"
       ],
       [
+       "product",
+       "update",
+       "沙发",
+       "书籍",
+       "slot"
+      ],
+      [
        "issue_type",
        "add",
        null,
@@ -338,18 +350,25 @@
        "compaction"
       ],
       [
-       "other:distance_to_warehouse_km",
+       "other:distance_to_warehouse",
        "add",
        null,
-       "30",
+       "家离仓库约30公里",
        "compaction"
       ],
       [
-       "other:promotion_purchase",
+       "other:fraud_call",
        "add",
        null,
-       "大促期间购买",
+       "有人冒充客服索要验证码",
        "compaction"
+      ],
+      [
+       "product",
+       "update",
+       "书籍",
+       "沙发",
+       "slot"
       ]
      ]
     },
@@ -357,30 +376,33 @@
      "conv": "c07",
      "summary_version": 1,
      "summary": {
-      "user_goal": "用户咨询退货、取消订单、发货时效、运费险、星河豆、发票、退款、价保、会员权益等售后与平台规则问题，涉及海外仓订单 HW2026100566881。",
+      "user_goal": "用户咨询海外仓直邮订单退货、取消订单、发货时效、运费险、星河豆、发票、退款、换货、上门取件、价保、会员权益等售后与平台规则问题。",
       "confirmed_info": [
-       "订单号 HW2026100566881，海外仓直邮，用户想退货",
-       "海外仓直邮订单退款原路退回，15 个工作日内到账，汇率差不予补偿",
-       "港澳台订单须寄回香港集运仓，寄回运费最高报销 60 元",
-       "现货商品付款后 48 小时内发货，预售以商品页约定为准",
-       "100 星河豆抵扣 1 元，单笔最多抵扣订单金额 50%",
-       "货到付款单笔上限 3000 元，超限需在线支付",
-       "普通商品保价期 7 天，大促期间 30 天，每件商品最多申请 3 次保价",
-       "人工客服服务时间每天 9:00–22:00，智能客服 7×24 小时"
+       "订单号 HW2026100566881，海外仓直邮订单",
+       "海外仓直邮订单不支持无理由退货，仅受理质量问题（签收后30天内）",
+       "海外仓直邮退款原路退回，15个工作日内到账，汇率差不予补偿",
+       "港澳台订单须寄回香港集运仓，寄回运费最高报销60元",
+       "未发货订单可在订单详情页点击“取消订单”，款项原路退回",
+       "现货商品付款后48小时内发货，预售以商品页约定为准",
+       "100星河豆抵扣1元，单笔最多抵扣订单金额50%",
+       "货到付款单笔上限3000元，部分偏远地区和大件商品不支持"
       ],
       "solutions_given": [
-       "未发货订单可在订单详情页点击“取消订单”，款项原路退回；已发货可拒收或签收后退货",
-       "运费险退货完成后自动理赔，按首重标准，一般 1–3 个工作日到账",
-       "签收后 15 天内质量问题可换同款同规格，非质量问题先退货再下单，换货寄回运费平台承担",
-       "上门取件未到可在售后单修改取件时间，或自行寄回上传运单号，多次未上门可投诉",
-       "默认开电子普通发票，公司报销可填抬头税号，24 小时内发邮箱；纸质专票需企业提交资质申请",
-       "退款原路退回：余额即时，支付宝微信 1–3 个工作日，银行卡 1–7 个工作日",
-       "未发货前可改收货地址，每单最多 2 次；已发货需联系快递改派，可能产生费用",
-       "退货可选上门取件或自行寄回，自行寄回需 7 天内在售后单填运单号"
+       "海外仓直邮质量问题退货：签收后30天内申请，寄回所在国海外仓，运费平台承担",
+       "已发货订单可拒收或签收后申请退货",
+       "运费险退货完成后自动理赔，按首重标准，1–3个工作日到账",
+       "签收后15天内质量问题可换同款同规格，换货寄回运费平台承担",
+       "未收到货可先联系快递员，48小时未找到可提交“未收到货”工单",
+       "上门取件未到可修改取件时间、自行寄回上传运单号或提交投诉",
+       "电子普通发票在订单详情页申请，24小时内发邮箱，可用于报销",
+       "退款原路返回：余额即时，支付宝微信1–3工作日，银行卡1–7工作日"
       ],
       "open_issues": [
-       "订单 HW2026100566881 退货需人工客服办理，正在转接",
-       "快递显示签收但用户未收到，建议先联系快递员，48 小时内未找到可提交“未收到货”工单"
+       "用户反映有人冒充客服索要验证码，已提醒勿透露并核实官方渠道",
+       "用户咨询黑卡会员权益及是否值得开通",
+       "用户咨询同一商品保价次数，答复每件最多3次",
+       "用户咨询线下门店周末关门时间（已拒答）",
+       "用户咨询是否支持比特币支付（已拒答）"
       ]
      },
      "fact_history": [
@@ -568,36 +590,31 @@
      "conv": "c11",
      "summary_version": 3,
      "summary": {
-      "user_goal": "用户咨询订单2026092800486电视机签收第二天黑屏退货，并询问正品保障、退货包装、退款到账、售后审核、发货时间、赠品退回、验证码诈骗、黑卡会员、客服时间、货到付款上限、专票、星河豆、电子发票、保价次数、运费险、取件未到、换货、改地址、未收到货、退款进度、退货寄回、七天无理由范围、价保等问题。",
+      "user_goal": "用户咨询订单2026092800486电视机签收第二天黑屏退货，并询问赠品退回、星河豆、电子发票、售后审核、货到付款上限、换货、退款到账、未收到货、正品保障、客服时间、退款进度、价格保护、保价次数、运费险、黑卡会员、改地址、纸质发票、发货时间、退货寄回、外包装破损、七天无理由范围、验证码诈骗等问题。",
       "confirmed_info": [
-       "订单号已更正为2026092800486（原2026092800468最后两位写反）",
-       "电视机，四川成都，签收第二天黑屏，属质量问题，往返运费商家承担，上门取件费不用用户出",
+       "订单号已更正为2026092800486，之前2026092800468最后两位写反",
+       "电视机，四川成都，签收第二天黑屏",
        "平台商品来自品牌授权或官方渠道，支持假一赔四",
-       "退款原路返回：余额即时，支付宝/微信1–3个工作日，银行卡1–7个工作日",
-       "售后申请一般24小时内审核，大促可能延长到48小时",
-       "现货付款后48小时内发货，预售以商品页约定为准",
        "赠品需和商品一起退回，缺失或已使用按赠品价值扣减",
-       "人工客服每天9:00–22:00，智能客服7×24小时"
+       "星河豆为平台积分，确认收货后按实付金额发放，签到、评价晒单也可获得",
+       "100星河豆抵扣1元，单笔最多抵扣订单金额50%，有有效期过期清零",
+       "电子普通发票下单后在订单详情页申请，24小时内发邮箱，可填公司名称和税号",
+       "货到付款单笔上限3000元，超限需在线支付，部分偏远地区和大件不支持"
       ],
       "solutions_given": [
-       "正品保障：品牌授权或官方渠道，支持假一赔四，可提交鉴定申请",
-       "退货包装：商品完好、配件赠品齐全，轻微破损不影响七天无理由，严重破损可能扣减退款",
-       "退款到账：原路返回，余额即时，支付宝/微信1–3工作日，银行卡1–7工作日",
-       "售后审核：一般24小时内，大促可能48小时，短信通知",
-       "发货时间：现货付款后48小时内，预售按商品页约定",
-       "赠品退回：需一起退回，缺失或已使用按价值扣减",
-       "验证码诈骗：客服不会索要验证码，请勿透露，可通过App核实或报警",
-       "黑卡会员：每月退货运费券、专属客服、生日礼包、部分会员价"
+       "验证码诈骗：客服不会索要验证码、银行卡密码或要求转账，可通过App在线客服或官方渠道核实，必要时报警",
+       "黑卡会员：每月领退货运费券，有专属客服通道、生日礼包、部分商品会员价",
+       "客服时间：在线智能客服7×24小时，人工客服每天9:00–22:00，22点后可留言",
+       "价格保护：保价期内降价可退差价，普通商品7天，大促30天，订单详情页申请价保",
+       "保价次数：同一订单每件商品最多申请3次，优惠券形式退回不计入次数",
+       "改地址：未发货订单详情页可改，每单最多2次；已发货联系快递改派可能产生费用",
+       "发货时间：现货付款后48小时内发货，预售以商品页约定为准，大促可能延长",
+       "换货：签收后15天内质量问题可换同款同规格，非质量问题先退货再下单，寄回运费平台承担"
       ],
       "open_issues": [
        "订单2026092800486电视机黑屏退货需人工客服办理，正在转接",
        "约好上门取件快递员一直没来，可修改取件时间、自行寄回或投诉",
-       "想换货：签收后15天内质量问题可换同款同规格，非质量问题先退货再下单",
-       "收货地址填错：未发货可改，每单最多2次；已发货需联系快递改派可能产生费用",
-       "快递显示签收但未收到：先联系快递员，48小时内未找到可提交未收到货工单",
-       "星河豆：100豆抵1元，单笔最多抵订单金额50%，有有效期过期清零",
-       "电子发票：订单详情页申请，可填公司名称和税号，24小时内发邮箱，可报销",
-       "纸质专票：需企业在发票中心提交资质申请，审核通过后邮寄"
+       "质量问题退货往返运费由商家承担，非质量问题寄回运费由用户承担，上门取件费按距离计费"
       ]
      },
      "fact_history": [
@@ -675,10 +692,10 @@
      "tags": [
       "slot"
      ],
-     "rewritten": "订单 2026100811235 购买的羽绒服穿着不合适，如何退货",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
+     "rewritten": "你好，我上周买了一件羽绒服，订单号 2026100811235，穿着不合适想退。",
+     "intent": "kb_qa",
+     "answer_type": "answer",
+     "answer": "您好，服装鞋包类商品自签收日起 15 天内可申请无理由退货 [2]，需吊牌完好且不影响二次销售 [4]。\n\n您可以在订单详情页提交申请并上传凭证，商家会在 48 小时内审核 [1]。审核通过后按系统地址寄回，商家收货验货后确认退款，款项按原支付渠道退回 [1]，一般 3 个工作日内到账（银行卡最长 7 个工作日）[5]。\n\n请问您的订单是否已签收？签收日期是哪天？我可以帮您确认是否还在退货期限内。",
      "slots": {
       "order_no": "2026100811235",
       "product": "羽绒服"
@@ -697,7 +714,7 @@
      },
      "summary_version": 0,
      "recent_turns": 0,
-     "prompt_tokens": 1120,
+     "prompt_tokens": 2346,
      "foreign_ids": [],
      "facts_ok": true
     },
@@ -708,13 +725,12 @@
      "tags": [
       "update"
      ],
-     "rewritten": "订单号更正为 2026100811253，羽绒服退货的售后单提交后多久审核",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
+     "rewritten": "我的订单号是 2026100811253，不是之前说的 2026100811235",
+     "intent": "recall",
+     "answer_type": "answer",
+     "answer": "您后来更正为订单号 2026100811253，商品是羽绒服。",
      "slots": {
-      "order_no": "2026100811253",
-      "product": "羽绒服"
+      "order_no": "2026100811253"
      },
      "facts": {
       "order_no": "2026100811253",
@@ -724,13 +740,13 @@
      "context_usage": {
       "facts": 16,
       "summary": 0,
-      "recent": 368,
+      "recent": 535,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 0,
      "recent_turns": 6,
-     "prompt_tokens": 1402,
+     "prompt_tokens": 2354,
      "foreign_ids": [],
      "facts_ok": true
     },
@@ -745,7 +761,7 @@
      "rewritten": "羽绒服签收后几天内可以无理由退货",
      "intent": "kb_qa",
      "answer_type": "answer",
-     "answer": "服装鞋包类商品自签收日起 15 天内可申请无理由退货 [1]。需注意：港澳台收货的订单无理由退货期限统一为 7 天 [3][5]，海外仓直邮订单不支持无理由退货 [3][4]。",
+     "answer": "服装鞋包类商品自签收日起 15 天内可申请无理由退货 [1]，需吊牌完好且不影响二次销售 [2]。",
      "slots": {
       "product": "羽绒服"
      },
@@ -757,15 +773,16 @@
      "context_usage": {
       "facts": 16,
       "summary": 0,
-      "recent": 1441,
+      "recent": 1611,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 0,
      "recent_turns": 20,
-     "prompt_tokens": 4254,
+     "prompt_tokens": 4671,
      "foreign_ids": [],
      "rewrite_ok": true,
+     "memory_ok": true,
      "answer_ok": true
     },
     {
@@ -776,10 +793,10 @@
       "update",
       "pronoun"
      ],
-     "rewritten": "订单 2026100811253 的羽绒服 10 月 9 日签收，现在申请无理由退货是否还在期限内",
+     "rewritten": "订单 2026100811253 的羽绒服在 10 月 9 号签收，现在申请无理由退货是否还在 15 天期限内",
      "intent": "kb_qa",
      "answer_type": "answer",
-     "answer": "您 10 月 9 日签收，服装鞋包类商品自签收日起 15 天内可申请无理由退货 [1]，因此只要在 10 月 24 日（含）前提交申请即可。",
+     "answer": "您 10 月 9 日签收，服装鞋包类商品自签收日起 15 天内可申请无理由退货 [1]，因此只要在 10 月 24 日（含）之前提交申请，就还在无理由退货期限内。",
      "slots": {
       "order_no": "2026100811253",
       "product": "羽绒服"
@@ -792,15 +809,16 @@
      "context_usage": {
       "facts": 16,
       "summary": 0,
-      "recent": 2024,
+      "recent": 2162,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 0,
      "recent_turns": 26,
-     "prompt_tokens": 4939,
+     "prompt_tokens": 5304,
      "foreign_ids": [],
      "rewrite_ok": true,
+     "memory_ok": true,
      "forbid_hit": []
     },
     {
@@ -810,7 +828,7 @@
      "tags": [
       "update"
      ],
-     "rewritten": "请记录订单号 2026100811253 的退货申请",
+     "rewritten": "请记录我的订单号 2026100811253",
      "intent": "action",
      "answer_type": "handoff",
      "answer": "这个需要人工客服帮您办理，正在为您转接。",
@@ -826,13 +844,13 @@
      "context_usage": {
       "facts": 16,
       "summary": 0,
-      "recent": 2124,
+      "recent": 2273,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 0,
      "recent_turns": 27,
-     "prompt_tokens": 2641,
+     "prompt_tokens": 2922,
      "foreign_ids": [],
      "forbid_hit": [],
      "facts_ok": true
@@ -864,7 +882,7 @@
      },
      "summary_version": 0,
      "recent_turns": 0,
-     "prompt_tokens": 2139,
+     "prompt_tokens": 2322,
      "foreign_ids": [],
      "facts_ok": true
     },
@@ -875,10 +893,10 @@
      "tags": [
       "topic"
      ],
-     "rewritten": "星河 X7 空气净化器适用面积是多少，40 平的客厅够用吗",
+     "rewritten": "星河 X7 空气净化器适用于 40 平方米的客厅吗",
      "intent": "kb_qa",
      "answer_type": "answer",
-     "answer": "够用。X7 适用面积为 45–80 ㎡ [1]，40 ㎡ 客厅在其适用范围内。",
+     "answer": "够用。X7 的适用面积为 45–80 ㎡ [1]，40 ㎡ 的客厅在其适用范围内。",
      "slots": {
       "product": "星河 X7"
      },
@@ -895,7 +913,7 @@
      },
      "summary_version": 0,
      "recent_turns": 7,
-     "prompt_tokens": 3440,
+     "prompt_tokens": 3482,
      "foreign_ids": [],
      "answer_ok": true
     },
@@ -907,10 +925,10 @@
       "recall",
       "trap"
      ],
-     "rewritten": "星河 X5 空气净化器的滤网多久更换一次？使用什么型号的滤网？",
+     "rewritten": "星河 X5 空气净化器的滤网多久更换一次？用什么型号的滤网？",
      "intent": "kb_qa",
      "answer_type": "answer",
-     "answer": "您的 X5 使用 F5-HEPA13 滤网 [1]，建议每 8 个月更换一次；在重度污染地区使用时，应缩短至 5 个月 [1]。",
+     "answer": "您这台 X5 使用 F5-HEPA13 滤网 [1]，建议每 8 个月更换一次；在重度污染地区使用时，应缩短至 5 个月 [1]。",
      "slots": {
       "product": "星河 X5"
      },
@@ -927,9 +945,10 @@
      },
      "summary_version": 0,
      "recent_turns": 20,
-     "prompt_tokens": 4644,
+     "prompt_tokens": 4831,
      "foreign_ids": [],
      "rewrite_ok": true,
+     "memory_ok": true,
      "answer_ok": true,
      "forbid_hit": []
     },
@@ -940,7 +959,7 @@
      "tags": [
       "topic"
      ],
-     "rewritten": "星河 X5 空气净化器屏幕显示 E07 是什么意思",
+     "rewritten": "星河 X5 空气净化器屏幕显示 E07 错误代码是什么意思",
      "intent": "kb_qa",
      "answer_type": "answer",
      "answer": "E07 表示后盖未关闭 [1]。请检查后盖卡扣是否扣紧 [1]。",
@@ -954,13 +973,13 @@
      "context_usage": {
       "facts": 7,
       "summary": 0,
-      "recent": 2745,
+      "recent": 2746,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 0,
      "recent_turns": 31,
-     "prompt_tokens": 6110,
+     "prompt_tokens": 6299,
      "foreign_ids": [],
      "answer_ok": true
     },
@@ -981,6 +1000,7 @@
      },
      "facts": {
       "product": "星河 X5",
+      "other:usage_duration": "用了两个月",
       "other:filter_model": "F5-HEPA13",
       "other:error_code": "E07"
      },
@@ -990,15 +1010,16 @@
      "context_usage": {
       "facts": 7,
       "summary": 0,
-      "recent": 2971,
+      "recent": 2972,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 0,
      "recent_turns": 36,
-     "prompt_tokens": 5976,
+     "prompt_tokens": 6165,
      "foreign_ids": [],
      "rewrite_ok": true,
+     "memory_ok": true,
      "forbid_hit": []
     },
     {
@@ -1015,20 +1036,21 @@
      "slots": {},
      "facts": {
       "product": "星河 X5",
+      "other:usage_duration": "用了两个月",
       "other:filter_model": "F5-HEPA13",
       "other:error_code": "E07"
      },
      "degraded": [],
      "context_usage": {
-      "facts": 24,
-      "summary": 627,
+      "facts": 35,
+      "summary": 682,
       "recent": 277,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 1,
      "recent_turns": 4,
-     "prompt_tokens": 1877,
+     "prompt_tokens": 2111,
      "foreign_ids": []
     },
     {
@@ -1054,7 +1076,7 @@
      },
      "summary_version": 0,
      "recent_turns": 0,
-     "prompt_tokens": 2443,
+     "prompt_tokens": 2626,
      "foreign_ids": [],
      "answer_ok": true
     },
@@ -1065,7 +1087,7 @@
      "tags": [
       "update"
      ],
-     "rewritten": "我上周已搬到浙江杭州，以后收货地址都是浙江，需要修改默认收货地址",
+     "rewritten": "我上周已搬到浙江杭州，以后收货地址都是浙江",
      "intent": "action",
      "answer_type": "handoff",
      "answer": "这个需要人工客服帮您办理，正在为您转接。",
@@ -1081,7 +1103,7 @@
      },
      "summary_version": 0,
      "recent_turns": 10,
-     "prompt_tokens": 1679,
+     "prompt_tokens": 1862,
      "foreign_ids": []
     },
     {
@@ -1092,10 +1114,10 @@
       "update",
       "pronoun"
      ],
-     "rewritten": "寄到浙江杭州的快递首重运费是多少",
+     "rewritten": "寄到浙江杭州的首重运费是多少",
      "intent": "kb_qa",
      "answer_type": "answer",
-     "answer": "浙江首重 6 元，续重每公斤 2 元，时效次日达 [1]。",
+     "answer": "浙江首重 6 元，续重每公斤 2 元 [1]。",
      "slots": {},
      "facts": {},
      "degraded": [],
@@ -1108,9 +1130,10 @@
      },
      "summary_version": 0,
      "recent_turns": 25,
-     "prompt_tokens": 5258,
+     "prompt_tokens": 4970,
      "foreign_ids": [],
      "rewrite_ok": true,
+     "memory_ok": true,
      "answer_ok": true,
      "forbid_hit": []
     },
@@ -1125,22 +1148,23 @@
      "rewritten": "寄到浙江杭州一般几天能到",
      "intent": "kb_qa",
      "answer_type": "answer",
-     "answer": "您现在收货地址在浙江，浙江属于江浙沪地区，一般次日达 [1]。具体时效以区域时效表为准 [1]。",
+     "answer": "您现在收货地址在浙江，江浙沪地区一般是次日达 [1]。",
      "slots": {},
      "facts": {},
      "degraded": [],
      "context_usage": {
       "facts": 0,
       "summary": 0,
-      "recent": 2614,
+      "recent": 2608,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 0,
      "recent_turns": 32,
-     "prompt_tokens": 6274,
+     "prompt_tokens": 6449,
      "foreign_ids": [],
      "rewrite_ok": true,
+     "memory_ok": true,
      "forbid_hit": []
     },
     {
@@ -1160,13 +1184,13 @@
      "context_usage": {
       "facts": 0,
       "summary": 0,
-      "recent": 2681,
+      "recent": 2651,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 0,
      "recent_turns": 33,
-     "prompt_tokens": 3111,
+     "prompt_tokens": 3277,
      "foreign_ids": []
     },
     {
@@ -1200,7 +1224,7 @@
      },
      "summary_version": 0,
      "recent_turns": 0,
-     "prompt_tokens": 2204,
+     "prompt_tokens": 2387,
      "foreign_ids": [],
      "answer_ok": true,
      "facts_ok": true
@@ -1212,7 +1236,7 @@
      "tags": [
       "update"
      ],
-     "rewritten": "我的手机号更换为 13987654321，以后联系这个新号码",
+     "rewritten": "我的手机号换了，新号码是 13987654321，以后联系这个号码",
      "intent": "action",
      "answer_type": "handoff",
      "answer": "这个需要人工客服帮您办理，正在为您转接。",
@@ -1234,7 +1258,7 @@
      },
      "summary_version": 0,
      "recent_turns": 9,
-     "prompt_tokens": 1896,
+     "prompt_tokens": 2079,
      "foreign_ids": [],
      "facts_ok": true
     },
@@ -1245,7 +1269,7 @@
      "tags": [
       "retract"
      ],
-     "rewritten": "订单号不对，先不用管它了",
+     "rewritten": "我之前的订单号说错了，请先不用管它",
      "intent": "kb_qa",
      "answer_type": "refused",
      "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。",
@@ -1265,7 +1289,7 @@
      },
      "summary_version": 0,
      "recent_turns": 18,
-     "prompt_tokens": 3466,
+     "prompt_tokens": 3757,
      "foreign_ids": []
     },
     {
@@ -1275,10 +1299,10 @@
      "tags": [
       "recall"
      ],
-     "rewritten": "过敏退货需要提供什么材料？",
+     "rewritten": "因过敏申请退货需要提供什么材料",
      "intent": "kb_qa",
      "answer_type": "answer",
-     "answer": "已拆封或使用的美妆产品不支持无理由退货；如果是过敏问题，需要提供二级以上医院出具的诊断证明 [1]。",
+     "answer": "已拆封或使用的美妆产品不支持无理由退货；如果是过敏问题，需要提供二级以上医院的诊断证明 [1]。",
      "slots": {},
      "facts": {
       "phone": "13987654321",
@@ -1303,9 +1327,10 @@
      },
      "summary_version": 0,
      "recent_turns": 32,
-     "prompt_tokens": 5810,
+     "prompt_tokens": 6053,
      "foreign_ids": [],
      "rewrite_ok": true,
+     "memory_ok": true,
      "answer_ok": true,
      "forbid_hit": []
     },
@@ -1316,37 +1341,36 @@
      "tags": [
       "update"
      ],
-     "rewritten": "星河优选客服会拨打哪个手机号码联系我？",
-     "intent": "kb_qa",
-     "answer_type": "refused",
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。",
-     "slots": {
-      "phone": "13987654321"
-     },
+     "rewritten": "你们会打哪个号码联系我？",
+     "intent": "recall",
+     "answer_type": "answer",
+     "answer": "根据记录，您提供的联系电话是13987654321（您后来更正过）。",
+     "slots": {},
      "facts": {
       "phone": "13987654321",
       "order_no": "2026101200777",
-      "issue_type": "退货",
       "product": "面霜",
-      "other:address_change": "收货地址填错,想修改",
+      "issue_type": "退货",
       "other:not_received": "快递显示签收但未收到货",
       "other:want_exchange": "不想退货,想直接换货",
-      "other:pickup_issue": "预约上门取件但快递员未到",
-      "other:allergy": "使用面霜后过敏"
+      "other:allergy": "使用面霜后过敏",
+      "other:address_change": "收货地址填错,想修改",
+      "other:pickup_issue": "预约上门取件但快递员未到"
      },
      "degraded": [],
      "context_usage": {
       "facts": 111,
       "summary": 632,
-      "recent": 946,
+      "recent": 944,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 1,
      "recent_turns": 12,
-     "prompt_tokens": 2312,
+     "prompt_tokens": 3946,
      "foreign_ids": [],
      "rewrite_ok": false,
+     "memory_ok": true,
      "forbid_hit": [],
      "facts_ok": true
     },
@@ -1361,7 +1385,7 @@
      "rewritten": "我有两个订单，耳机那单是 2026100900111，奶粉那单是 2026100900222。",
      "intent": "clarify",
      "answer_type": "answer",
-     "answer": "请问您想对这两个订单做什么？查物流、退款还是其他？",
+     "answer": "请问您想对这两个订单做什么？查询物流、退款还是其他？",
      "slots": {
       "order_no": "2026100900111"
      },
@@ -1378,7 +1402,7 @@
      },
      "summary_version": 0,
      "recent_turns": 0,
-     "prompt_tokens": 1123,
+     "prompt_tokens": 1306,
      "foreign_ids": []
     },
     {
@@ -1391,7 +1415,7 @@
      "rewritten": "订单 2026100900111 的耳机有杂音，能换货吗",
      "intent": "kb_qa",
      "answer_type": "answer",
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。\n\n（说明：我这边没有查到订单 2026100900111 的品类、签收时间等具体信息，无法判断是否在换货期限内。建议您提供该订单的商品品类和签收日期，或直接在订单详情页提交售后申请。）",
+     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。\n\n（说明：您未提供该订单的商品品类、签收时间及是否已确认质量问题，我无法判断是否符合换货条件。）",
      "slots": {
       "order_no": "2026100900111",
       "product": "耳机"
@@ -1412,9 +1436,10 @@
      },
      "summary_version": 0,
      "recent_turns": 6,
-     "prompt_tokens": 2796,
+     "prompt_tokens": 2979,
      "foreign_ids": [],
      "rewrite_ok": true,
+     "memory_ok": true,
      "forbid_hit": []
     },
     {
@@ -1441,15 +1466,16 @@
      "context_usage": {
       "facts": 14,
       "summary": 0,
-      "recent": 1203,
+      "recent": 1169,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 0,
      "recent_turns": 15,
-     "prompt_tokens": 3879,
+     "prompt_tokens": 4010,
      "foreign_ids": [],
      "rewrite_ok": true,
+     "memory_ok": true,
      "answer_ok": true,
      "forbid_hit": []
     },
@@ -1461,13 +1487,12 @@
       "trap",
       "recall"
      ],
-     "rewritten": "确认奶粉订单的订单号",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
+     "rewritten": "我在本次对话中提供的奶粉订单的订单号是多少",
+     "intent": "recall",
+     "answer_type": "answer",
+     "answer": "您奶粉那单的订单号是 2026100900222。",
      "slots": {
-      "product": "奶粉",
-      "order_no": "2026100900222"
+      "product": "奶粉"
      },
      "facts": {
       "order_no": "2026100900222",
@@ -1477,15 +1502,16 @@
      "context_usage": {
       "facts": 15,
       "summary": 0,
-      "recent": 1751,
+      "recent": 1717,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 0,
      "recent_turns": 22,
-     "prompt_tokens": 2383,
+     "prompt_tokens": 4038,
      "foreign_ids": [],
      "rewrite_ok": true,
+     "memory_ok": true,
      "forbid_hit": []
     },
     {
@@ -1518,10 +1544,10 @@
      "tags": [
       "slot"
      ],
-     "rewritten": "我要退一张沙发，订单号 2026090100345，是大促期间买的，家离仓库大概 30 公里，退货怎么办理",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
+     "rewritten": "我要退一张沙发，订单号 2026090100345，是大促期间买的，家离仓库大概 30 公里。",
+     "intent": "kb_qa",
+     "answer_type": "answer",
+     "answer": "抱歉，您的问题我暂时无法完整回答，先说明我能确认的部分：\n\n- 家具大件类商品自签收日起 7 天内可申请无理由退货 [2]。\n- 大促期间（618、双 11、年货节）售后申请量较大，审核时效可能顺延 1 至 2 个工作日 [3][5]。\n- 商家应在 48 小时内审核，审核通过后您按系统地址寄回，物流单号须在申请通过后 48 小时内填写 [4]。\n\n关于\"家离仓库 30 公里\"是否影响取件或运费，",
      "slots": {
       "order_no": "2026090100345",
       "product": "沙发"
@@ -1540,7 +1566,7 @@
      },
      "summary_version": 0,
      "recent_turns": 0,
-     "prompt_tokens": 1125,
+     "prompt_tokens": 2487,
      "foreign_ids": [],
      "facts_ok": true
     },
@@ -1551,10 +1577,10 @@
      "tags": [
       "topic"
      ],
-     "rewritten": "星河豆第 3 版规则中星河豆的有效期是多久",
+     "rewritten": "星河豆第 3 版规则的有效期是多久",
      "intent": "kb_qa",
      "answer_type": "answer",
-     "answer": "星河豆第 3 版规则规定，星河豆自获得之日起 15 个月内有效[1]。不过该版本已于 2020 年废止[1]，建议以现行规则为准。",
+     "answer": "星河豆自获得之日起 15 个月内有效 [1]。",
      "slots": {},
      "facts": {
       "order_no": "2026090100345",
@@ -1564,15 +1590,15 @@
      "context_usage": {
       "facts": 14,
       "summary": 0,
-      "recent": 1258,
+      "recent": 1501,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 0,
      "recent_turns": 17,
-     "prompt_tokens": 3892,
+     "prompt_tokens": 4573,
      "foreign_ids": [],
-     "answer_ok": true
+     "answer_ok": false
     },
     {
      "conv": "c06",
@@ -1581,26 +1607,33 @@
      "tags": [
       "topic"
      ],
-     "rewritten": "书籍七天无理由退货寄回邮费怎么算？",
+     "rewritten": "书籍七天无理由退货寄回邮费怎么算",
      "intent": "kb_qa",
      "answer_type": "answer",
-     "answer": "图书音像类非质量原因退货，寄回运费由买家承担，首重 8 元[1]；如果是质量问题，往返运费由商家承担[1]。",
-     "slots": {},
+     "answer": "非质量原因退货的寄回运费由买家承担，首重 8 元 [1]。",
+     "slots": {
+      "product": "书籍"
+     },
      "facts": {
       "order_no": "2026090100345",
-      "product": "沙发"
+      "issue_type": "退货",
+      "product": "书籍",
+      "other:distance_to_warehouse": "家离仓库约30公里",
+      "other:fraud_call": "有人冒充客服索要验证码"
      },
-     "degraded": [],
+     "degraded": [
+      "history_gap"
+     ],
      "context_usage": {
       "facts": 14,
       "summary": 0,
-      "recent": 2945,
+      "recent": 2838,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 0,
-     "recent_turns": 36,
-     "prompt_tokens": 5882,
+     "recent_turns": 35,
+     "prompt_tokens": 6158,
      "foreign_ids": [],
      "answer_ok": true
     },
@@ -1614,7 +1647,7 @@
      "rewritten": "订单 2026090100345 的沙发退货选择上门取件，费用是多少",
      "intent": "kb_qa",
      "answer_type": "answer",
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。\n\n因为上门取件费按距离分档计算（5 公里以内 30 元、5–20 公里 60 元、20–50 公里 120 元、50 公里以上每公里 2 元最高 300 元）[1]，而您没有提供取件距离，我无法确定具体金额。另外，如果是质量问题产生的往返运费由商家承担，非质量原因退货才由买家承担上门取件费[2]。",
+     "answer": "您家离仓库约 30 公里，属于 20–50 公里区间，上门取件费为 120 元 [1]。如果是质量问题产生的退货，往返运费由商家承担 [2]；非质量原因退货则由您承担这笔取件费 [2]。",
      "slots": {
       "order_no": "2026090100345",
       "product": "沙发"
@@ -1623,24 +1656,23 @@
       "order_no": "2026090100345",
       "product": "沙发",
       "issue_type": "退货",
-      "other:distance_to_warehouse_km": "30",
-      "other:promotion_purchase": "大促期间购买"
+      "other:distance_to_warehouse": "家离仓库约30公里",
+      "other:fraud_call": "有人冒充客服索要验证码"
      },
-     "degraded": [
-      "history_gap"
-     ],
+     "degraded": [],
      "context_usage": {
-      "facts": 14,
-      "summary": 0,
-      "recent": 2980,
+      "facts": 56,
+      "summary": 768,
+      "recent": 1866,
       "recall": 0,
       "budget": 3000
      },
-     "summary_version": 0,
-     "recent_turns": 36,
-     "prompt_tokens": 6421,
+     "summary_version": 1,
+     "recent_turns": 23,
+     "prompt_tokens": 6248,
      "foreign_ids": [],
      "rewrite_ok": true,
+     "memory_ok": true,
      "answer_ok": true
     },
     {
@@ -1650,10 +1682,10 @@
      "tags": [
       "recall"
      ],
-     "rewritten": "订单 2026090100345 大促期间购买的沙发，价格保护多少天",
+     "rewritten": "大促期间购买的沙发订单 2026090100345 的价格保护期是多少天",
      "intent": "kb_qa",
      "answer_type": "answer",
-     "answer": "大促期间购买的订单，价保期限是自签收日起 30 天[1]。同一订单每件商品最多可申请 3 次保价，差价以优惠券形式退回的不计入次数[2]。",
+     "answer": "大促期间购买的订单，价格保护期为自签收日起 30 天 [1]。",
      "slots": {
       "order_no": "2026090100345",
       "product": "沙发"
@@ -1662,22 +1694,23 @@
       "order_no": "2026090100345",
       "product": "沙发",
       "issue_type": "退货",
-      "other:distance_to_warehouse_km": "30",
-      "other:promotion_purchase": "大促期间购买"
+      "other:distance_to_warehouse": "家离仓库约30公里",
+      "other:fraud_call": "有人冒充客服索要验证码"
      },
      "degraded": [],
      "context_usage": {
-      "facts": 44,
+      "facts": 56,
       "summary": 768,
-      "recent": 461,
+      "recent": 1982,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 1,
-     "recent_turns": 4,
-     "prompt_tokens": 3858,
+     "recent_turns": 24,
+     "prompt_tokens": 6074,
      "foreign_ids": [],
      "rewrite_ok": true,
+     "memory_ok": true,
      "answer_ok": true
     },
     {
@@ -1696,20 +1729,20 @@
       "order_no": "2026090100345",
       "product": "沙发",
       "issue_type": "退货",
-      "other:distance_to_warehouse_km": "30",
-      "other:promotion_purchase": "大促期间购买"
+      "other:distance_to_warehouse": "家离仓库约30公里",
+      "other:fraud_call": "有人冒充客服索要验证码"
      },
      "degraded": [],
      "context_usage": {
-      "facts": 44,
+      "facts": 56,
       "summary": 768,
-      "recent": 559,
+      "recent": 2038,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 1,
-     "recent_turns": 5,
-     "prompt_tokens": 2211,
+     "recent_turns": 25,
+     "prompt_tokens": 3418,
      "foreign_ids": []
     },
     {
@@ -1719,10 +1752,10 @@
      "tags": [
       "slot"
      ],
-     "rewritten": "海外仓直邮订单 HW2026100566881 如何退货",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
+     "rewritten": "我有一个海外仓直邮的订单 HW2026100566881，想退货。",
+     "intent": "kb_qa",
+     "answer_type": "answer",
+     "answer": "海外仓直邮订单不支持无理由退货，仅受理质量问题（签收后 30 天内）[1][2][3]。\n\n如果您的商品存在质量问题，可以按以下要点申请：\n- 申请时限：签收后 30 天内 [1][2][3]\n- 退款方式与时效：原路退回，15 个工作日内到账，汇率差不予补偿 [2][3]\n- 寄回方式：须寄回所在国海外仓，运费由平台承担 [2][3]\n- 凭证要求：照片、视频、检测报告须清晰可辨，照片应能显示商",
      "slots": {
       "order_no": "HW2026100566881"
      },
@@ -1739,7 +1772,7 @@
      },
      "summary_version": 0,
      "recent_turns": 0,
-     "prompt_tokens": 1114,
+     "prompt_tokens": 2497,
      "foreign_ids": [],
      "facts_ok": true
     },
@@ -1753,7 +1786,7 @@
      "rewritten": "港澳台地区退货寄回的运费最多报销多少",
      "intent": "kb_qa",
      "answer_type": "answer",
-     "answer": "港澳台订单须寄回香港集运仓，寄回运费最高报销 60 元[1][2]。",
+     "answer": "港澳台订单须寄回香港集运仓，寄回运费最高报销 60 元 [1][2][3]。",
      "slots": {},
      "facts": {
       "order_no": "HW2026100566881"
@@ -1762,13 +1795,13 @@
      "context_usage": {
       "facts": 9,
       "summary": 0,
-      "recent": 961,
+      "recent": 1222,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 0,
      "recent_turns": 12,
-     "prompt_tokens": 3596,
+     "prompt_tokens": 4128,
      "foreign_ids": [],
      "answer_ok": true
     },
@@ -1780,10 +1813,10 @@
       "recall",
       "pronoun"
      ],
-     "rewritten": "海外仓直邮订单 HW2026100566881 的退款多久能到账",
+     "rewritten": "海外仓直邮订单 HW2026100566881 退货退款多久能到账",
      "intent": "kb_qa",
      "answer_type": "answer",
-     "answer": "海外仓直邮订单的退款原路退回，15 个工作日内到账，汇率差不予补偿[2][4]。",
+     "answer": "海外仓直邮订单的退款原路退回，15 个工作日内到账，汇率差不予补偿 [2][3]。",
      "slots": {
       "order_no": "HW2026100566881"
      },
@@ -1794,15 +1827,16 @@
      "context_usage": {
       "facts": 9,
       "summary": 0,
-      "recent": 2491,
+      "recent": 2754,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 0,
      "recent_turns": 29,
-     "prompt_tokens": 5688,
+     "prompt_tokens": 6206,
      "foreign_ids": [],
      "rewrite_ok": true,
+     "memory_ok": true,
      "answer_ok": true
     },
     {
@@ -1812,10 +1846,10 @@
      "tags": [
       "topic"
      ],
-     "rewritten": "跨境退货的关税会退吗",
+     "rewritten": "跨境退货时已缴纳的关税会退还吗",
      "intent": "kb_qa",
      "answer_type": "answer",
-     "answer": "因质量问题退货的，已缴关税会随退款一并退还；非质量原因退货的，关税不退[1]。",
+     "answer": "因质量问题退货的，已缴关税随退款一并退还；非质量原因退货的，关税不退 [1]。",
      "slots": {},
      "facts": {
       "order_no": "HW2026100566881",
@@ -1829,13 +1863,13 @@
      "context_usage": {
       "facts": 9,
       "summary": 0,
-      "recent": 2908,
+      "recent": 2910,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 0,
      "recent_turns": 35,
-     "prompt_tokens": 5805,
+     "prompt_tokens": 6229,
      "foreign_ids": [],
      "answer_ok": true
     },
@@ -1846,13 +1880,11 @@
      "tags": [
       "recall"
      ],
-     "rewritten": "确认订单号 HW2026100566881 不要记错",
+     "rewritten": "那就先这样，订单号你别记错了。",
      "intent": "chitchat",
      "answer_type": "answer",
      "answer": "好的，您放心～有订单或售后问题随时找我，我帮您跟进。",
-     "slots": {
-      "order_no": "HW2026100566881"
-     },
+     "slots": {},
      "facts": {
       "order_no": "HW2026100566881",
       "issue_type": "退货",
@@ -1862,14 +1894,14 @@
      "degraded": [],
      "context_usage": {
       "facts": 40,
-      "summary": 706,
-      "recent": 351,
+      "summary": 668,
+      "recent": 350,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 1,
      "recent_turns": 4,
-     "prompt_tokens": 2039,
+     "prompt_tokens": 2159,
      "foreign_ids": [],
      "facts_ok": true
     },
@@ -1902,7 +1934,7 @@
      },
      "summary_version": 0,
      "recent_turns": 0,
-     "prompt_tokens": 2019,
+     "prompt_tokens": 2202,
      "foreign_ids": [],
      "answer_ok": true,
      "facts_ok": true
@@ -1915,10 +1947,10 @@
       "recall",
       "pronoun"
      ],
-     "rewritten": "已激活的笔记本电脑出现质量问题可以怎么处理",
+     "rewritten": "已激活的笔记本电脑出现质量问题可以怎么处理（换货/退货规则）",
      "intent": "kb_qa",
      "answer_type": "answer",
-     "answer": "如果这台笔记本电脑存在质量问题，签收后 15 天内可以选择退货或换货 [2]；超过 15 天但在 365 天保修期内的，可以申请免费维修 [2]。申请时请提供清晰可辨的凭证，照片应能显示商品全貌、问题部位及商品标签或序列号 [1]。",
+     "answer": "经确认存在质量问题的笔记本电脑，签收后 15 天内可选择退货或换货 [3]；超过换货期限但在 365 天保修期内的，可申请免费维修 [3]。",
      "slots": {
       "order_no": "2026101000999",
       "product": "笔记本电脑"
@@ -1937,9 +1969,10 @@
      },
      "summary_version": 0,
      "recent_turns": 16,
-     "prompt_tokens": 3643,
+     "prompt_tokens": 3883,
      "foreign_ids": [],
-     "rewrite_ok": true
+     "rewrite_ok": true,
+     "memory_ok": true
     },
     {
      "conv": "c08",
@@ -1949,14 +1982,11 @@
       "recall",
       "trap"
      ],
-     "rewritten": "我的订单号是多少",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "order_no": "2026101000999",
-      "product": "笔记本电脑"
-     },
+     "rewritten": "我在本次对话中提供的订单号是多少",
+     "intent": "recall",
+     "answer_type": "answer",
+     "answer": "您本次提供的订单号是 2026101000999，商品为笔记本电脑。",
+     "slots": {},
      "facts": {
       "order_no": "2026101000999",
       "product": "笔记本电脑"
@@ -1965,15 +1995,16 @@
      "context_usage": {
       "facts": 19,
       "summary": 0,
-      "recent": 1885,
+      "recent": 1841,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 0,
      "recent_turns": 26,
-     "prompt_tokens": 2495,
+     "prompt_tokens": 4256,
      "foreign_ids": [],
      "rewrite_ok": false,
+     "memory_ok": true,
      "forbid_hit": []
     },
     {
@@ -1996,13 +2027,13 @@
      "context_usage": {
       "facts": 19,
       "summary": 0,
-      "recent": 1919,
+      "recent": 1882,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 0,
      "recent_turns": 27,
-     "prompt_tokens": 2662,
+     "prompt_tokens": 2820,
      "foreign_ids": []
     },
     {
@@ -2030,7 +2061,7 @@
      },
      "summary_version": 0,
      "recent_turns": 0,
-     "prompt_tokens": 2617,
+     "prompt_tokens": 2800,
      "foreign_ids": []
     },
     {
@@ -2040,7 +2071,7 @@
      "tags": [
       "topic"
      ],
-     "rewritten": "商家虚假发货一次扣几分",
+     "rewritten": "星河优选平台对商家虚假发货一次扣几分",
      "intent": "kb_qa",
      "answer_type": "answer",
      "answer": "商家虚假发货（上传无效物流单号或物流信息与实际不符）的，每次扣 6 分，并向买家支付订单实付金额 20% 的违约金，最高不超过 200 元。[1]",
@@ -2056,7 +2087,7 @@
      },
      "summary_version": 0,
      "recent_turns": 9,
-     "prompt_tokens": 3599,
+     "prompt_tokens": 3808,
      "foreign_ids": [],
      "answer_ok": true
     },
@@ -2067,7 +2098,7 @@
      "tags": [
       "topic"
      ],
-     "rewritten": "商家延迟发货最多需要赔付顾客多少钱",
+     "rewritten": "延迟发货最多要赔顾客多少钱",
      "intent": "kb_qa",
      "answer_type": "answer",
      "answer": "商家未在承诺时效内发货的，构成延迟发货，应向买家赔付订单实付金额的 30%，单笔最低 5 元、最高 500 元；预售商品以页面约定的发货时间为准。[1]",
@@ -2083,7 +2114,7 @@
      },
      "summary_version": 0,
      "recent_turns": 20,
-     "prompt_tokens": 4861,
+     "prompt_tokens": 5023,
      "foreign_ids": [],
      "answer_ok": true
     },
@@ -2094,7 +2125,7 @@
      "tags": [
       "pronoun"
      ],
-     "rewritten": "商家虚假发货累计扣满 12 分会有什么处罚",
+     "rewritten": "商家虚假发货累计扣满12分会有什么处罚",
      "intent": "kb_qa",
      "answer_type": "answer",
      "answer": "一般违规行为扣分累计达到 12 分的，平台对商家店铺采取限制参加营销活动 7 日的措施；累计达到 24 分的，限制发布新商品 14 日。[1]",
@@ -2115,9 +2146,10 @@
      },
      "summary_version": 0,
      "recent_turns": 32,
-     "prompt_tokens": 6474,
+     "prompt_tokens": 6657,
      "foreign_ids": [],
      "rewrite_ok": true,
+     "memory_ok": true,
      "answer_ok": true
     },
     {
@@ -2127,7 +2159,7 @@
      "tags": [
       "topic"
      ],
-     "rewritten": "商品标题最多能写多少字？",
+     "rewritten": "商品标题最多能写多少字",
      "intent": "kb_qa",
      "answer_type": "answer",
      "answer": "商品标题不得超过 60 个汉字，且不得堆砌与商品无关的关键词。[1]",
@@ -2146,7 +2178,7 @@
      },
      "summary_version": 1,
      "recent_turns": 9,
-     "prompt_tokens": 4468,
+     "prompt_tokens": 4651,
      "foreign_ids": [],
      "answer_ok": true
     },
@@ -2173,7 +2205,7 @@
      },
      "summary_version": 0,
      "recent_turns": 0,
-     "prompt_tokens": 2533,
+     "prompt_tokens": 2716,
      "foreign_ids": [],
      "answer_ok": true
     },
@@ -2201,9 +2233,10 @@
      },
      "summary_version": 0,
      "recent_turns": 15,
-     "prompt_tokens": 4221,
+     "prompt_tokens": 4404,
      "foreign_ids": [],
      "rewrite_ok": true,
+     "memory_ok": true,
      "answer_ok": true
     },
     {
@@ -2229,7 +2262,7 @@
      },
      "summary_version": 0,
      "recent_turns": 35,
-     "prompt_tokens": 6546,
+     "prompt_tokens": 6729,
      "foreign_ids": [],
      "answer_ok": true
     },
@@ -2247,12 +2280,12 @@
      "slots": {},
      "facts": {
       "issue_type": "货物丢失赔偿",
-      "other:contract_type": "仓储合同",
-      "other:contract_no": "XH-WL-2026-0158",
       "other:not_received_package": "快递显示签收但未收到",
       "other:address_change_needed": "收货地址填错需修改",
-      "other:pickup_not_arrived": "预约上门取件快递员未到",
-      "other:fraud_call_report": "有人冒充客服索要验证码"
+      "other:fraud_call_report": "有人冒充客服索要验证码",
+      "other:contract_no": "XH-WL-2026-0158",
+      "other:contract_type": "仓储合同",
+      "other:pickup_not_arrived": "预约上门取件快递员未到"
      },
      "degraded": [
       "history_gap"
@@ -2266,9 +2299,10 @@
      },
      "summary_version": 0,
      "recent_turns": 33,
-     "prompt_tokens": 6194,
+     "prompt_tokens": 6377,
      "foreign_ids": [],
      "rewrite_ok": false,
+     "memory_ok": false,
      "answer_ok": true
     },
     {
@@ -2285,12 +2319,12 @@
      "slots": {},
      "facts": {
       "issue_type": "货物丢失赔偿",
-      "other:contract_type": "仓储合同",
-      "other:contract_no": "XH-WL-2026-0158",
       "other:not_received_package": "快递显示签收但未收到",
       "other:address_change_needed": "收货地址填错需修改",
-      "other:pickup_not_arrived": "预约上门取件快递员未到",
-      "other:fraud_call_report": "有人冒充客服索要验证码"
+      "other:fraud_call_report": "有人冒充客服索要验证码",
+      "other:contract_no": "XH-WL-2026-0158",
+      "other:contract_type": "仓储合同",
+      "other:pickup_not_arrived": "预约上门取件快递员未到"
      },
      "degraded": [],
      "context_usage": {
@@ -2302,7 +2336,7 @@
      },
      "summary_version": 1,
      "recent_turns": 4,
-     "prompt_tokens": 1864,
+     "prompt_tokens": 2047,
      "foreign_ids": []
     },
     {
@@ -2312,7 +2346,7 @@
      "tags": [
       "slot"
      ],
-     "rewritten": "我在四川成都，订单 2026092800468 买的电视机签收第二天就黑屏了，想退货，怎么处理",
+     "rewritten": "我在四川成都，订单 2026092800468 购买的电视机签收第二天就黑屏了，想退货，能否退货及如何办理",
      "intent": "action",
      "answer_type": "handoff",
      "answer": "这个需要人工客服帮您办理，正在为您转接。",
@@ -2334,7 +2368,7 @@
      },
      "summary_version": 0,
      "recent_turns": 0,
-     "prompt_tokens": 1124,
+     "prompt_tokens": 1307,
      "foreign_ids": [],
      "facts_ok": true
     },
@@ -2345,13 +2379,12 @@
      "tags": [
       "update"
      ],
-     "rewritten": "更正订单号，正确的是 2026092800486，之前提供的 2026092800468 最后两位写反了",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
+     "rewritten": "我核对后正确的订单号是 2026092800486，之前提供的订单号最后两位写反了",
+     "intent": "recall",
+     "answer_type": "answer",
+     "answer": "您后来更正为：订单号 2026092800486，之前提供的 2026092800468 最后两位写反了。",
      "slots": {
-      "order_no": "2026092800486",
-      "product": "电视机"
+      "order_no": "2026092800486"
      },
      "facts": {
       "order_no": "2026092800486",
@@ -2375,7 +2408,7 @@
      },
      "summary_version": 0,
      "recent_turns": 8,
-     "prompt_tokens": 2815,
+     "prompt_tokens": 4954,
      "foreign_ids": [],
      "facts_ok": true
     },
@@ -2386,12 +2419,11 @@
      "tags": [
       "recall"
      ],
-     "rewritten": "订单2026092800486的电视机大件退货，上门取件需要用户支付运费吗",
+     "rewritten": "电视机这类大件商品退货，上门取件的费用需要用户承担吗",
      "intent": "kb_qa",
      "answer_type": "answer",
-     "answer": "您这台电视机是签收第二天黑屏，属于质量问题，往返运费由商家承担，上门取件费不需要您出 [1][2]。",
+     "answer": "分两种情况：\n\n- 如果是质量问题（比如您这台签收第二天就黑屏），往返运费由商家承担，您不需要出上门取件费 [1][2]。\n- 如果是非质量原因退货，寄回运费由您承担，上门取件费按距离计费 [1]。\n\n另外，您之前提到约好的上门取件快递员一直没来，可以修改取件时间、自行寄回或投诉。您这台电视的黑屏退货需要人工客服办理，正在为您转接。",
      "slots": {
-      "order_no": "2026092800486",
       "product": "电视机"
      },
      "facts": {
@@ -2399,24 +2431,25 @@
       "product": "电视机",
       "issue_type": "退货",
       "other:pickup_not_arrived": "预约上门取件快递员一直没来",
-      "other:address_change_needed": "用户收货地址填错,想修改",
       "other:considering_exchange": "用户询问能否直接换货",
+      "other:address_change_needed": "用户收货地址填错,想修改",
       "other:product_issue": "签收第二天黑屏",
       "address_region": "四川成都"
      },
      "degraded": [],
      "context_usage": {
       "facts": 99,
-      "summary": 878,
+      "summary": 753,
       "recent": 1678,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 2,
      "recent_turns": 5,
-     "prompt_tokens": 5274,
+     "prompt_tokens": 5293,
      "foreign_ids": [],
      "rewrite_ok": true,
+     "memory_ok": true,
      "answer_ok": true
     },
     {
@@ -2427,10 +2460,10 @@
       "update",
       "recall"
      ],
-     "rewritten": "订单 2026092800486 的退款会退到哪里",
+     "rewritten": "订单 2026092800486 的退款会退到哪里，并确认该订单号",
      "intent": "kb_qa",
      "answer_type": "answer",
-     "answer": "您的订单号是 2026092800486。\n\n退款会按原支付渠道原路退回：余额支付即时到账，支付宝、微信支付一般 1–3 个工作日到账，银行卡一般 1–7 个工作日到账。",
+     "answer": "您的订单号是 2026092800486。\n\n退款会按您的原支付渠道原路退回，即您当初用什么方式付款，就退回到哪里。",
      "slots": {
       "order_no": "2026092800486"
      },
@@ -2439,8 +2472,8 @@
       "product": "电视机",
       "issue_type": "退货",
       "other:pickup_not_arrived": "预约上门取件快递员一直没来",
-      "other:address_change_needed": "用户收货地址填错,想修改",
       "other:considering_exchange": "用户询问能否直接换货",
+      "other:address_change_needed": "用户收货地址填错,想修改",
       "other:product_issue": "签收第二天黑屏",
       "address_region": "四川成都"
      },
@@ -2449,16 +2482,17 @@
      ],
      "context_usage": {
       "facts": 99,
-      "summary": 934,
+      "summary": 832,
       "recent": 1831,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 3,
      "recent_turns": 5,
-     "prompt_tokens": 5847,
+     "prompt_tokens": 5920,
      "foreign_ids": [],
      "rewrite_ok": true,
+     "memory_ok": true,
      "forbid_hit": []
     },
     {
@@ -2468,4276 +2502,35 @@
      "tags": [
       "recall"
      ],
-     "rewritten": "从星河优选发货寄到四川成都一般需要几天",
+     "rewritten": "寄到四川成都一般需要几天",
      "intent": "kb_qa",
      "answer_type": "answer",
-     "answer": "江浙沪地区次日达，其他省份一般 2–4 天，新疆、西藏、青海等偏远地区 5–8 天，具体以区域时效表为准 [1]。",
+     "answer": "您所在的四川，首重 11 元、续重每公斤 4 元，时效 3 天[1]。时效自出库起计算[3]，四川城区支持上门取件，节假日会顺延[1]。",
      "slots": {},
      "facts": {
       "order_no": "2026092800486",
       "product": "电视机",
       "issue_type": "退货",
       "other:pickup_not_arrived": "预约上门取件快递员一直没来",
-      "other:address_change_needed": "用户收货地址填错,想修改",
       "other:considering_exchange": "用户询问能否直接换货",
+      "other:address_change_needed": "用户收货地址填错,想修改",
       "other:product_issue": "签收第二天黑屏",
       "address_region": "四川成都"
      },
      "degraded": [],
      "context_usage": {
       "facts": 99,
-      "summary": 934,
-      "recent": 1931,
+      "summary": 832,
+      "recent": 1903,
       "recall": 0,
       "budget": 3000
      },
      "summary_version": 3,
      "recent_turns": 6,
-     "prompt_tokens": 5861,
-     "foreign_ids": [],
-     "rewrite_ok": true
-    }
-   ]
-  },
-  "8000": {
-   "metrics": {
-    "run_turns": 56,
-    "retention": 0.941,
-    "update_correctness": 0.909,
-    "confusion_rate": 0.0,
-    "rewrite_correctness": 0.909,
-    "answer_quality": 1.0,
-    "fact_accuracy": 1.0,
-    "trap_pass": 0.857,
-    "identifier_mismatch_flags": 0,
-    "history_gap_turns": 2,
-    "avg_prompt_tokens": 4229,
-    "avg_history_tokens": 2137
-   },
-   "compactions": {
-    "success": 2
-   },
-   "cost": {
-    "llm": {
-     "calls": 3,
-     "prompt_tokens": 9002,
-     "cache_hit_tokens": 1280,
-     "completion_tokens": 95,
-     "yuan_conservative": 0.0188,
-     "yuan_with_cache": 0.0165
-    },
-    "rerank_yuan": 0.0
-   },
-   "live_first_token_ms": [
-    868
-   ],
-   "wall_s": 10.6,
-   "conversations": [
-    {
-     "conv": "c01",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": [
-      [
-       "order_no",
-       "add",
-       null,
-       "2026100811235",
-       "slot"
-      ],
-      [
-       "product",
-       "add",
-       null,
-       "羽绒服",
-       "slot"
-      ],
-      [
-       "order_no",
-       "update",
-       "2026100811235",
-       "2026100811253",
-       "slot"
-      ]
-     ]
-    },
-    {
-     "conv": "c02",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": [
-      [
-       "product",
-       "add",
-       null,
-       "星河 X5 空气净化器",
-       "slot"
-      ],
-      [
-       "product",
-       "update",
-       "星河 X5 空气净化器",
-       "星河 X7",
-       "slot"
-      ],
-      [
-       "product",
-       "update",
-       "星河 X7",
-       "星河 X5",
-       "slot"
-      ]
-     ]
-    },
-    {
-     "conv": "c03",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": []
-    },
-    {
-     "conv": "c04",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": [
-      [
-       "order_no",
-       "add",
-       null,
-       "2026101200777",
-       "slot"
-      ],
-      [
-       "product",
-       "add",
-       null,
-       "面霜",
-       "slot"
-      ],
-      [
-       "phone",
-       "add",
-       null,
-       "13812345678",
-       "slot"
-      ],
-      [
-       "phone",
-       "update",
-       "13812345678",
-       "13987654321",
-       "slot"
-      ]
-     ]
-    },
-    {
-     "conv": "c05",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": [
-      [
-       "order_no",
-       "add",
-       null,
-       "2026100900111",
-       "slot"
-      ],
-      [
-       "product",
-       "add",
-       null,
-       "耳机",
-       "slot"
-      ],
-      [
-       "order_no",
-       "update",
-       "2026100900111",
-       "2026100900222",
-       "slot"
-      ],
-      [
-       "product",
-       "update",
-       "耳机",
-       "奶粉",
-       "slot"
-      ]
-     ]
-    },
-    {
-     "conv": "c06",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": [
-      [
-       "order_no",
-       "add",
-       null,
-       "2026090100345",
-       "slot"
-      ],
-      [
-       "product",
-       "add",
-       null,
-       "沙发",
-       "slot"
-      ]
-     ]
-    },
-    {
-     "conv": "c07",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": [
-      [
-       "order_no",
-       "add",
-       null,
-       "HW2026100566881",
-       "slot"
-      ]
-     ]
-    },
-    {
-     "conv": "c08",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": [
-      [
-       "order_no",
-       "add",
-       null,
-       "2026101000999",
-       "slot"
-      ],
-      [
-       "product",
-       "add",
-       null,
-       "笔记本电脑",
-       "slot"
-      ]
-     ]
-    },
-    {
-     "conv": "c09",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": []
-    },
-    {
-     "conv": "c10",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": []
-    },
-    {
-     "conv": "c11",
-     "summary_version": 3,
-     "summary": {
-      "user_goal": "用户订单2026092800486电视机签收第二天黑屏，想退货，并咨询价保、改地址、发货时间、发票、星河豆、货到付款上限、客服时间、换货、上门取件费、黑卡会员、外包装破损、售后审核、退款进度、七天无理由范围、赠品退回、正品保障、运费险、防诈骗、未收到货等问题。",
-      "confirmed_info": [
-       "订单号已更正为 2026092800486（原 2026092800468 最后两位写反）",
-       "用户在四川成都",
-       "商品为电视机，签收第二天黑屏",
-       "人工客服服务时间每天 9:00–22:00，智能客服 7×24 小时",
-       "货到付款单笔上限 3000 元，部分偏远地区和大件商品不支持",
-       "同一订单每件商品最多申请 3 次保价，优惠券形式差价不计入",
-       "普通商品保价期 7 天，大促商品 30 天",
-       "专票需订单完成后 90 天内在发票中心申请"
-      ],
-      "solutions_given": [
-       "退货需人工客服办理，正在转接",
-       "商品来自品牌授权或官方渠道，支持假一赔四，可申请第三方鉴定",
-       "外包装轻微破损不影响七天无理由退货，严重破损可能扣减退款",
-       "退款原路返回：余额即时，支付宝微信 1–3 工作日，银行卡 1–7 工作日",
-       "售后申请一般 24 小时内审核，大促可能延至 48 小时",
-       "现货付款后 48 小时内发货，预售以商品页为准",
-       "赠品需一起退回，缺失或已使用按价值扣减",
-       "电子普通发票可在订单详情申请，24 小时内发邮箱，可用于报销"
-      ],
-      "open_issues": [
-       "电视机黑屏退货需人工客服办理，尚未完成",
-       "用户反映约好上门取件但快递员一直没来",
-       "用户反映快递显示签收但未收到货",
-       "用户询问能否修改收货地址（填错）",
-       "用户询问不想退能否直接换货",
-       "用户询问黑卡会员权益及是否值得开通",
-       "用户询问运费险理赔方式",
-       "用户询问退款进度查询方式"
-      ]
-     },
-     "fact_history": [
-      [
-       "order_no",
-       "add",
-       null,
-       "2026092800468",
-       "slot"
-      ],
-      [
-       "product",
-       "add",
-       null,
-       "电视机",
-       "slot"
-      ],
-      [
-       "order_no",
-       "update",
-       "2026092800468",
-       "2026092800486",
-       "slot"
-      ],
-      [
-       "issue_type",
-       "add",
-       null,
-       "退货",
-       "compaction"
-      ],
-      [
-       "address_region",
-       "add",
-       null,
-       "四川成都",
-       "compaction"
-      ],
-      [
-       "other:quality_issue",
-       "add",
-       null,
-       "签收第二天黑屏",
-       "compaction"
-      ],
-      [
-       "other:address_filled_wrong",
-       "add",
-       null,
-       "收货地址填错了,想修改",
-       "compaction"
-      ],
-      [
-       "other:pickup_not_arrived",
-       "add",
-       null,
-       "预约上门取件快递员一直没来",
-       "compaction"
-      ],
-      [
-       "other:not_received",
-       "add",
-       null,
-       "快递显示签收但未收到货",
-       "compaction"
-      ],
-      [
-       "other:considering_exchange",
-       "add",
-       null,
-       "不想退了,想直接换货",
-       "compaction"
-      ],
-      [
-       "other:invoice_for_reimbursement",
-       "add",
-       null,
-       "需要电子发票用于公司报销",
-       "compaction"
-      ],
-      [
-       "other:fraud_call",
-       "add",
-       null,
-       "有人冒充客服索要验证码",
-       "compaction"
-      ]
-     ]
-    }
-   ],
-   "rows": [
-    {
-     "conv": "c01",
-     "turn": 0,
-     "q": "你好，我上周买了一件羽绒服，订单号 2026100811235，穿着不合适想退。",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "订单 2026100811235 购买的羽绒服穿着不合适，如何退货",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "order_no": "2026100811235",
-      "product": "羽绒服"
-     },
-     "facts": {
-      "order_no": "2026100811235",
-      "product": "羽绒服"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 1120,
-     "foreign_ids": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c01",
-     "turn": 6,
-     "q": "不好意思，刚才订单号说错了，应该是 2026100811253。",
-     "tags": [
-      "update"
-     ],
-     "rewritten": "订单号更正为 2026100811253，羽绒服退货的售后单提交后多久审核",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "order_no": "2026100811253",
-      "product": "羽绒服"
-     },
-     "facts": {
-      "order_no": "2026100811253",
-      "product": "羽绒服"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 16,
-      "summary": 0,
-      "recent": 368,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 6,
-     "prompt_tokens": 1402,
-     "foreign_ids": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c01",
-     "turn": 20,
-     "q": "那件衣服签收后几天内可以无理由退？",
-     "tags": [
-      "recall",
-      "pronoun"
-     ],
-     "rewritten": "羽绒服签收后几天内可以无理由退货",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "服装鞋包类商品自签收日起 15 天内可申请无理由退货 [1]。需注意：港澳台收货的订单无理由退货期限统一为 7 天 [3][5]，海外仓直邮订单不支持无理由退货 [3][4]。",
-     "slots": {
-      "product": "羽绒服"
-     },
-     "facts": {
-      "order_no": "2026100811253",
-      "product": "羽绒服"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 16,
-      "summary": 0,
-      "recent": 1441,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 20,
-     "prompt_tokens": 4254,
+     "prompt_tokens": 6517,
      "foreign_ids": [],
      "rewrite_ok": true,
-     "answer_ok": true
-    },
-    {
-     "conv": "c01",
-     "turn": 26,
-     "q": "我那个订单现在退的话，还在无理由期限内吗？我是 10 月 9 号签收的。",
-     "tags": [
-      "update",
-      "pronoun"
-     ],
-     "rewritten": "订单 2026100811253 的羽绒服 10 月 9 日签收，现在申请无理由退货是否还在期限内",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "您 10 月 9 日签收，服装鞋包类商品自签收日起 15 天内可申请无理由退货 [1]，因此只要在 10 月 24 日（含）前提交申请即可。",
-     "slots": {
-      "order_no": "2026100811253",
-      "product": "羽绒服"
-     },
-     "facts": {
-      "order_no": "2026100811253",
-      "product": "羽绒服"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 16,
-      "summary": 0,
-      "recent": 2024,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 26,
-     "prompt_tokens": 4939,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c01",
-     "turn": 27,
-     "q": "好的，那就按这个订单号帮我记一下，谢谢。",
-     "tags": [
-      "update"
-     ],
-     "rewritten": "请记录订单号 2026100811253 的退货申请",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "order_no": "2026100811253",
-      "product": "羽绒服"
-     },
-     "facts": {
-      "order_no": "2026100811253",
-      "product": "羽绒服"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 16,
-      "summary": 0,
-      "recent": 2124,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 27,
-     "prompt_tokens": 2641,
-     "foreign_ids": [],
-     "forbid_hit": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c02",
-     "turn": 0,
-     "q": "我买的是星河 X5 空气净化器，用了两个月，想问下保养的事。",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "我买的是星河 X5 空气净化器，用了两个月，想问下保养的事。",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "X5 的保养要点如下：\n\n- 预滤网：每 4 周用清水冲洗一次，晾干后装回 [1]。\n- 主滤网 F5-HEPA13：不可水洗 [1]。\n- 滤网更换：建议每 8 个月更换一次；重度污染地区应缩短至 5 个月 [2]。更换后长按“复位”键 3 秒清除提醒 [2]。\n- 如出现异味，请检查滤网是否到期（8 个月）[4]。\n\n如需购买原装配件，可在星河优选 App 搜索“AirPure 配件” [3]",
-     "slots": {
-      "product": "星河 X5 空气净化器"
-     },
-     "facts": {
-      "product": "星河 X5 空气净化器"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 2139,
-     "foreign_ids": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c02",
-     "turn": 7,
-     "q": "另外我朋友买的是 X7，他家客厅 40 平，X7 够用吗？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "星河 X7 空气净化器适用面积是多少，40 平的客厅够用吗",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "够用。X7 适用面积为 45–80 ㎡ [1]，40 ㎡ 客厅在其适用范围内。",
-     "slots": {
-      "product": "星河 X7"
-     },
-     "facts": {
-      "product": "星河 X7"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 16,
-      "summary": 0,
-      "recent": 780,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 7,
-     "prompt_tokens": 3440,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c02",
-     "turn": 20,
-     "q": "回到我自己那台，滤网多久换一次？用什么型号的滤网？",
-     "tags": [
-      "recall",
-      "trap"
-     ],
-     "rewritten": "星河 X5 空气净化器的滤网多久更换一次？使用什么型号的滤网？",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "您的 X5 使用 F5-HEPA13 滤网 [1]，建议每 8 个月更换一次；在重度污染地区使用时，应缩短至 5 个月 [1]。",
-     "slots": {
-      "product": "星河 X5"
-     },
-     "facts": {
-      "product": "星河 X5"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 7,
-      "summary": 0,
-      "recent": 1812,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 20,
-     "prompt_tokens": 4644,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c02",
-     "turn": 31,
-     "q": "屏幕上显示 E07 是什么意思？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "星河 X5 空气净化器屏幕显示 E07 是什么意思",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "E07 表示后盖未关闭 [1]。请检查后盖卡扣是否扣紧 [1]。",
-     "slots": {
-      "product": "星河 X5"
-     },
-     "facts": {
-      "product": "星河 X5"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 7,
-      "summary": 0,
-      "recent": 2745,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 31,
-     "prompt_tokens": 6110,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c02",
-     "turn": 37,
-     "q": "我那台保修期内滤网坏了能免费换吗？",
-     "tags": [
-      "recall",
-      "trap"
-     ],
-     "rewritten": "星河 X5 空气净化器在保修期内滤网坏了能免费更换吗",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "不能。滤网属于耗材，不在保修范围内 [1]。",
-     "slots": {
-      "product": "星河 X5"
-     },
-     "facts": {
-      "product": "星河 X5"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 7,
-      "summary": 0,
-      "recent": 3200,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 37,
-     "prompt_tokens": 6294,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c02",
-     "turn": 38,
-     "q": "行，谢谢你。",
-     "tags": [
-      "chitchat"
-     ],
-     "rewritten": "行，谢谢你。",
-     "intent": "chitchat",
-     "answer_type": "answer",
-     "answer": "不客气～我是星河优选的智能客服助手，有什么选购或订单方面的问题，随时告诉我。",
-     "slots": {},
-     "facts": {
-      "product": "星河 X5"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 7,
-      "summary": 0,
-      "recent": 3248,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 38,
-     "prompt_tokens": 3509,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c03",
-     "turn": 0,
-     "q": "我在新疆乌鲁木齐，网购的东西寄过来一般几天能到？",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "我在新疆乌鲁木齐，网购的东西寄过来一般几天能到？",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "新疆属于偏远地区，一般 5–8 天能到 [1][2]。具体时效以区域时效表为准 [1]。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 2443,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c03",
-     "turn": 10,
-     "q": "对了我上周已经搬到浙江杭州了，以后收货地址都是浙江。",
-     "tags": [
-      "update"
-     ],
-     "rewritten": "我上周已搬到浙江杭州，以后收货地址都是浙江，需要修改默认收货地址",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 813,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 10,
-     "prompt_tokens": 1679,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c03",
-     "turn": 25,
-     "q": "那寄到我现在这边首重多少钱？",
-     "tags": [
-      "update",
-      "pronoun"
-     ],
-     "rewritten": "寄到浙江杭州的快递首重运费是多少",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "浙江首重 6 元，续重每公斤 2 元，时效次日达 [1]。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 1985,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 25,
-     "prompt_tokens": 5258,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c03",
-     "turn": 32,
-     "q": "一般几天能到我这儿？",
-     "tags": [
-      "update",
-      "pronoun"
-     ],
-     "rewritten": "寄到浙江杭州一般几天能到",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "您现在收货地址在浙江，浙江属于江浙沪地区，一般次日达 [1]。具体时效以区域时效表为准 [1]。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 2614,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 32,
-     "prompt_tokens": 6274,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c03",
-     "turn": 33,
-     "q": "好的明白了。",
-     "tags": [
-      "chitchat"
-     ],
-     "rewritten": "好的明白了。",
-     "intent": "chitchat",
-     "answer_type": "answer",
-     "answer": "好的，有需要随时找我～您可以说说想咨询的商品或订单问题哦。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 2681,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 33,
-     "prompt_tokens": 3111,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c04",
-     "turn": 0,
-     "q": "我的手机号是 13812345678，订单 2026101200777 的面霜用了过敏，怎么退？",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "我的手机号是 13812345678，订单 2026101200777 的面霜用了过敏，怎么退？",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "抱歉，您的问题我暂时无法完整回答，先说明能确认的部分：\n\n**过敏退货的处理要点**\n- 已拆封或使用的美妆产品不支持无理由退货；过敏需提供二级以上医院诊断证明 [2]。\n- 处理流程：在订单详情页提交申请并上传凭证 → 商家 48 小时内审核 → 审核通过后按系统给出的地址寄回 → 商家收货验货后确认退款 → 系统按支付渠道原路退款 [1]。\n- 寄回地址以审核通过后系统给出的地址为准，寄往其他",
-     "slots": {
-      "order_no": "2026101200777",
-      "product": "面霜",
-      "phone": "13812345678"
-     },
-     "facts": {
-      "order_no": "2026101200777",
-      "phone": "13812345678",
-      "product": "面霜"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 2204,
-     "foreign_ids": [],
-     "answer_ok": true,
-     "facts_ok": true
-    },
-    {
-     "conv": "c04",
-     "turn": 9,
-     "q": "手机号我换了，新号码是 13987654321，以后联系这个。",
-     "tags": [
-      "update"
-     ],
-     "rewritten": "我的手机号更换为 13987654321，以后联系这个新号码",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "phone": "13987654321"
-     },
-     "facts": {
-      "phone": "13987654321",
-      "order_no": "2026101200777",
-      "product": "面霜"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 21,
-      "summary": 0,
-      "recent": 1097,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 9,
-     "prompt_tokens": 1896,
-     "foreign_ids": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c04",
-     "turn": 18,
-     "q": "等等，那个订单号不对，不是这个，你先不用管它了。",
-     "tags": [
-      "retract"
-     ],
-     "rewritten": "订单号不对，先不用管它了",
-     "intent": "kb_qa",
-     "answer_type": "refused",
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。",
-     "slots": {},
-     "facts": {
-      "phone": "13987654321",
-      "order_no": "2026101200777",
-      "product": "面霜"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 21,
-      "summary": 0,
-      "recent": 1826,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 18,
-     "prompt_tokens": 3466,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c04",
-     "turn": 33,
-     "q": "过敏退货需要提供什么材料？",
-     "tags": [
-      "recall"
-     ],
-     "rewritten": "过敏退货需要提供什么材料？",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "过敏退货需要提供二级以上医院出具的诊断证明 [1]。已拆封或使用的美妆产品不支持无理由退货，过敏情形需凭该诊断证明申请 [1]。",
-     "slots": {},
-     "facts": {
-      "phone": "13987654321",
-      "order_no": "2026101200777",
-      "product": "面霜"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 21,
-      "summary": 0,
-      "recent": 3064,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 33,
-     "prompt_tokens": 6308,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c04",
-     "turn": 42,
-     "q": "你们会打哪个号码联系我？",
-     "tags": [
-      "update"
-     ],
-     "rewritten": "你们会打哪个号码联系我？",
-     "intent": "kb_qa",
-     "answer_type": "refused",
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。",
-     "slots": {
-      "phone": "13987654321"
-     },
-     "facts": {
-      "phone": "13987654321",
-      "order_no": "2026101200777",
-      "product": "面霜"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 21,
-      "summary": 0,
-      "recent": 3811,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 42,
-     "prompt_tokens": 4762,
-     "foreign_ids": [],
-     "rewrite_ok": false,
-     "forbid_hit": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c05",
-     "turn": 0,
-     "q": "我有两个订单，耳机那单是 2026100900111，奶粉那单是 2026100900222。",
-     "tags": [
-      "slot",
-      "trap"
-     ],
-     "rewritten": "我有两个订单，耳机那单是 2026100900111，奶粉那单是 2026100900222。",
-     "intent": "clarify",
-     "answer_type": "answer",
-     "answer": "请问您想对这两个订单做什么？查物流、退款还是其他？",
-     "slots": {
-      "order_no": "2026100900111"
-     },
-     "facts": {
-      "order_no": "2026100900111"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 1123,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c05",
-     "turn": 6,
-     "q": "耳机那单有杂音，能换货吗？",
-     "tags": [
-      "trap"
-     ],
-     "rewritten": "订单 2026100900111 的耳机有杂音，能换货吗",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。\n\n（说明：我这边没有查到订单 2026100900111 的品类、签收时间等具体信息，无法判断是否在换货期限内。建议您提供该订单的商品品类和签收日期，或直接在订单详情页提交售后申请。）",
-     "slots": {
-      "order_no": "2026100900111",
-      "product": "耳机"
-     },
-     "facts": {
-      "order_no": "2026100900111",
-      "product": "耳机"
-     },
-     "degraded": [
-      "no_citation"
-     ],
-     "context_usage": {
-      "facts": 8,
-      "summary": 0,
-      "recent": 455,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 6,
-     "prompt_tokens": 2796,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c05",
-     "turn": 15,
-     "q": "奶粉那单开封了还能退吗？",
-     "tags": [
-      "trap",
-      "recall"
-     ],
-     "rewritten": "订单 2026100900222 的奶粉已开封还能退货吗",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "奶粉拆封后不支持退货[1]。",
-     "slots": {
-      "order_no": "2026100900222",
-      "product": "奶粉"
-     },
-     "facts": {
-      "order_no": "2026100900222",
-      "product": "奶粉"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 14,
-      "summary": 0,
-      "recent": 1203,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 15,
-     "prompt_tokens": 3879,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c05",
-     "turn": 22,
-     "q": "奶粉那个订单号你再跟我确认一下？",
-     "tags": [
-      "trap",
-      "recall"
-     ],
-     "rewritten": "确认奶粉订单的订单号",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "product": "奶粉",
-      "order_no": "2026100900222"
-     },
-     "facts": {
-      "order_no": "2026100900222",
-      "product": "奶粉"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 15,
-      "summary": 0,
-      "recent": 1751,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 22,
-     "prompt_tokens": 2383,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c05",
-     "turn": 23,
-     "q": "谢谢。",
-     "tags": [
-      "chitchat"
-     ],
-     "rewritten": "谢谢。",
-     "intent": "chitchat",
-     "answer_type": "answer",
-     "answer": "不客气，还有其他问题随时问我。",
-     "slots": {},
-     "facts": {
-      "order_no": "2026100900222",
-      "product": "奶粉"
-     },
-     "degraded": [],
-     "context_usage": {},
-     "summary_version": null,
-     "recent_turns": null,
-     "prompt_tokens": 0,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c06",
-     "turn": 0,
-     "q": "我要退一张沙发，订单号 2026090100345，是大促期间买的，家离仓库大概 30 公里。",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "我要退一张沙发，订单号 2026090100345，是大促期间买的，家离仓库大概 30 公里，退货怎么办理",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "order_no": "2026090100345",
-      "product": "沙发"
-     },
-     "facts": {
-      "order_no": "2026090100345",
-      "product": "沙发"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 1125,
-     "foreign_ids": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c06",
-     "turn": 17,
-     "q": "顺便问下，星河豆第 3 版规则的有效期是多久？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "星河豆第 3 版规则中星河豆的有效期是多久",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "星河豆第 3 版规则规定，星河豆自获得之日起 15 个月内有效[1]。不过该版本已于 2020 年废止[1]，建议以现行规则为准。",
-     "slots": {},
-     "facts": {
-      "order_no": "2026090100345",
-      "product": "沙发"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 14,
-      "summary": 0,
-      "recent": 1258,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 17,
-     "prompt_tokens": 3892,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c06",
-     "turn": 36,
-     "q": "书籍七天无理由退货寄回邮费怎么算？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "书籍七天无理由退货寄回邮费怎么算？",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "图书音像类非质量原因退货，寄回运费由买家承担，首重 8 元[1]；如果是质量问题，往返运费由商家承担[1]。",
-     "slots": {},
-     "facts": {
-      "order_no": "2026090100345",
-      "product": "沙发"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 14,
-      "summary": 0,
-      "recent": 2945,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 36,
-     "prompt_tokens": 5882,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c06",
-     "turn": 56,
-     "q": "回到最开始那张沙发，上门取件费用是多少？",
-     "tags": [
-      "recall"
-     ],
-     "rewritten": "订单 2026090100345 的沙发退货上门取件费用是多少",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "您这张沙发距离仓库约 30 公里，属于 20–50 公里区间，上门取件费为 120 元[1]。如果是质量问题退货，往返运费由商家承担，您无需支付这笔费用[2]；非质量原因退货则由您承担上门取件费[2]。",
-     "slots": {
-      "order_no": "2026090100345",
-      "product": "沙发"
-     },
-     "facts": {
-      "order_no": "2026090100345",
-      "product": "沙发"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 14,
-      "summary": 0,
-      "recent": 4517,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 56,
-     "prompt_tokens": 8703,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true
-    },
-    {
-     "conv": "c06",
-     "turn": 57,
-     "q": "还有我最早那个订单是大促买的，价格保护多少天？",
-     "tags": [
-      "recall"
-     ],
-     "rewritten": "大促期间购买的沙发订单 2026090100345 的价格保护期是多少天",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "您这张沙发订单是大促期间购买的，价格保护期为 30 天[1]。",
-     "slots": {
-      "order_no": "2026090100345",
-      "product": "沙发"
-     },
-     "facts": {
-      "order_no": "2026090100345",
-      "product": "沙发"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 14,
-      "summary": 0,
-      "recent": 4645,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 57,
-     "prompt_tokens": 8359,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true
-    },
-    {
-     "conv": "c06",
-     "turn": 58,
-     "q": "好的，谢谢你这么耐心。",
-     "tags": [
-      "chitchat"
-     ],
-     "rewritten": "好的，谢谢你这么耐心。",
-     "intent": "chitchat",
-     "answer_type": "answer",
-     "answer": "不客气～有商品、订单或售后相关的问题，随时告诉我就好。",
-     "slots": {},
-     "facts": {
-      "order_no": "2026090100345",
-      "product": "沙发"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 14,
-      "summary": 0,
-      "recent": 4703,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 58,
-     "prompt_tokens": 4549,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c07",
-     "turn": 0,
-     "q": "我有一个海外仓直邮的订单 HW2026100566881，想退货。",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "海外仓直邮订单 HW2026100566881 如何退货",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "order_no": "HW2026100566881"
-     },
-     "facts": {
-      "order_no": "HW2026100566881"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 1114,
-     "foreign_ids": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c07",
-     "turn": 12,
-     "q": "另外我妈妈在香港，港澳台退货寄回的运费最多报销多少？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "港澳台地区退货寄回的运费最多报销多少",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "港澳台订单须寄回香港集运仓，寄回运费最高报销 60 元[1][2]。",
-     "slots": {},
-     "facts": {
-      "order_no": "HW2026100566881"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 9,
-      "summary": 0,
-      "recent": 961,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 12,
-     "prompt_tokens": 3596,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c07",
-     "turn": 29,
-     "q": "刚才那个海外订单的退款多久能到账？",
-     "tags": [
-      "recall",
-      "pronoun"
-     ],
-     "rewritten": "海外仓直邮订单 HW2026100566881 的退款多久能到账",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "海外仓直邮订单的退款原路退回，15 个工作日内到账，汇率差不予补偿[2][4]。",
-     "slots": {
-      "order_no": "HW2026100566881"
-     },
-     "facts": {
-      "order_no": "HW2026100566881"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 9,
-      "summary": 0,
-      "recent": 2491,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 29,
-     "prompt_tokens": 5688,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true
-    },
-    {
-     "conv": "c07",
-     "turn": 46,
-     "q": "跨境退货的关税会退吗？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "跨境退货的关税会退吗",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "因质量问题退货的，已缴关税随退款一并退还；非质量原因退货的，关税不退[1]。",
-     "slots": {},
-     "facts": {
-      "order_no": "HW2026100566881"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 9,
-      "summary": 0,
-      "recent": 3768,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 46,
-     "prompt_tokens": 6986,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c07",
-     "turn": 47,
-     "q": "那就先这样，订单号你别记错了。",
-     "tags": [
-      "recall"
-     ],
-     "rewritten": "那就先这样，订单号你别记错了。",
-     "intent": "chitchat",
-     "answer_type": "answer",
-     "answer": "好的，您放心～有订单或售后问题随时找我，我帮您跟进。",
-     "slots": {
-      "order_no": "HW2026100566881"
-     },
-     "facts": {
-      "order_no": "HW2026100566881"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 9,
-      "summary": 0,
-      "recent": 3823,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 47,
-     "prompt_tokens": 3941,
-     "foreign_ids": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c08",
-     "turn": 0,
-     "q": "我买了台笔记本电脑，订单 2026101000999，已经开机激活了，还能七天无理由吗？",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "我买了台笔记本电脑，订单 2026101000999，已经开机激活了，还能七天无理由吗？",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "不能。笔记本电脑激活后不支持七天无理由退货 [1][2]。如有质量问题，可在 15 天内申请换货 [2]。",
-     "slots": {
-      "order_no": "2026101000999",
-      "product": "笔记本电脑"
-     },
-     "facts": {
-      "order_no": "2026101000999",
-      "product": "笔记本电脑"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 2019,
-     "foreign_ids": [],
-     "answer_ok": true,
-     "facts_ok": true
-    },
-    {
-     "conv": "c08",
-     "turn": 16,
-     "q": "那这台电脑要是有质量问题呢？",
-     "tags": [
-      "recall",
-      "pronoun"
-     ],
-     "rewritten": "已激活的笔记本电脑出现质量问题可以怎么处理",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "如果这台笔记本电脑存在质量问题，签收后 15 天内可以选择退货或换货 [2]；超过 15 天但在 365 天保修期内的，可以申请免费维修 [2]。申请时请提供清晰可辨的凭证，照片应能显示商品全貌、问题部位及商品标签或序列号 [1]。",
-     "slots": {
-      "order_no": "2026101000999",
-      "product": "笔记本电脑"
-     },
-     "facts": {
-      "order_no": "2026101000999",
-      "product": "笔记本电脑"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 19,
-      "summary": 0,
-      "recent": 1201,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 16,
-     "prompt_tokens": 3643,
-     "foreign_ids": [],
-     "rewrite_ok": true
-    },
-    {
-     "conv": "c08",
-     "turn": 26,
-     "q": "我的订单号你那边记的是多少？",
-     "tags": [
-      "recall",
-      "trap"
-     ],
-     "rewritten": "我的订单号是多少",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "order_no": "2026101000999",
-      "product": "笔记本电脑"
-     },
-     "facts": {
-      "order_no": "2026101000999",
-      "product": "笔记本电脑"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 19,
-      "summary": 0,
-      "recent": 1885,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 26,
-     "prompt_tokens": 2495,
-     "foreign_ids": [],
-     "rewrite_ok": false,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c08",
-     "turn": 27,
-     "q": "好，谢谢。",
-     "tags": [
-      "chitchat"
-     ],
-     "rewritten": "好，谢谢。",
-     "intent": "chitchat",
-     "answer_type": "answer",
-     "answer": "不客气～有关于星河优选的问题随时问我，我来帮您看看。",
-     "slots": {},
-     "facts": {
-      "order_no": "2026101000999",
-      "product": "笔记本电脑"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 19,
-      "summary": 0,
-      "recent": 1919,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 27,
-     "prompt_tokens": 2662,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c09",
-     "turn": 0,
-     "q": "我是平台上的商家，店铺 ID 是 SHOP20260088，想了解违规扣分。",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "我是平台上的商家，店铺 ID 是 SHOP20260088，想了解违规扣分。",
-     "intent": "kb_qa",
-     "answer_type": "refused",
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。",
-     "slots": {},
-     "facts": {},
-     "degraded": [
-      "output_filtered"
-     ],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 2617,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c09",
-     "turn": 9,
-     "q": "虚假发货一次扣几分？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "商家虚假发货一次扣几分",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "商家虚假发货（上传无效物流单号或物流信息与实际不符）的，每次扣 6 分，并向买家支付订单实付金额 20% 的违约金，最高不超过 200 元。[1]",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 805,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 9,
-     "prompt_tokens": 3599,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c09",
-     "turn": 20,
-     "q": "延迟发货最多要赔顾客多少钱？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "商家延迟发货最多需要赔付顾客多少钱",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "商家未在承诺时效内发货的，构成延迟发货，应向买家赔付订单实付金额的 30%，单笔最低 5 元、最高 500 元；预售商品以页面约定的发货时间为准。[1]",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 1777,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 20,
-     "prompt_tokens": 4861,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c09",
-     "turn": 33,
-     "q": "那刚才说的虚假发货，累计扣满 12 分会怎样？",
-     "tags": [
-      "pronoun"
-     ],
-     "rewritten": "商家虚假发货累计扣满 12 分会有什么处罚",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "一般违规行为扣分累计达到 12 分的，平台对商家店铺采取限制参加营销活动 7 日的措施；累计达到 24 分的，限制发布新商品 14 日。[1]",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 3008,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 33,
-     "prompt_tokens": 6538,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true
-    },
-    {
-     "conv": "c09",
-     "turn": 39,
-     "q": "商品标题最多能写多少字？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "商品标题最多能写多少字",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "商品标题不得超过 60 个汉字，且不得堆砌与商品无关的关键词。[1]",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 3574,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 39,
-     "prompt_tokens": 7200,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c10",
-     "turn": 0,
-     "q": "我们和你们签了仓储合同，编号 XH-WL-2026-0158，想咨询货物丢失赔偿。",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "我们和你们签了仓储合同，编号 XH-WL-2026-0158，想咨询货物丢失赔偿。",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "货物丢失的，乙方按货值的 100% 赔偿[1]；单票货物赔偿金额最高不超过 5,000 元，甲方保价的按保价金额赔偿[2]。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 2533,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c10",
-     "turn": 15,
-     "q": "单票赔偿上限是多少？",
-     "tags": [
-      "recall",
-      "pronoun"
-     ],
-     "rewritten": "仓储物流合同中货物丢失的单票赔偿上限是多少",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "单票货物赔偿金额最高不超过 5,000 元，甲方保价的按保价金额赔偿[2]。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 1250,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 15,
-     "prompt_tokens": 4221,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true
-    },
-    {
-     "conv": "c10",
-     "turn": 35,
-     "q": "仓储服务费是每月几号结算付款？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "仓储服务费是每月几号结算付款？",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "费用按月结算，乙方于次月 5 日前提供对账单，甲方于次月 15 日前付款[1]。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 2965,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 35,
-     "prompt_tokens": 6546,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c10",
-     "turn": 52,
-     "q": "我们那份合同的争议由哪里仲裁？",
-     "tags": [
-      "recall"
-     ],
-     "rewritten": "星河优选仓储物流合同（编号 XH-WL-2026-0158）的争议由哪里仲裁",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "因该合同产生的争议，双方协商解决；协商不成的，提交杭州仲裁委员会仲裁[1]。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 4449,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 52,
-     "prompt_tokens": 7993,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true
-    },
-    {
-     "conv": "c10",
-     "turn": 53,
-     "q": "好的，感谢。",
-     "tags": [
-      "chitchat"
-     ],
-     "rewritten": "好的，感谢。",
-     "intent": "chitchat",
-     "answer_type": "answer",
-     "answer": "不客气～我是星河优选的智能客服助手，有什么想了解的，随时告诉我哦。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 4516,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 53,
-     "prompt_tokens": 4391,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c11",
-     "turn": 0,
-     "q": "你好，我在四川成都，订单 2026092800468 买的电视机签收第二天就黑屏了，想退货。",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "我在四川成都，订单 2026092800468 买的电视机签收第二天就黑屏了，想退货，怎么处理",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "order_no": "2026092800468",
-      "product": "电视机"
-     },
-     "facts": {
-      "order_no": "2026092800468",
-      "product": "电视机"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 1124,
-     "foreign_ids": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c11",
-     "turn": 19,
-     "q": "订单号我核对了一下，正确的是 2026092800486，之前那个最后两位写反了。",
-     "tags": [
-      "update"
-     ],
-     "rewritten": "订单号更正为 2026092800486，之前提供的 2026092800468 最后两位写反了",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "order_no": "2026092800486",
-      "product": "电视机"
-     },
-     "facts": {
-      "order_no": "2026092800486",
-      "product": "电视机"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 14,
-      "summary": 0,
-      "recent": 6170,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 19,
-     "prompt_tokens": 4856,
-     "foreign_ids": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c11",
-     "turn": 40,
-     "q": "电视这种大件退货，上门取件要我出钱吗？",
-     "tags": [
-      "recall"
-     ],
-     "rewritten": "电视机大件商品退货，上门取件需要用户支付费用吗",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "这要看退货原因：\n\n- 如果是质量问题，往返运费由商家承担，您不需要出上门取件费 [1][4]。\n- 如果是非质量原因退货，寄回运费由买家承担，上门取件费按距离计费 [1][3]：5 公里以内 30 元，5–20 公里 60 元，20–50 公里 120 元，50 公里以上每公里 2 元、最高 300 元 [3]。\n\n另外提醒一下，您这笔订单是电视机，属于数码家电品类，非质量原因退货的寄回运费按首",
-     "slots": {
-      "product": "电视机"
-     },
-     "facts": {
-      "order_no": "2026092800486",
-      "product": "电视机",
-      "issue_type": "退货",
-      "address_region": "四川成都",
-      "other:quality_issue": "签收第二天黑屏",
-      "other:address_filled_wrong": "收货地址填错了,想修改",
-      "other:pickup_not_arrived": "预约上门取件快递员一直没来",
-      "other:not_received": "快递显示签收但未收到货",
-      "other:considering_exchange": "不想退了,想直接换货",
-      "other:invoice_for_reimbursement": "需要电子发票用于公司报销",
-      "other:fraud_call": "有人冒充客服索要验证码"
-     },
-     "degraded": [
-      "history_gap"
-     ],
-     "context_usage": {
-      "facts": 14,
-      "summary": 0,
-      "recent": 7731,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 0,
-     "recent_turns": 24,
-     "prompt_tokens": 11265,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true
-    },
-    {
-     "conv": "c11",
-     "turn": 58,
-     "q": "我那个订单的退款会退到哪里？订单号再帮我确认下。",
-     "tags": [
-      "update",
-      "recall"
-     ],
-     "rewritten": "订单 2026092800486 的退款会退到哪里",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "您的订单号是 2026092800486。\n\n退款会原路退回到您的支付账户：余额支付即时到账，支付宝和微信一般 1–3 个工作日，银行卡一般 1–7 个工作日，具体以银行处理时间为准。退款成功后会有短信通知。",
-     "slots": {
-      "order_no": "2026092800486"
-     },
-     "facts": {
-      "order_no": "2026092800486",
-      "issue_type": "退货",
-      "product": "电视机",
-      "other:address_filled_wrong": "收货地址填错了,想修改",
-      "other:pickup_not_arrived": "预约上门取件快递员一直没来",
-      "other:not_received": "快递显示签收但未收到货",
-      "other:considering_exchange": "不想退了,想直接换货",
-      "other:invoice_for_reimbursement": "需要电子发票用于公司报销",
-      "other:fraud_call": "有人冒充客服索要验证码",
-      "address_region": "四川成都",
-      "other:quality_issue": "签收第二天黑屏"
-     },
-     "degraded": [
-      "history_gap",
-      "no_citation"
-     ],
-     "context_usage": {
-      "facts": 156,
-      "summary": 688,
-      "recent": 6985,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 2,
-     "recent_turns": 20,
-     "prompt_tokens": 11754,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c11",
-     "turn": 59,
-     "q": "寄到我所在的省份一般要几天？",
-     "tags": [
-      "recall"
-     ],
-     "rewritten": "从星河优选发货寄到四川成都一般需要几天？",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "江浙沪地区次日达，其他省份 2–4 天，新疆、西藏、青海等偏远地区 5–8 天，具体以区域时效表为准。[1]",
-     "slots": {},
-     "facts": {
-      "order_no": "2026092800486",
-      "issue_type": "退货",
-      "product": "电视机",
-      "other:address_filled_wrong": "收货地址填错了,想修改",
-      "other:pickup_not_arrived": "预约上门取件快递员一直没来",
-      "other:not_received": "快递显示签收但未收到货",
-      "other:considering_exchange": "不想退了,想直接换货",
-      "other:invoice_for_reimbursement": "需要电子发票用于公司报销",
-      "other:fraud_call": "有人冒充客服索要验证码",
-      "address_region": "四川成都",
-      "other:quality_issue": "签收第二天黑屏"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 156,
-      "summary": 701,
-      "recent": 1152,
-      "recall": 0,
-      "budget": 8000
-     },
-     "summary_version": 3,
-     "recent_turns": 4,
-     "prompt_tokens": 4580,
-     "foreign_ids": [],
-     "rewrite_ok": true
-    }
-   ]
-  },
-  "16000": {
-   "metrics": {
-    "run_turns": 56,
-    "retention": 0.882,
-    "update_correctness": 0.909,
-    "confusion_rate": 0.0,
-    "rewrite_correctness": 0.909,
-    "answer_quality": 0.962,
-    "fact_accuracy": 1.0,
-    "trap_pass": 0.857,
-    "identifier_mismatch_flags": 0,
-    "history_gap_turns": 1,
-    "avg_prompt_tokens": 4320,
-    "avg_history_tokens": 2369
-   },
-   "compactions": {
-    "success": 1
-   },
-   "cost": {
-    "llm": {
-     "calls": 9,
-     "prompt_tokens": 47686,
-     "cache_hit_tokens": 15488,
-     "completion_tokens": 1306,
-     "yuan_conservative": 0.1058,
-     "yuan_with_cache": 0.0779
-    },
-    "rerank_yuan": 0.0052
-   },
-   "live_first_token_ms": [
-    907,
-    1557
-   ],
-   "wall_s": 27.0,
-   "conversations": [
-    {
-     "conv": "c01",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": [
-      [
-       "order_no",
-       "add",
-       null,
-       "2026100811235",
-       "slot"
-      ],
-      [
-       "product",
-       "add",
-       null,
-       "羽绒服",
-       "slot"
-      ],
-      [
-       "order_no",
-       "update",
-       "2026100811235",
-       "2026100811253",
-       "slot"
-      ]
-     ]
-    },
-    {
-     "conv": "c02",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": [
-      [
-       "product",
-       "add",
-       null,
-       "星河 X5 空气净化器",
-       "slot"
-      ],
-      [
-       "product",
-       "update",
-       "星河 X5 空气净化器",
-       "星河 X7",
-       "slot"
-      ],
-      [
-       "product",
-       "update",
-       "星河 X7",
-       "星河 X5",
-       "slot"
-      ]
-     ]
-    },
-    {
-     "conv": "c03",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": []
-    },
-    {
-     "conv": "c04",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": [
-      [
-       "order_no",
-       "add",
-       null,
-       "2026101200777",
-       "slot"
-      ],
-      [
-       "product",
-       "add",
-       null,
-       "面霜",
-       "slot"
-      ],
-      [
-       "phone",
-       "add",
-       null,
-       "13812345678",
-       "slot"
-      ],
-      [
-       "phone",
-       "update",
-       "13812345678",
-       "13987654321",
-       "slot"
-      ]
-     ]
-    },
-    {
-     "conv": "c05",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": [
-      [
-       "order_no",
-       "add",
-       null,
-       "2026100900111",
-       "slot"
-      ],
-      [
-       "product",
-       "add",
-       null,
-       "耳机",
-       "slot"
-      ],
-      [
-       "order_no",
-       "update",
-       "2026100900111",
-       "2026100900222",
-       "slot"
-      ],
-      [
-       "product",
-       "update",
-       "耳机",
-       "奶粉",
-       "slot"
-      ]
-     ]
-    },
-    {
-     "conv": "c06",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": [
-      [
-       "order_no",
-       "add",
-       null,
-       "2026090100345",
-       "slot"
-      ],
-      [
-       "product",
-       "add",
-       null,
-       "沙发",
-       "slot"
-      ]
-     ]
-    },
-    {
-     "conv": "c07",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": [
-      [
-       "order_no",
-       "add",
-       null,
-       "HW2026100566881",
-       "slot"
-      ]
-     ]
-    },
-    {
-     "conv": "c08",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": [
-      [
-       "order_no",
-       "add",
-       null,
-       "2026101000999",
-       "slot"
-      ],
-      [
-       "product",
-       "add",
-       null,
-       "笔记本电脑",
-       "slot"
-      ]
-     ]
-    },
-    {
-     "conv": "c09",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": []
-    },
-    {
-     "conv": "c10",
-     "summary_version": 0,
-     "summary": null,
-     "fact_history": []
-    },
-    {
-     "conv": "c11",
-     "summary_version": 3,
-     "summary": {
-      "user_goal": "用户订单2026092800486电视机签收第二天黑屏，想退货，并咨询退款到账、运费险理赔、正品保障、七天无理由范围、改地址、未收到货、发货时间、退货寄回方式、黑卡会员、电子发票、外包装破损、价保、防诈骗等问题。",
-      "confirmed_info": [
-       "订单号已更正为 2026092800486（原 2026092800468 最后两位写反）",
-       "用户在四川成都",
-       "商品为电视机，签收第二天黑屏，属质量问题",
-       "人工客服服务时间每天 9:00–22:00，智能客服 7×24 小时",
-       "货到付款单笔上限 3000 元，部分偏远地区和大件商品不支持",
-       "同一订单每件商品最多申请 3 次保价，优惠券退差不计入",
-       "普通商品保价期 7 天，大促商品 30 天",
-       "专票需企业在发票中心提交资质申请，审核通过后邮寄"
-      ],
-      "solutions_given": [
-       "退款原路返回：余额即时，支付宝微信 1–3 工作日，银行卡 1–7 工作日，成功后有短信通知",
-       "运费险退货完成后自动理赔，按首重标准，一般 1–3 个工作日到账，订单详情可查进度",
-       "商品来自品牌授权或官方渠道，支持假一赔四，可提交第三方鉴定申请",
-       "不支持七天无理由：定制、鲜活易腐、已激活数码、拆封影响健康护理品、已拆封音像制品等",
-       "未发货可在订单详情改地址，每单最多 2 次；已发货需联系快递改派，可能产生费用",
-       "未收到货先联系快递员、查快递柜驿站门卫，48 小时未找到可提交“未收到货”工单",
-       "现货付款后 48 小时内发货，预售以商品页为准，大促可能延长，订单详情可查",
-       "退货可上门取件或自行寄回，自行寄回需 7 天内在售后单填运单号，超时可能关闭"
-      ],
-      "open_issues": [
-       "电视机黑屏退货需人工客服办理，尚未完成",
-       "用户反映约好上门取件但快递员一直没来",
-       "用户询问不想退能否直接换货",
-       "用户询问黑卡会员权益及是否值得开通",
-       "用户询问退款进度查询方式"
-      ]
-     },
-     "fact_history": [
-      [
-       "order_no",
-       "add",
-       null,
-       "2026092800468",
-       "slot"
-      ],
-      [
-       "product",
-       "add",
-       null,
-       "电视机",
-       "slot"
-      ],
-      [
-       "order_no",
-       "update",
-       "2026092800468",
-       "2026092800486",
-       "slot"
-      ],
-      [
-       "issue_type",
-       "add",
-       null,
-       "退货",
-       "compaction"
-      ],
-      [
-       "address_region",
-       "add",
-       null,
-       "四川成都",
-       "compaction"
-      ],
-      [
-       "other:quality_issue",
-       "add",
-       null,
-       "签收第二天黑屏",
-       "compaction"
-      ],
-      [
-       "other:address_filled_wrong",
-       "add",
-       null,
-       "收货地址填错了,想修改",
-       "compaction"
-      ],
-      [
-       "other:pickup_not_arrived",
-       "add",
-       null,
-       "预约上门取件快递员一直没来",
-       "compaction"
-      ],
-      [
-       "other:not_received",
-       "add",
-       null,
-       "快递显示签收但未收到货",
-       "compaction"
-      ],
-      [
-       "other:considering_exchange",
-       "add",
-       null,
-       "不想退了,想直接换货",
-       "compaction"
-      ],
-      [
-       "other:invoice_for_reimbursement",
-       "add",
-       null,
-       "需要电子发票用于公司报销",
-       "compaction"
-      ],
-      [
-       "other:fraud_call",
-       "add",
-       null,
-       "有人冒充客服索要验证码",
-       "compaction"
-      ]
-     ]
-    }
-   ],
-   "rows": [
-    {
-     "conv": "c01",
-     "turn": 0,
-     "q": "你好，我上周买了一件羽绒服，订单号 2026100811235，穿着不合适想退。",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "订单 2026100811235 购买的羽绒服穿着不合适，如何退货",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "order_no": "2026100811235",
-      "product": "羽绒服"
-     },
-     "facts": {
-      "order_no": "2026100811235",
-      "product": "羽绒服"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 1120,
-     "foreign_ids": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c01",
-     "turn": 6,
-     "q": "不好意思，刚才订单号说错了，应该是 2026100811253。",
-     "tags": [
-      "update"
-     ],
-     "rewritten": "订单号更正为 2026100811253，羽绒服退货的售后单提交后多久审核",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "order_no": "2026100811253",
-      "product": "羽绒服"
-     },
-     "facts": {
-      "order_no": "2026100811253",
-      "product": "羽绒服"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 16,
-      "summary": 0,
-      "recent": 368,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 6,
-     "prompt_tokens": 1402,
-     "foreign_ids": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c01",
-     "turn": 20,
-     "q": "那件衣服签收后几天内可以无理由退？",
-     "tags": [
-      "recall",
-      "pronoun"
-     ],
-     "rewritten": "羽绒服签收后几天内可以无理由退货",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "服装鞋包类商品自签收日起 15 天内可申请无理由退货 [1]。需注意：港澳台收货的订单无理由退货期限统一为 7 天 [3][5]，海外仓直邮订单不支持无理由退货 [3][4]。",
-     "slots": {
-      "product": "羽绒服"
-     },
-     "facts": {
-      "order_no": "2026100811253",
-      "product": "羽绒服"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 16,
-      "summary": 0,
-      "recent": 1441,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 20,
-     "prompt_tokens": 4254,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true
-    },
-    {
-     "conv": "c01",
-     "turn": 26,
-     "q": "我那个订单现在退的话，还在无理由期限内吗？我是 10 月 9 号签收的。",
-     "tags": [
-      "update",
-      "pronoun"
-     ],
-     "rewritten": "订单 2026100811253 的羽绒服 10 月 9 日签收，现在申请无理由退货是否还在期限内",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "您 10 月 9 日签收，服装鞋包类商品自签收日起 15 天内可申请无理由退货 [1]，因此只要在 10 月 24 日（含）前提交申请即可。",
-     "slots": {
-      "order_no": "2026100811253",
-      "product": "羽绒服"
-     },
-     "facts": {
-      "order_no": "2026100811253",
-      "product": "羽绒服"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 16,
-      "summary": 0,
-      "recent": 2024,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 26,
-     "prompt_tokens": 4939,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c01",
-     "turn": 27,
-     "q": "好的，那就按这个订单号帮我记一下，谢谢。",
-     "tags": [
-      "update"
-     ],
-     "rewritten": "请记录订单号 2026100811253 的退货申请",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "order_no": "2026100811253",
-      "product": "羽绒服"
-     },
-     "facts": {
-      "order_no": "2026100811253",
-      "product": "羽绒服"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 16,
-      "summary": 0,
-      "recent": 2124,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 27,
-     "prompt_tokens": 2641,
-     "foreign_ids": [],
-     "forbid_hit": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c02",
-     "turn": 0,
-     "q": "我买的是星河 X5 空气净化器，用了两个月，想问下保养的事。",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "我买的是星河 X5 空气净化器，用了两个月，想问下保养的事。",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "X5 的保养要点如下：\n\n- 预滤网：每 4 周用清水冲洗一次，晾干后装回 [1]。\n- 主滤网 F5-HEPA13：不可水洗 [1]。\n- 滤网更换：建议每 8 个月更换一次；重度污染地区应缩短至 5 个月 [2]。更换后长按“复位”键 3 秒清除提醒 [2]。\n- 如出现异味，请检查滤网是否到期（8 个月）[4]。\n\n如需购买原装配件，可在星河优选 App 搜索“AirPure 配件” [3]",
-     "slots": {
-      "product": "星河 X5 空气净化器"
-     },
-     "facts": {
-      "product": "星河 X5 空气净化器"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 2139,
-     "foreign_ids": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c02",
-     "turn": 7,
-     "q": "另外我朋友买的是 X7，他家客厅 40 平，X7 够用吗？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "星河 X7 空气净化器适用面积是多少，40 平的客厅够用吗",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "够用。X7 适用面积为 45–80 ㎡ [1]，40 ㎡ 客厅在其适用范围内。",
-     "slots": {
-      "product": "星河 X7"
-     },
-     "facts": {
-      "product": "星河 X7"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 16,
-      "summary": 0,
-      "recent": 780,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 7,
-     "prompt_tokens": 3440,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c02",
-     "turn": 20,
-     "q": "回到我自己那台，滤网多久换一次？用什么型号的滤网？",
-     "tags": [
-      "recall",
-      "trap"
-     ],
-     "rewritten": "星河 X5 空气净化器的滤网多久更换一次？使用什么型号的滤网？",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "您的 X5 使用 F5-HEPA13 滤网 [1]，建议每 8 个月更换一次；在重度污染地区使用时，应缩短至 5 个月 [1]。",
-     "slots": {
-      "product": "星河 X5"
-     },
-     "facts": {
-      "product": "星河 X5"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 7,
-      "summary": 0,
-      "recent": 1812,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 20,
-     "prompt_tokens": 4644,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c02",
-     "turn": 31,
-     "q": "屏幕上显示 E07 是什么意思？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "星河 X5 空气净化器屏幕显示 E07 是什么意思",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "E07 表示后盖未关闭 [1]。请检查后盖卡扣是否扣紧 [1]。",
-     "slots": {
-      "product": "星河 X5"
-     },
-     "facts": {
-      "product": "星河 X5"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 7,
-      "summary": 0,
-      "recent": 2745,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 31,
-     "prompt_tokens": 6110,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c02",
-     "turn": 37,
-     "q": "我那台保修期内滤网坏了能免费换吗？",
-     "tags": [
-      "recall",
-      "trap"
-     ],
-     "rewritten": "星河 X5 空气净化器在保修期内滤网坏了能免费更换吗",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "不能。滤网属于耗材，不在保修范围内 [1]。",
-     "slots": {
-      "product": "星河 X5"
-     },
-     "facts": {
-      "product": "星河 X5"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 7,
-      "summary": 0,
-      "recent": 3200,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 37,
-     "prompt_tokens": 6294,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c02",
-     "turn": 38,
-     "q": "行，谢谢你。",
-     "tags": [
-      "chitchat"
-     ],
-     "rewritten": "行，谢谢你。",
-     "intent": "chitchat",
-     "answer_type": "answer",
-     "answer": "不客气～我是星河优选的智能客服助手，有什么选购或订单方面的问题，随时告诉我。",
-     "slots": {},
-     "facts": {
-      "product": "星河 X5"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 7,
-      "summary": 0,
-      "recent": 3248,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 38,
-     "prompt_tokens": 3509,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c03",
-     "turn": 0,
-     "q": "我在新疆乌鲁木齐，网购的东西寄过来一般几天能到？",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "我在新疆乌鲁木齐，网购的东西寄过来一般几天能到？",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "新疆属于偏远地区，一般 5–8 天能到 [1][2]。具体时效以区域时效表为准 [1]。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 2443,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c03",
-     "turn": 10,
-     "q": "对了我上周已经搬到浙江杭州了，以后收货地址都是浙江。",
-     "tags": [
-      "update"
-     ],
-     "rewritten": "我上周已搬到浙江杭州，以后收货地址都是浙江，需要修改默认收货地址",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 813,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 10,
-     "prompt_tokens": 1679,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c03",
-     "turn": 25,
-     "q": "那寄到我现在这边首重多少钱？",
-     "tags": [
-      "update",
-      "pronoun"
-     ],
-     "rewritten": "寄到浙江杭州的快递首重运费是多少",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "浙江首重 6 元，续重每公斤 2 元，时效次日达 [1]。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 1985,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 25,
-     "prompt_tokens": 5258,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c03",
-     "turn": 32,
-     "q": "一般几天能到我这儿？",
-     "tags": [
-      "update",
-      "pronoun"
-     ],
-     "rewritten": "寄到浙江杭州一般几天能到",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "您现在收货地址在浙江，浙江属于江浙沪地区，一般次日达 [1]。具体时效以区域时效表为准 [1]。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 2614,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 32,
-     "prompt_tokens": 6274,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c03",
-     "turn": 33,
-     "q": "好的明白了。",
-     "tags": [
-      "chitchat"
-     ],
-     "rewritten": "好的明白了。",
-     "intent": "chitchat",
-     "answer_type": "answer",
-     "answer": "好的，有需要随时找我～您可以说说想咨询的商品或订单问题哦。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 2681,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 33,
-     "prompt_tokens": 3111,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c04",
-     "turn": 0,
-     "q": "我的手机号是 13812345678，订单 2026101200777 的面霜用了过敏，怎么退？",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "我的手机号是 13812345678，订单 2026101200777 的面霜用了过敏，怎么退？",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "抱歉，您的问题我暂时无法完整回答，先说明能确认的部分：\n\n**过敏退货的处理要点**\n- 已拆封或使用的美妆产品不支持无理由退货；过敏需提供二级以上医院诊断证明 [2]。\n- 处理流程：在订单详情页提交申请并上传凭证 → 商家 48 小时内审核 → 审核通过后按系统给出的地址寄回 → 商家收货验货后确认退款 → 系统按支付渠道原路退款 [1]。\n- 寄回地址以审核通过后系统给出的地址为准，寄往其他",
-     "slots": {
-      "order_no": "2026101200777",
-      "product": "面霜",
-      "phone": "13812345678"
-     },
-     "facts": {
-      "order_no": "2026101200777",
-      "phone": "13812345678",
-      "product": "面霜"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 2204,
-     "foreign_ids": [],
-     "answer_ok": true,
-     "facts_ok": true
-    },
-    {
-     "conv": "c04",
-     "turn": 9,
-     "q": "手机号我换了，新号码是 13987654321，以后联系这个。",
-     "tags": [
-      "update"
-     ],
-     "rewritten": "我的手机号更换为 13987654321，以后联系这个新号码",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "phone": "13987654321"
-     },
-     "facts": {
-      "phone": "13987654321",
-      "order_no": "2026101200777",
-      "product": "面霜"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 21,
-      "summary": 0,
-      "recent": 1097,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 9,
-     "prompt_tokens": 1896,
-     "foreign_ids": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c04",
-     "turn": 18,
-     "q": "等等，那个订单号不对，不是这个，你先不用管它了。",
-     "tags": [
-      "retract"
-     ],
-     "rewritten": "订单号不对，先不用管它了",
-     "intent": "kb_qa",
-     "answer_type": "refused",
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。",
-     "slots": {},
-     "facts": {
-      "phone": "13987654321",
-      "order_no": "2026101200777",
-      "product": "面霜"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 21,
-      "summary": 0,
-      "recent": 1826,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 18,
-     "prompt_tokens": 3466,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c04",
-     "turn": 33,
-     "q": "过敏退货需要提供什么材料？",
-     "tags": [
-      "recall"
-     ],
-     "rewritten": "过敏退货需要提供什么材料？",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "过敏退货需要提供二级以上医院出具的诊断证明 [1]。已拆封或使用的美妆产品不支持无理由退货，过敏情形需凭该诊断证明申请 [1]。",
-     "slots": {},
-     "facts": {
-      "phone": "13987654321",
-      "order_no": "2026101200777",
-      "product": "面霜"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 21,
-      "summary": 0,
-      "recent": 3064,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 33,
-     "prompt_tokens": 6308,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c04",
-     "turn": 42,
-     "q": "你们会打哪个号码联系我？",
-     "tags": [
-      "update"
-     ],
-     "rewritten": "你们会打哪个号码联系我？",
-     "intent": "kb_qa",
-     "answer_type": "refused",
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。",
-     "slots": {
-      "phone": "13987654321"
-     },
-     "facts": {
-      "phone": "13987654321",
-      "order_no": "2026101200777",
-      "product": "面霜"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 21,
-      "summary": 0,
-      "recent": 3811,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 42,
-     "prompt_tokens": 4762,
-     "foreign_ids": [],
-     "rewrite_ok": false,
-     "forbid_hit": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c05",
-     "turn": 0,
-     "q": "我有两个订单，耳机那单是 2026100900111，奶粉那单是 2026100900222。",
-     "tags": [
-      "slot",
-      "trap"
-     ],
-     "rewritten": "我有两个订单，耳机那单是 2026100900111，奶粉那单是 2026100900222。",
-     "intent": "clarify",
-     "answer_type": "answer",
-     "answer": "请问您想对这两个订单做什么？查物流、退款还是其他？",
-     "slots": {
-      "order_no": "2026100900111"
-     },
-     "facts": {
-      "order_no": "2026100900111"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 1123,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c05",
-     "turn": 6,
-     "q": "耳机那单有杂音，能换货吗？",
-     "tags": [
-      "trap"
-     ],
-     "rewritten": "订单 2026100900111 的耳机有杂音，能换货吗",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。\n\n（说明：我这边没有查到订单 2026100900111 的品类、签收时间等具体信息，无法判断是否在换货期限内。建议您提供该订单的商品品类和签收日期，或直接在订单详情页提交售后申请。）",
-     "slots": {
-      "order_no": "2026100900111",
-      "product": "耳机"
-     },
-     "facts": {
-      "order_no": "2026100900111",
-      "product": "耳机"
-     },
-     "degraded": [
-      "no_citation"
-     ],
-     "context_usage": {
-      "facts": 8,
-      "summary": 0,
-      "recent": 455,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 6,
-     "prompt_tokens": 2796,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c05",
-     "turn": 15,
-     "q": "奶粉那单开封了还能退吗？",
-     "tags": [
-      "trap",
-      "recall"
-     ],
-     "rewritten": "订单 2026100900222 的奶粉已开封还能退货吗",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "奶粉拆封后不支持退货[1]。",
-     "slots": {
-      "order_no": "2026100900222",
-      "product": "奶粉"
-     },
-     "facts": {
-      "order_no": "2026100900222",
-      "product": "奶粉"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 14,
-      "summary": 0,
-      "recent": 1203,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 15,
-     "prompt_tokens": 3879,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c05",
-     "turn": 22,
-     "q": "奶粉那个订单号你再跟我确认一下？",
-     "tags": [
-      "trap",
-      "recall"
-     ],
-     "rewritten": "确认奶粉订单的订单号",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "product": "奶粉",
-      "order_no": "2026100900222"
-     },
-     "facts": {
-      "order_no": "2026100900222",
-      "product": "奶粉"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 15,
-      "summary": 0,
-      "recent": 1751,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 22,
-     "prompt_tokens": 2383,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c05",
-     "turn": 23,
-     "q": "谢谢。",
-     "tags": [
-      "chitchat"
-     ],
-     "rewritten": "谢谢。",
-     "intent": "chitchat",
-     "answer_type": "answer",
-     "answer": "不客气，还有其他问题随时问我。",
-     "slots": {},
-     "facts": {
-      "order_no": "2026100900222",
-      "product": "奶粉"
-     },
-     "degraded": [],
-     "context_usage": {},
-     "summary_version": null,
-     "recent_turns": null,
-     "prompt_tokens": 0,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c06",
-     "turn": 0,
-     "q": "我要退一张沙发，订单号 2026090100345，是大促期间买的，家离仓库大概 30 公里。",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "我要退一张沙发，订单号 2026090100345，是大促期间买的，家离仓库大概 30 公里，退货怎么办理",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "order_no": "2026090100345",
-      "product": "沙发"
-     },
-     "facts": {
-      "order_no": "2026090100345",
-      "product": "沙发"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 1125,
-     "foreign_ids": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c06",
-     "turn": 17,
-     "q": "顺便问下，星河豆第 3 版规则的有效期是多久？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "星河豆第 3 版规则中星河豆的有效期是多久",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "星河豆第 3 版规则规定，星河豆自获得之日起 15 个月内有效[1]。不过该版本已于 2020 年废止[1]，建议以现行规则为准。",
-     "slots": {},
-     "facts": {
-      "order_no": "2026090100345",
-      "product": "沙发"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 14,
-      "summary": 0,
-      "recent": 1258,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 17,
-     "prompt_tokens": 3892,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c06",
-     "turn": 36,
-     "q": "书籍七天无理由退货寄回邮费怎么算？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "书籍七天无理由退货寄回邮费怎么算？",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "图书音像类非质量原因退货，寄回运费由买家承担，首重 8 元[1]；如果是质量问题，往返运费由商家承担[1]。",
-     "slots": {},
-     "facts": {
-      "order_no": "2026090100345",
-      "product": "沙发"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 14,
-      "summary": 0,
-      "recent": 2945,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 36,
-     "prompt_tokens": 5882,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c06",
-     "turn": 56,
-     "q": "回到最开始那张沙发，上门取件费用是多少？",
-     "tags": [
-      "recall"
-     ],
-     "rewritten": "订单 2026090100345 的沙发退货上门取件费用是多少",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "您这张沙发距离仓库约 30 公里，属于 20–50 公里区间，上门取件费为 120 元[1]。如果是质量问题退货，往返运费由商家承担，您无需支付这笔费用[2]；非质量原因退货则由您承担上门取件费[2]。",
-     "slots": {
-      "order_no": "2026090100345",
-      "product": "沙发"
-     },
-     "facts": {
-      "order_no": "2026090100345",
-      "product": "沙发"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 14,
-      "summary": 0,
-      "recent": 4517,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 56,
-     "prompt_tokens": 8703,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true
-    },
-    {
-     "conv": "c06",
-     "turn": 57,
-     "q": "还有我最早那个订单是大促买的，价格保护多少天？",
-     "tags": [
-      "recall"
-     ],
-     "rewritten": "大促期间购买的沙发订单 2026090100345 的价格保护期是多少天",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "您这张沙发订单是大促期间购买的，价格保护期为 30 天[1]。",
-     "slots": {
-      "order_no": "2026090100345",
-      "product": "沙发"
-     },
-     "facts": {
-      "order_no": "2026090100345",
-      "product": "沙发"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 14,
-      "summary": 0,
-      "recent": 4645,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 57,
-     "prompt_tokens": 8359,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true
-    },
-    {
-     "conv": "c06",
-     "turn": 58,
-     "q": "好的，谢谢你这么耐心。",
-     "tags": [
-      "chitchat"
-     ],
-     "rewritten": "好的，谢谢你这么耐心。",
-     "intent": "chitchat",
-     "answer_type": "answer",
-     "answer": "不客气～有商品、订单或售后相关的问题，随时告诉我就好。",
-     "slots": {},
-     "facts": {
-      "order_no": "2026090100345",
-      "product": "沙发"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 14,
-      "summary": 0,
-      "recent": 4703,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 58,
-     "prompt_tokens": 4549,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c07",
-     "turn": 0,
-     "q": "我有一个海外仓直邮的订单 HW2026100566881，想退货。",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "海外仓直邮订单 HW2026100566881 如何退货",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "order_no": "HW2026100566881"
-     },
-     "facts": {
-      "order_no": "HW2026100566881"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 1114,
-     "foreign_ids": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c07",
-     "turn": 12,
-     "q": "另外我妈妈在香港，港澳台退货寄回的运费最多报销多少？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "港澳台地区退货寄回的运费最多报销多少",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "港澳台订单须寄回香港集运仓，寄回运费最高报销 60 元[1][2]。",
-     "slots": {},
-     "facts": {
-      "order_no": "HW2026100566881"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 9,
-      "summary": 0,
-      "recent": 961,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 12,
-     "prompt_tokens": 3596,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c07",
-     "turn": 29,
-     "q": "刚才那个海外订单的退款多久能到账？",
-     "tags": [
-      "recall",
-      "pronoun"
-     ],
-     "rewritten": "海外仓直邮订单 HW2026100566881 的退款多久能到账",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "海外仓直邮订单的退款原路退回，15 个工作日内到账，汇率差不予补偿[2][4]。",
-     "slots": {
-      "order_no": "HW2026100566881"
-     },
-     "facts": {
-      "order_no": "HW2026100566881"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 9,
-      "summary": 0,
-      "recent": 2491,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 29,
-     "prompt_tokens": 5688,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true
-    },
-    {
-     "conv": "c07",
-     "turn": 46,
-     "q": "跨境退货的关税会退吗？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "跨境退货的关税会退吗",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "因质量问题退货的，已缴关税随退款一并退还；非质量原因退货的，关税不退[1]。",
-     "slots": {},
-     "facts": {
-      "order_no": "HW2026100566881"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 9,
-      "summary": 0,
-      "recent": 3768,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 46,
-     "prompt_tokens": 6986,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c07",
-     "turn": 47,
-     "q": "那就先这样，订单号你别记错了。",
-     "tags": [
-      "recall"
-     ],
-     "rewritten": "那就先这样，订单号你别记错了。",
-     "intent": "chitchat",
-     "answer_type": "answer",
-     "answer": "好的，您放心～有订单或售后问题随时找我，我帮您跟进。",
-     "slots": {
-      "order_no": "HW2026100566881"
-     },
-     "facts": {
-      "order_no": "HW2026100566881"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 9,
-      "summary": 0,
-      "recent": 3823,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 47,
-     "prompt_tokens": 3941,
-     "foreign_ids": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c08",
-     "turn": 0,
-     "q": "我买了台笔记本电脑，订单 2026101000999，已经开机激活了，还能七天无理由吗？",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "我买了台笔记本电脑，订单 2026101000999，已经开机激活了，还能七天无理由吗？",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "不能。笔记本电脑激活后不支持七天无理由退货 [1][2]。如有质量问题，可在 15 天内申请换货 [2]。",
-     "slots": {
-      "order_no": "2026101000999",
-      "product": "笔记本电脑"
-     },
-     "facts": {
-      "order_no": "2026101000999",
-      "product": "笔记本电脑"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 2019,
-     "foreign_ids": [],
-     "answer_ok": true,
-     "facts_ok": true
-    },
-    {
-     "conv": "c08",
-     "turn": 16,
-     "q": "那这台电脑要是有质量问题呢？",
-     "tags": [
-      "recall",
-      "pronoun"
-     ],
-     "rewritten": "已激活的笔记本电脑出现质量问题可以怎么处理",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "如果这台笔记本电脑存在质量问题，签收后 15 天内可以选择退货或换货 [2]；超过 15 天但在 365 天保修期内的，可以申请免费维修 [2]。申请时请提供清晰可辨的凭证，照片应能显示商品全貌、问题部位及商品标签或序列号 [1]。",
-     "slots": {
-      "order_no": "2026101000999",
-      "product": "笔记本电脑"
-     },
-     "facts": {
-      "order_no": "2026101000999",
-      "product": "笔记本电脑"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 19,
-      "summary": 0,
-      "recent": 1201,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 16,
-     "prompt_tokens": 3643,
-     "foreign_ids": [],
-     "rewrite_ok": true
-    },
-    {
-     "conv": "c08",
-     "turn": 26,
-     "q": "我的订单号你那边记的是多少？",
-     "tags": [
-      "recall",
-      "trap"
-     ],
-     "rewritten": "我的订单号是多少",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "order_no": "2026101000999",
-      "product": "笔记本电脑"
-     },
-     "facts": {
-      "order_no": "2026101000999",
-      "product": "笔记本电脑"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 19,
-      "summary": 0,
-      "recent": 1885,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 26,
-     "prompt_tokens": 2495,
-     "foreign_ids": [],
-     "rewrite_ok": false,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c08",
-     "turn": 27,
-     "q": "好，谢谢。",
-     "tags": [
-      "chitchat"
-     ],
-     "rewritten": "好，谢谢。",
-     "intent": "chitchat",
-     "answer_type": "answer",
-     "answer": "不客气～有关于星河优选的问题随时问我，我来帮您看看。",
-     "slots": {},
-     "facts": {
-      "order_no": "2026101000999",
-      "product": "笔记本电脑"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 19,
-      "summary": 0,
-      "recent": 1919,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 27,
-     "prompt_tokens": 2662,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c09",
-     "turn": 0,
-     "q": "我是平台上的商家，店铺 ID 是 SHOP20260088，想了解违规扣分。",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "我是平台上的商家，店铺 ID 是 SHOP20260088，想了解违规扣分。",
-     "intent": "kb_qa",
-     "answer_type": "refused",
-     "answer": "抱歉，这个问题我暂时无法回答，您可以换个问法或联系人工客服。",
-     "slots": {},
-     "facts": {},
-     "degraded": [
-      "output_filtered"
-     ],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 2617,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c09",
-     "turn": 9,
-     "q": "虚假发货一次扣几分？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "商家虚假发货一次扣几分",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "商家虚假发货（上传无效物流单号或物流信息与实际不符）的，每次扣 6 分，并向买家支付订单实付金额 20% 的违约金，最高不超过 200 元。[1]",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 805,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 9,
-     "prompt_tokens": 3599,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c09",
-     "turn": 20,
-     "q": "延迟发货最多要赔顾客多少钱？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "商家延迟发货最多需要赔付顾客多少钱",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "商家未在承诺时效内发货的，构成延迟发货，应向买家赔付订单实付金额的 30%，单笔最低 5 元、最高 500 元；预售商品以页面约定的发货时间为准。[1]",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 1777,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 20,
-     "prompt_tokens": 4861,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c09",
-     "turn": 33,
-     "q": "那刚才说的虚假发货，累计扣满 12 分会怎样？",
-     "tags": [
-      "pronoun"
-     ],
-     "rewritten": "商家虚假发货累计扣满 12 分会有什么处罚",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "一般违规行为扣分累计达到 12 分的，平台对商家店铺采取限制参加营销活动 7 日的措施；累计达到 24 分的，限制发布新商品 14 日。[1]",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 3008,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 33,
-     "prompt_tokens": 6538,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true
-    },
-    {
-     "conv": "c09",
-     "turn": 39,
-     "q": "商品标题最多能写多少字？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "商品标题最多能写多少字",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "商品标题不得超过 60 个汉字，且不得堆砌与商品无关的关键词。[1]",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 3574,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 39,
-     "prompt_tokens": 7200,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c10",
-     "turn": 0,
-     "q": "我们和你们签了仓储合同，编号 XH-WL-2026-0158，想咨询货物丢失赔偿。",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "我们和你们签了仓储合同，编号 XH-WL-2026-0158，想咨询货物丢失赔偿。",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "货物丢失的，乙方按货值的 100% 赔偿[1]；单票货物赔偿金额最高不超过 5,000 元，甲方保价的按保价金额赔偿[2]。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 2533,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c10",
-     "turn": 15,
-     "q": "单票赔偿上限是多少？",
-     "tags": [
-      "recall",
-      "pronoun"
-     ],
-     "rewritten": "仓储物流合同中货物丢失的单票赔偿上限是多少",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "单票货物赔偿金额最高不超过 5,000 元，甲方保价的按保价金额赔偿[2]。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 1250,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 15,
-     "prompt_tokens": 4221,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true
-    },
-    {
-     "conv": "c10",
-     "turn": 35,
-     "q": "仓储服务费是每月几号结算付款？",
-     "tags": [
-      "topic"
-     ],
-     "rewritten": "仓储服务费是每月几号结算付款？",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "费用按月结算，乙方于次月 5 日前提供对账单，甲方于次月 15 日前付款[1]。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 2965,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 35,
-     "prompt_tokens": 6546,
-     "foreign_ids": [],
-     "answer_ok": true
-    },
-    {
-     "conv": "c10",
-     "turn": 52,
-     "q": "我们那份合同的争议由哪里仲裁？",
-     "tags": [
-      "recall"
-     ],
-     "rewritten": "星河优选仓储物流合同（编号 XH-WL-2026-0158）的争议由哪里仲裁",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "因该合同产生的争议，双方协商解决；协商不成的，提交杭州仲裁委员会仲裁[1]。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 4449,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 52,
-     "prompt_tokens": 7993,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": true
-    },
-    {
-     "conv": "c10",
-     "turn": 53,
-     "q": "好的，感谢。",
-     "tags": [
-      "chitchat"
-     ],
-     "rewritten": "好的，感谢。",
-     "intent": "chitchat",
-     "answer_type": "answer",
-     "answer": "不客气～我是星河优选的智能客服助手，有什么想了解的，随时告诉我哦。",
-     "slots": {},
-     "facts": {},
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 4516,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 53,
-     "prompt_tokens": 4391,
-     "foreign_ids": []
-    },
-    {
-     "conv": "c11",
-     "turn": 0,
-     "q": "你好，我在四川成都，订单 2026092800468 买的电视机签收第二天就黑屏了，想退货。",
-     "tags": [
-      "slot"
-     ],
-     "rewritten": "我在四川成都，订单 2026092800468 买的电视机签收第二天就黑屏了，想退货，怎么处理",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "order_no": "2026092800468",
-      "product": "电视机"
-     },
-     "facts": {
-      "order_no": "2026092800468",
-      "product": "电视机"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 0,
-      "summary": 0,
-      "recent": 0,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 0,
-     "prompt_tokens": 1124,
-     "foreign_ids": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c11",
-     "turn": 19,
-     "q": "订单号我核对了一下，正确的是 2026092800486，之前那个最后两位写反了。",
-     "tags": [
-      "update"
-     ],
-     "rewritten": "订单号更正为 2026092800486，之前提供的 2026092800468 最后两位写反了",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "order_no": "2026092800486",
-      "product": "电视机"
-     },
-     "facts": {
-      "order_no": "2026092800486",
-      "product": "电视机"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 14,
-      "summary": 0,
-      "recent": 6170,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 19,
-     "prompt_tokens": 4856,
-     "foreign_ids": [],
-     "facts_ok": true
-    },
-    {
-     "conv": "c11",
-     "turn": 40,
-     "q": "电视这种大件退货，上门取件要我出钱吗？",
-     "tags": [
-      "recall"
-     ],
-     "rewritten": "电视机大件商品退货，上门取件需要用户支付运费吗",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "您的电视机属于数码家电类，非质量原因退货的寄回运费由买家承担，首重 12 元 [2]。如果是质量问题，往返运费由商家承担 [2]。\n\n另外，您之前提到签收第二天就黑屏，这属于质量问题，往返运费应由商家承担 [2]。建议您尽快提交售后申请，并保留好能显示商品全貌、问题部位及标签或序列号的照片或视频 [1]。",
-     "slots": {
-      "product": "电视机"
-     },
-     "facts": {
-      "order_no": "2026092800486",
-      "product": "电视机"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 14,
-      "summary": 0,
-      "recent": 12854,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 40,
-     "prompt_tokens": 17323,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "answer_ok": false
-    },
-    {
-     "conv": "c11",
-     "turn": 58,
-     "q": "我那个订单的退款会退到哪里？订单号再帮我确认下。",
-     "tags": [
-      "update",
-      "recall"
-     ],
-     "rewritten": "订单 2026092800486 的退款会退到哪里",
-     "intent": "action",
-     "answer_type": "handoff",
-     "answer": "这个需要人工客服帮您办理，正在为您转接。",
-     "slots": {
-      "order_no": "2026092800486"
-     },
-     "facts": {
-      "order_no": "2026092800486",
-      "product": "电视机",
-      "issue_type": "退货",
-      "other:quality_issue": "签收第二天黑屏",
-      "other:address_filled_wrong": "收货地址填错了,想修改",
-      "other:pickup_not_arrived": "预约上门取件快递员一直没来",
-      "other:not_received": "快递显示签收但未收到货",
-      "other:considering_exchange": "不想退了,想直接换货",
-      "other:invoice_for_reimbursement": "需要电子发票用于公司报销",
-      "other:fraud_call": "有人冒充客服索要验证码",
-      "address_region": "四川成都"
-     },
-     "degraded": [
-      "history_gap"
-     ],
-     "context_usage": {
-      "facts": 14,
-      "summary": 0,
-      "recent": 15703,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 0,
-     "recent_turns": 47,
-     "prompt_tokens": 10652,
-     "foreign_ids": [],
-     "rewrite_ok": true,
-     "forbid_hit": []
-    },
-    {
-     "conv": "c11",
-     "turn": 59,
-     "q": "寄到我所在的省份一般要几天？",
-     "tags": [
-      "recall"
-     ],
-     "rewritten": "从星河优选发货寄到四川成都一般需要几天",
-     "intent": "kb_qa",
-     "answer_type": "answer",
-     "answer": "江浙沪地区次日达，其他省份 2–4 天，新疆、西藏、青海等偏远地区 5–8 天，具体以区域时效表为准。[1]\n\n您在四川成都，属于其他省份，一般是 2–4 天。[1]",
-     "slots": {},
-     "facts": {
-      "order_no": "2026092800486",
-      "product": "电视机",
-      "issue_type": "退货",
-      "other:quality_issue": "签收第二天黑屏",
-      "other:address_filled_wrong": "收货地址填错了,想修改",
-      "other:pickup_not_arrived": "预约上门取件快递员一直没来",
-      "other:not_received": "快递显示签收但未收到货",
-      "other:considering_exchange": "不想退了,想直接换货",
-      "other:invoice_for_reimbursement": "需要电子发票用于公司报销",
-      "other:fraud_call": "有人冒充客服索要验证码",
-      "address_region": "四川成都"
-     },
-     "degraded": [],
-     "context_usage": {
-      "facts": 156,
-      "summary": 753,
-      "recent": 1076,
-      "recall": 0,
-      "budget": 16000
-     },
-     "summary_version": 3,
-     "recent_turns": 4,
-     "prompt_tokens": 4712,
-     "foreign_ids": [],
-     "rewrite_ok": true
+     "memory_ok": true
     }
    ]
   }

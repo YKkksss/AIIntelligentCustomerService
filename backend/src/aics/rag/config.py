@@ -29,7 +29,15 @@ from pydantic import (
 
 from aics.core.models import ModelRegistry
 
-INTENTS: tuple[str, ...] = ("kb_qa", "chitchat", "human", "out_of_scope", "action", "clarify")
+INTENTS: tuple[str, ...] = (
+    "kb_qa",
+    "chitchat",
+    "human",
+    "out_of_scope",
+    "action",
+    "clarify",
+    "recall",  # M2.6 (设计讨论 0007): questions about what the user said earlier
+)
 WEEKDAYS: tuple[str, ...] = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 
 # 窗口校验常量（对话上下文管理 §9）

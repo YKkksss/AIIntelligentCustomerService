@@ -29,6 +29,8 @@ def responder(messages: list[BaseMessage], kwargs: dict[str, Any]) -> str:
     if node == "classify":
         q = tag(text, "question")
         slots = {"order_no": m.group(0)} if (m := ORDER_RE.search(q)) else {}
+        if "刚才给你的" in q:
+            return classify_json(q, "recall", 0.95)
         if "随便聊" in q:
             return classify_json(q, "chitchat", 0.95)
         if "那个怎么弄" in q:
@@ -40,6 +42,9 @@ def responder(messages: list[BaseMessage], kwargs: dict[str, Any]) -> str:
         return json.dumps({"answerable": True, "reason": "ok"})
     if node == "chitchat":
         return "很高兴为您服务。"
+    if node == "recall":
+        m = ORDER_RE.search(tag(text, "facts"))
+        return f"您提供的订单号是{m.group(0)}。" if m else "没有找到。"
     ctx = text
     for k, v in ANSWER.items():
         if k in ctx:
