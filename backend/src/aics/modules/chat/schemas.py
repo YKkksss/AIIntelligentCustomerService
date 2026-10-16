@@ -109,10 +109,14 @@ class NewMessage(_Model):
         elif self.answer_type is None:
             raise ValueError("assistant messages need answer_type")
         # An empty body is only legitimate for an assistant turn that failed or was cut off,
-        # or for a handoff reply where the AI stays silent (reply_by=none).
+        # or for a handoff reply where the AI stays silent (reply_by=none), and for the
+        # `idle_closed` timeline marker (会话生命周期 §2.2: content is empty).
         if not self.content.strip() and not (
-            self.role == "assistant"
-            and (self.interrupted or self.answer_type in ("error", "handoff"))
+            (
+                self.role == "assistant"
+                and (self.interrupted or self.answer_type in ("error", "handoff"))
+            )
+            or (self.role == "system" and self.kind == "idle_closed")
         ):
             raise ValueError("content must not be empty")
         return self

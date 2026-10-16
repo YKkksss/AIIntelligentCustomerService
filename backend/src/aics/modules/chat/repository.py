@@ -73,6 +73,99 @@ class ConversationRepository(AppScopedRepository[Conversation]):
         stmt = self._scoped(app_id).where(Conversation.id == conversation_id).with_for_update()
         return (await self.session.execute(stmt)).scalar_one_or_none()
 
+    # ------------------------------------------------------------ idle sweep (M2.7)
+    async def idle_app_ids_all_apps(self, *, before: datetime) -> list[UUID]:
+        """Apps that have an active, non-eval conversation idle since `before` (cross-app:
+        only `chat.lifecycle.sweep` calls this; uses ix_conversations_active_activity)."""
+        stmt = (
+            select(Conversation.app_id)
+            .where(
+                Conversation.status == "active",
+                Conversation.channel != "eval",
+                Conversation.last_activity_at <= before,
+            )
+            .distinct()
+        )
+        return list((await self.session.execute(stmt)).scalars())
+
+    async def idle_candidates(
+        self,
+        app_id: UUID,
+        *,
+        before: datetime,
+        after: datetime | None = None,
+        unnoticed: bool = False,
+        pause_pending: bool = False,
+        limit: int = 500,
+    ) -> list[tuple[UUID, datetime]]:
+        """(id, last_activity_at) of active conversations idle since `before` (and active after
+        `after`), excluding eval and paused ones (会话生命周期 §3.4), oldest first."""
+        stmt = self._scoped(app_id).where(*self._sweepable(pause_pending))
+        stmt = stmt.where(Conversation.last_activity_at <= before)
+        if after is not None:
+            stmt = stmt.where(Conversation.last_activity_at > after)
+        if unnoticed:
+            stmt = stmt.where(Conversation.idle_notice_sent_at.is_(None))
+        stmt = stmt.order_by(Conversation.last_activity_at).limit(limit)
+        rows = await self.session.execute(
+            stmt.with_only_columns(Conversation.id, Conversation.last_activity_at)
+        )
+        return [(r[0], r[1]) for r in rows]
+
+    async def mark_idle_notice(
+        self,
+        app_id: UUID,
+        conversation_id: UUID,
+        *,
+        seen_activity: datetime,
+        at: datetime,
+        pause_pending: bool = False,
+    ) -> bool:
+        """Set idle_notice_sent_at only if nothing happened since the sweep read the row."""
+        stmt = (
+            update(Conversation)
+            .where(
+                Conversation.app_id == app_id,
+                Conversation.id == conversation_id,
+                Conversation.last_activity_at == seen_activity,
+                Conversation.idle_notice_sent_at.is_(None),
+                *self._sweepable(pause_pending),
+            )
+            .values(idle_notice_sent_at=at)
+        )
+        return bool((await self.session.execute(stmt)).rowcount)  # type: ignore[attr-defined]
+
+    async def close_idle(
+        self,
+        app_id: UUID,
+        conversation_id: UUID,
+        *,
+        seen_activity: datetime,
+        at: datetime,
+        pause_pending: bool = False,
+    ) -> bool:
+        """Close for idleness only if nothing happened since the sweep read the row."""
+        stmt = (
+            update(Conversation)
+            .where(
+                Conversation.app_id == app_id,
+                Conversation.id == conversation_id,
+                Conversation.last_activity_at == seen_activity,
+                *self._sweepable(pause_pending),
+            )
+            .values(status="closed", close_reason="idle", closed_at=at)
+        )
+        return bool((await self.session.execute(stmt)).rowcount)  # type: ignore[attr-defined]
+
+    @staticmethod
+    def _sweepable(pause_pending: bool) -> list[Any]:
+        paused = ["accepted", "pending"] if pause_pending else ["accepted"]
+        return [
+            Conversation.status == "active",
+            Conversation.channel != "eval",
+            Conversation.handoff_status.not_in(paused),
+        ]
+
     async def list_recent(
         self,
         app_id: UUID,

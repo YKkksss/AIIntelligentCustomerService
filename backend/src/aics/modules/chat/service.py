@@ -33,7 +33,7 @@ import structlog
 from sqlalchemy import func
 
 from aics.core import metrics
-from aics.core.errors import AppError
+from aics.core.errors import AppError, ConversationNotFoundError
 from aics.db.base import new_id
 from aics.memory.compactor import CompactParams
 from aics.modules.apps.service import AppConfig, AppService
@@ -261,7 +261,12 @@ class ChatService:
             previous: UUID | None = None
             conv = None
             if req.conversation_id is not None:
-                conv = await convs.get_or_404(req.app_id, req.conversation_id)
+                # Row lock: an idle sweep (chat.lifecycle) closing this conversation either
+                # commits first (we see `closed` and start a new one) or waits for our user
+                # message, whose last_activity_at then fails its conditional update.
+                conv = await convs.get_for_update(req.app_id, req.conversation_id)
+                if conv is None:
+                    raise ConversationNotFoundError(details={"id": str(req.conversation_id)})
                 if conv.status != "active":
                     previous = conv.id
                     conv = await convs.create(
