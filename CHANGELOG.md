@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### 新增（M2.6 对话编排与接口，2026-10-16）
+- 开放接口鉴权（M3.1 核心提前）：迁移 `0009` `api_keys`；`modules.apikeys`（`aics_` 密钥只显示一次、HMAC-SHA256 + pepper、过期 / 吊销 / scope、Redis 缓存 60 s、分钟窗口限流 + 每日配额、`X-RateLimit-*` / `Retry-After`）；`core.security`（`Principal`、`require_scope`）；`aics-cli apikey create/revoke`。
+- `chat.service`：`start_turn` / `handle_turn`，生成前落 user 消息、按转人工状态分派、组装 `RagInput` / `RagPorts`，每轮在独立任务中运行（断线仍会落库，`interrupted`）、error 落库、`refusal_streak` 与 handoff → pending，每轮调用 `capture_slots` / `maybe_compact`。
+- `POST /api/v1/apps/{app_id}/chat`（阻塞 + SSE，15 s 心跳，`end` 带 `answer`）与 `GET /api/v1/apps/{app_id}/conversations/{id}/messages`（游标分页）。
+- 新意图 `recall`：回问本次对话中提供过的信息，依据记忆作答（提示词 `condense_classify` v2、`recall` v1；迁移 `0010`）；设计讨论 0007。
+- 真实 HTTP 端到端脚本 `scripts/e2e_m2/e2e_m26_http.py`；`eval_m25.py` 新增 `memory_use` 与 `--classify-timeout-ms`。
+
+### 修复（M2.6）
+- 带节点预算（如 classify 2 s）的 LLM 调用超时不再计入熔断，避免上游变慢时整个模型熔断、generate 返回 503（设计讨论 0007 D8）。
+
 ### 新增（M2.5 对话记忆，2026-10-16）
 - `memory.context`：按 token 预算组装上下文——关键事实固定注入（按重要度，≤ 300 token）→ 滚动摘要 → 近期原文按轮填充 → 保底 `keep_recent_turns` 轮（超长单条截断）→ `history_gap`；拒答压成"（已拒答）"；无状态请求同算法裁剪 + 临时摘要钩子。`MemoryService.load_context` 与适配器 `modules.chat.memory_port.MemoryPortAdapter`；rag trace 新增 `context`（事实脱敏）。
 - `memory.facts`：值规范化（NFKC、手机号去 +86 与分隔符）、ADD / UPDATE / NOOP / RETRACT 对账、同批冲突裁决、过期写丢弃（压缩不回滚新槽位值）、乐观锁冲突重试；`MemoryService.capture_slots` / `write_facts`。
