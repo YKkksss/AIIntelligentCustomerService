@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -252,6 +253,14 @@ class ChunkConfig(_Cfg):
         return self.full_doc_max_tokens if self.parent_mode == "full_doc" else self.parent_size
 
 
+def merge_chunk_config(current: Mapping[str, Any], patch: Mapping[str, Any]) -> dict[str, Any]:
+    """chunk_config 部分更新（应用级与文档级共用）：patch 指定了 preset 时以该预设为底（丢弃旧值），
+    否则在 current 上逐键覆盖。结果须再经 `ChunkConfig` 校验。"""
+    if "preset" in patch:
+        return dict(patch)
+    return {**current, **patch}
+
+
 # ---------------------------------------------------------------- session
 IdleClose = Annotated[int, Field(ge=1, le=1440)]
 NoticeBefore = Annotated[int, Field(ge=0, le=1439)]
@@ -386,6 +395,50 @@ class ConfigValidationError(Exception):
         return "; ".join(f"{'.'.join(i.loc)}: {i.msg}" for i in self.issues)
 
 
+def _window_issue(
+    rag: AppRagConfig,
+    chunk: ChunkConfig,
+    doc_chunks: Sequence[ChunkConfig],
+    llm_name: str,
+    llm_window: int,
+) -> ConfigIssue | None:
+    """上下文窗口规则：按应用与各文档级覆盖中单个检索结果最大的那个计算（最坏情况）。"""
+    worst = max([chunk, *doc_chunks], key=lambda c: c.context_chunk_tokens)
+    need = (
+        rag.history_token_budget
+        + rag.max_tokens
+        + rag.rerank_top_n * worst.context_chunk_tokens
+        + PROMPT_RESERVE_TOKENS
+    )
+    limit = int(WINDOW_RATIO * llm_window)
+    if need <= limit:
+        return None
+    unit = (
+        ("full_doc_max_tokens" if worst.parent_mode == "full_doc" else "parent_size")
+        if worst.mode == "parent_child"
+        else "chunk_size"
+    )
+    where = "" if worst is chunk else "（文档级 chunk_config）"
+    return ConfigIssue(
+        ("rag_config",),
+        f"上下文超出模型 {llm_name} 窗口 80%：history_token_budget + max_tokens + "
+        f"rerank_top_n × {unit}{where} + {PROMPT_RESERVE_TOKENS} = {need} > {limit}",
+    )
+
+
+def check_chunk_window(
+    *, rag: AppRagConfig, chunk: ChunkConfig, models: ModelRegistry, default_llm_model: str
+) -> None:
+    """文档级 chunk_config 保存时的窗口校验（与应用级同一规则）；不满足抛 `ConfigValidationError`。"""
+    llm_name = rag.llm_model or default_llm_model
+    spec = models.get(llm_name)
+    if spec is None or spec.kind != "chat":
+        return  # 模型问题由应用配置校验报告
+    issue = _window_issue(rag, chunk, (), llm_name, spec.context_window)
+    if issue is not None:
+        raise ConfigValidationError([ConfigIssue(("chunk_config",), issue.msg)])
+
+
 def validate_app_config(
     *,
     rag: AppRagConfig,
@@ -395,6 +448,7 @@ def validate_app_config(
     models: ModelRegistry,
     default_llm_model: str,
     message_embed_enabled: bool,
+    doc_chunks: Sequence[ChunkConfig] = (),
 ) -> None:
     """依赖模型注册表 / 平台配置 / 多个配置对象的规则；全部问题一次列出，抛 `ConfigValidationError`。"""
     issues: list[ConfigIssue] = []
@@ -409,26 +463,9 @@ def validate_app_config(
     llm_name = rag.llm_model or default_llm_model
     llm_window = chat_window(llm_name, ("rag_config", "llm_model"))
     if llm_window is not None:
-        need = (
-            rag.history_token_budget
-            + rag.max_tokens
-            + rag.rerank_top_n * chunk.context_chunk_tokens
-            + PROMPT_RESERVE_TOKENS
-        )
-        limit = int(WINDOW_RATIO * llm_window)
-        unit = (
-            ("full_doc_max_tokens" if chunk.parent_mode == "full_doc" else "parent_size")
-            if chunk.mode == "parent_child"
-            else "chunk_size"
-        )
-        if need > limit:
-            issues.append(
-                ConfigIssue(
-                    ("rag_config",),
-                    f"上下文超出模型 {llm_name} 窗口 80%：history_token_budget + max_tokens + "
-                    f"rerank_top_n × {unit} + {PROMPT_RESERVE_TOKENS} = {need} > {limit}",
-                )
-            )
+        issue = _window_issue(rag, chunk, doc_chunks, llm_name, llm_window)
+        if issue is not None:
+            issues.append(issue)
 
     summary_name = rag.summary_model or llm_name
     summary_window = (

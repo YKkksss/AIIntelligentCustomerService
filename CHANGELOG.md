@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### 新增（M1.7 文档级切块配置，2026-10-16）
+- 迁移 `0005`：`documents.chunk_config`（文档级覆盖，保存合并校验后的完整快照，NULL = 跟随应用）。
+- `KnowledgeService`：`upload_file` / `import_url` / `replace_file` / `rebuild_document` 可带 `chunk_config`（替换 / 重建另有 `reset_chunk_config`）；`set_document_chunk_config`；生效配置变化只重建该文档，构建成功切换时写入；`rebuild_app` 默认跳过有覆盖的文档（`skipped_override`，`include_overridden` 全量）。
+- 上下文窗口规则覆盖文档级配置（`check_chunk_window`；应用 `rag_config` 修改按最坏情况校验）；`merge_chunk_config` 应用级与文档级共用。
+
 ### 变更（按 M1 评测采纳默认值，2026-10-16）
 - `rag_config.rerank_threshold` 默认 0.35 → 0.5，`judge_gray_upper` 默认 0.5 → 0.8（依据 M1 端到端测试报告 §4/§5，待服务器复验）；其余检索参数经评测确认保持不变。
 - 新增 [参数默认值与依据](docs/06-development/09-参数默认值与依据.md) 作为默认值唯一来源；测试策略与文档索引登记常设规则“每轮测试后记录结果并采纳最佳值为默认”。

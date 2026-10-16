@@ -12,11 +12,12 @@ from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ValidationError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aics.core.config import Settings, get_settings
 from aics.core.errors import AppError, ValidationAppError
-from aics.db.models import App
+from aics.db.models import App, Document
 from aics.modules.apps.repository import AppRepository
 from aics.rag.config import (
     PLATFORM_DEFAULT_SESSION,
@@ -28,6 +29,7 @@ from aics.rag.config import (
     SessionConfig,
     WebhookConfig,
     chunk_presets,
+    merge_chunk_config,
     validate_app_config,
 )
 
@@ -61,11 +63,7 @@ def list_chunk_presets() -> list[dict[str, Any]]:
     ]
 
 
-def _merge_chunk(current: Mapping[str, Any], patch: Mapping[str, Any]) -> dict[str, Any]:
-    """chunk_config 部分更新：patch 指定了 preset 时以该预设为底（丢弃旧值），再叠加 patch 中的其他键。"""
-    if "preset" in patch:
-        return dict(patch)
-    return {**current, **patch}
+_merge_chunk = merge_chunk_config
 
 
 class AppNotFoundError(AppError):
@@ -135,6 +133,7 @@ class AppService:
         session_config: Mapping[str, Any] | None,
         chunk_config: Mapping[str, Any] | None,
         webhook_config: Mapping[str, Any] | None = None,
+        doc_chunks: tuple[ChunkConfig, ...] = (),
     ) -> AppConfig:
         """校验并补齐默认值；任何问题抛 `422 VALIDATION_ERROR`（`details.errors` 一次列全）。"""
         errors: list[dict[str, Any]] = []
@@ -169,6 +168,7 @@ class AppService:
                 models=self.settings.models,
                 default_llm_model=self.settings.llm_model,
                 message_embed_enabled=self.settings.message_embed_enabled,
+                doc_chunks=doc_chunks,
             )
         except ConfigValidationError as e:
             raise ValidationAppError(
@@ -292,7 +292,17 @@ class AppService:
             "chunk_config": _merge_chunk(app.chunk_config, patch.get("chunk_config") or {}),
             "webhook_config": _merge(app.webhook_config, webhook_patch, ()),
         }
-        cfg = self.build_config(**merged)
+        doc_chunks: tuple[ChunkConfig, ...] = ()
+        if patch.get("rag_config"):  # 窗口规则要覆盖文档级 chunk_config（最坏情况）
+            rows = await self.session.execute(
+                select(Document.chunk_config).where(
+                    Document.app_id == app_id,
+                    Document.chunk_config.is_not(None),
+                    Document.deleted_at.is_(None),
+                )
+            )
+            doc_chunks = tuple(ChunkConfig.model_validate(c) for c in rows.scalars())
+        cfg = self.build_config(**merged, doc_chunks=doc_chunks)
         new_values: dict[str, Any] = {
             "rag_config": _dump(cfg.rag),
             "handoff_config": _dump(cfg.handoff),

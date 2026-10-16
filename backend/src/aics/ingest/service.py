@@ -64,6 +64,19 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+# job.payload 中携带的文档级 chunk_config 变更（值为完整配置或 None = 恢复跟随应用），构建成功切换时写入文档
+OVERRIDE_KEY = "chunk_config_override"
+
+
+def effective_chunk_config(
+    app_chunk_config: Mapping[str, Any], doc: Document, payload: Mapping[str, Any] | None = None
+) -> Mapping[str, Any]:
+    """本次构建使用的切块配置：payload 中待生效的覆盖 > 文档已有覆盖 > 应用配置。"""
+    if payload is not None and OVERRIDE_KEY in payload:
+        return payload[OVERRIDE_KEY] or app_chunk_config
+    return doc.chunk_config or app_chunk_config
+
+
 def _embed_text_for(
     title: str | None, chunk_config: Mapping[str, Any], heading: str, text: str
 ) -> str:
@@ -162,13 +175,14 @@ class IngestService:
         *,
         limit: int = PREVIEW_DEFAULT_LIMIT,
     ) -> dict[str, Any]:
-        """已有文档按新配置（缺省为应用当前配置）预览，用于改配置前比较。"""
+        """已有文档按新配置（缺省为该文档生效配置：文档级覆盖，否则应用配置）预览，用于改配置前比较。"""
         async with self.sessions() as s:
             doc = await s.get(Document, document_id)
             if doc is None or doc.app_id != app_id or doc.status == "deleting":
                 raise DocumentNotFoundError()
             app = await s.get(App, app_id)
-            cfg = dict(chunk_config if chunk_config is not None else app.chunk_config)  # type: ignore[union-attr]
+            base = doc.chunk_config or app.chunk_config  # type: ignore[union-attr]
+            cfg = dict(chunk_config if chunk_config is not None else base)
         parsed = await self._load(doc, None)
         result = split_document(parsed, ChunkOptions.from_mapping(cfg))
         return preview_result(result, title=doc.title, chunk_config=cfg, limit=limit)
@@ -236,9 +250,9 @@ class IngestService:
             doc.status, doc.progress, doc.error = "parsing", 0, None
             await s.commit()
             app_id, title = doc.app_id, doc.title
-            cfg: dict[str, Any] = dict(app.chunk_config)
-            cfg_version, custom_dict = app.chunk_config_version, list(app.custom_dict or [])
             payload: dict[str, Any] = dict(job.payload or {})
+            cfg: dict[str, Any] = dict(effective_chunk_config(app.chunk_config, doc, payload))
+            cfg_version, custom_dict = app.chunk_config_version, list(app.custom_dict or [])
         replace_key: str | None = payload.get("storage_key")
 
         try:
@@ -399,6 +413,8 @@ class IngestService:
                 for f in ("content_hash", "mime_type", "size_bytes", "version"):
                     if f in payload:
                         setattr(doc, f, payload[f])
+            if OVERRIDE_KEY in payload:  # 文档级 chunk_config 随本次构建一起生效
+                doc.chunk_config = payload[OVERRIDE_KEY]
             doc.index_version, doc.pending_index_version = n, None
             doc.status, doc.progress, doc.error, doc.chunk_count = "done", 100, None, count
             doc.chunk_config_version, doc.embed_model = cfg_version, self.settings.embed_model

@@ -14,6 +14,8 @@ from aics.rag.config import (
     ServiceHours,
     SessionConfig,
     WebhookConfig,
+    check_chunk_window,
+    merge_chunk_config,
     validate_app_config,
 )
 
@@ -208,3 +210,22 @@ def test_queue_timeout_below_idle_close() -> None:
     with pytest.raises(ConfigValidationError):
         _validate(session=session)
     _validate(session=session, handoff=HandoffConfig(handoff_queue_timeout_minutes=4))
+
+
+def test_doc_chunk_window_rules() -> None:
+    """文档级覆盖（M1.7）：窗口按最坏情况计算；单独校验时报 chunk_config。"""
+    huge = ChunkConfig(mode="parent_child", parent_mode="full_doc", full_doc_max_tokens=10000)
+    rag = AppRagConfig(rerank_top_n=20)  # 20 × 10000 > 0.8 × 128k
+    _validate(rag=rag)  # 应用自身配置没问题
+    with pytest.raises(ConfigValidationError, match="文档级"):
+        _validate(rag=rag, doc_chunks=(huge,))
+    with pytest.raises(ConfigValidationError) as ei:
+        check_chunk_window(rag=rag, chunk=huge, models=REG, default_llm_model="big")
+    assert ei.value.issues[0].loc == ("chunk_config",)
+    check_chunk_window(rag=AppRagConfig(), chunk=huge, models=REG, default_llm_model="big")
+
+
+def test_merge_chunk_config() -> None:
+    cur = ChunkConfig().model_dump()
+    assert merge_chunk_config(cur, {"chunk_size": 300})["chunk_size"] == 300
+    assert merge_chunk_config(cur, {"preset": "legal"}) == {"preset": "legal"}
