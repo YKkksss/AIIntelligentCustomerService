@@ -50,6 +50,9 @@ class RagInput(BaseModel):
     conversation_id: UUID | None = None  # None = stateless (OpenAI-compatible without header)
     question: str = Field(min_length=1, max_length=QUESTION_MAX_CHARS)
     inline_history: list[ChatTurn] | None = None
+    # Persisted current user message (chat.service writes it before generation); excluded
+    # from history by load_context.
+    user_message_id: UUID | None = None
     config: AppRagConfig = Field(default_factory=AppRagConfig)  # overrides already merged
     profile: AppProfile
     handoff: HandoffConfig = Field(default_factory=HandoffConfig)

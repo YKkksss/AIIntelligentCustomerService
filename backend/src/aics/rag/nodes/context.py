@@ -8,10 +8,23 @@ from typing import Any
 import structlog
 from langgraph.runtime import Runtime
 
-from aics.rag.ports import ContextRequest
+from aics.core.masking import mask_fact
+from aics.rag.ports import ContextBundle, ContextRequest
 from aics.rag.state import RagDeps, RagState, merged
 
 log = structlog.get_logger()
+
+
+def context_trace(b: ContextBundle) -> dict[str, Any]:
+    """trace.context (对话上下文管理 §11); fact values masked (§13)."""
+    return {
+        "facts": {k: mask_fact(k, v) for k, v in b.facts.items()},
+        "summary_version": b.summary_version,
+        "recent_turns": b.recent_turns,
+        "recall": {"triggered": bool(b.recalled)},
+        "usage": dict(b.usage),
+        "flags": list(b.flags),
+    }
 
 
 async def load_context(state: RagState, runtime: Runtime[RagDeps]) -> dict[str, Any]:
@@ -33,6 +46,7 @@ async def load_context(state: RagState, runtime: Runtime[RagDeps]) -> dict[str, 
                     enable_facts=cfg.enable_facts,
                     enable_history_recall=cfg.enable_history_recall,
                     temp_summary=cfg.openai_temp_summary,
+                    exclude_message_id=inp.user_message_id,
                 )
             )
         except Exception as e:  # read failure → recent inline turns only
@@ -48,6 +62,7 @@ async def load_context(state: RagState, runtime: Runtime[RagDeps]) -> dict[str, 
                 recalled=list(bundle.recalled),
                 context_usage=dict(bundle.usage),
                 degraded=list(bundle.flags),
+                trace={"context": context_trace(bundle)},
                 timings={"load_context": int((time.perf_counter() - t0) * 1000)},
             )
     # No memory port (stateless / M2.3) or failure: last keep_recent_turns turns verbatim.

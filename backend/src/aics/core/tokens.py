@@ -23,3 +23,15 @@ def count_tokens(text: str) -> int:
         return 0
     # disallowed_special=() 让 "<|endoftext|>" 等按普通文本计数，用户内容里出现也不报错
     return len(_encoding().encode(text, disallowed_special=()))
+
+
+def truncate_tokens(text: str, max_tokens: int) -> str:
+    """First `max_tokens` tokens of `text` (same encoding as count_tokens)."""
+    if max_tokens <= 0 or not text:
+        return ""
+    enc = _encoding()
+    ids = enc.encode(text, disallowed_special=())
+    if len(ids) <= max_tokens:
+        return text
+    # Decoding a cut inside a multi-byte character yields U+FFFD; drop it.
+    return enc.decode(ids[:max_tokens]).rstrip("\ufffd")

@@ -102,6 +102,8 @@ class ContextRequest(BaseModel):
     enable_facts: bool = True
     enable_history_recall: bool = False
     temp_summary: bool = True
+    # Current user message if chat.service persisted it before generation (excluded).
+    exclude_message_id: UUID | None = None
 
 
 class ContextBundle(BaseModel):
@@ -113,6 +115,8 @@ class ContextBundle(BaseModel):
     recalled: list[RecalledSnippet] = Field(default_factory=list)
     usage: dict[str, int] = Field(default_factory=dict)
     flags: list[str] = Field(default_factory=list)
+    summary_version: int = 0
+    recent_turns: int = 0
 
 
 @runtime_checkable
