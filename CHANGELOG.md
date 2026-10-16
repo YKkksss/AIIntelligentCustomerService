@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### 文档（设计讨论记录，2026-10-16）
+- 新增 `docs/09-design-discussions/`（设计讨论记录目录与索引，今后所有设计讨论在此记录）；首篇 0001《知识库切块与检索设置（参考 Dify）》与 ADR-0013。
+- 结论同步到文档处理流水线、RAG 流程设计 §4.2、数据库设计、Qdrant 设计、管理接口、功能需求 FR-KB-11~20；开发计划扩充 M1.4，新增 M2.2b、M4.3b、M4.6b。
+
 ### 新增（M1.3b 切块预设、手动选项与父子切块，2026-10-16）
 - 切块预设 `rag/chunk_presets.yaml`（general / legal / paper / faq / manual / contract），`list_chunk_presets()`（`GET /admin/chunk-presets`）；未选预设取 general，选预设后可逐项修改，`preset` 记录来源。
 - `chunk_config` 新增 `strategy`、`separators`（字面量）、`split_by_heading`、`keep_tables`、`mode`、`parent_size` / `child_size` / `child_overlap`；父子模式 80% 窗口按 `parent_size` 校验。

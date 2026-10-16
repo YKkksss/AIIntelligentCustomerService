@@ -136,7 +136,15 @@ class RagState(TypedDict, total=False):
 3. rerank：对父块正文（`heading_path + "\n" + 父块 text`）打分，取前 `rerank_top_n`；judge 阈值规则不变。
 4. generate：编号上下文中的每一项是一个父块；引用 `[n]` 指向父块，`citations` 记录父块所含的最佳子块 `chunk_id`（便于定位）与 `parent_id`。
 5. 父块的子块全部被禁用或 flagged 时，该父块自然不会被命中；只禁用部分子块不影响父块正文（后台"禁用父块"即禁用其全部子块）。
-6. 80% 窗口按 `rerank_top_n × parent_size` 计算（对话上下文管理 §9）。
+6. 80% 窗口按 `rerank_top_n × parent_size` 计算（对话上下文管理 §9）；`parent_mode=full_doc` 时按 `full_doc_max_tokens` 计算。
+
+### 4.2 检索设置与命中测试（M2.2b，设计讨论 0001）
+- `rag_config.retrieval_mode`：`hybrid`（默认，向量 + 全文）/ `vector` / `fulltext`；单路模式下 fuse 只做去重排序。
+- `rag_config.fusion`：`rrf`（默认，k=60）/ `weighted`（`vector_weight` 0–1，全文权重 = 1 − vector_weight；两路分数各自 min-max 归一化后加权）。rerank 仍由 `enable_rerank` 控制，与融合方式独立。
+- `rag_config.vector_score_threshold`（默认 null = 不过滤）：向量分数低于阈值的命中在融合前丢弃；rerank 阈值仍为 `rerank_threshold`。
+- 元数据过滤：请求可带 `filters: {"tags": [...]}`（任一匹配），Qdrant 用 payload `tags` 过滤、PG 全文路用 `documents.tags && :tags` 过滤；应用可配默认过滤。
+- 切块补充问题：`chunk_questions` 每条单独向量化（Qdrant 点 `kind=question`、payload 带 `chunk_id`），命中后映射回原切块，与切块自身命中按 chunk 去重取最高名次。
+- 命中测试：`knowledge.service.hit_test(app_id, query, overrides)` 只执行 retrieve → fuse → rerank，返回两路命中（分数、名次）、融合结果、rerank 分数与最终顺序，不调用 LLM、不写会话与统计。
 
 ## 5. 提示词
 - 所有提示词是 `aics/rag/prompts/*.md` 文件（memory 的在 `aics/memory/prompts/`，评测评判在 `aics/modules/eval/prompts/`），由 `core.prompts` 加载；文件头为 YAML front-matter：

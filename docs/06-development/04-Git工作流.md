@@ -67,3 +67,6 @@ gitGraph
 - pre-commit 与 CI 都运行 gitleaks；一旦误提交密钥：**先轮换密钥**，再清理历史（清理历史不能代替轮换）。
 - 文档与示例只使用占位符（`<DEEPSEEK_API_KEY>`、`aics_xxx`）。服务器内网地址 192.168.110.86 可以出现，其他真实 IP、账号、密码不得出现。
 - 建议开启 GitHub Secret scanning 与 Push protection、Dependabot。
+
+## 设计讨论
+- 涉及设计取舍的讨论（尤其参考竞品 / 开源实现后）必须在 `docs/09-design-discussions/` 新增记录，结论同步到相关设计文档与开发计划后再开始实现；重要决策另写 ADR。
