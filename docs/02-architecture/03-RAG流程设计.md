@@ -49,6 +49,10 @@ class RagInput(BaseModel):
     refusal_streak: int               # 由 chat.service 从 conversations 读出传入
     last_assistant_was_clarify: bool
     run_mode: RunMode
+    # M2.3（设计讨论 0004 C1）：rag 不读 apps 表，以下由 chat.service 组装传入
+    profile: AppProfile               # name / description / system_prompt / answer_style / fallback_text / language
+    handoff: HandoffConfig            # handoff_config（on_unanswerable、text 等）
+    tags: list[str] | None            # 请求标签过滤；None → rag_config.default_tags
 
 async def run_rag(inp: RagInput, ports: RagPorts) -> AsyncIterator[RagEvent]  # 最后一个事件是 RagResult
 ```
@@ -72,6 +76,7 @@ class RagResult(BaseModel):
     rewritten_query: str | None
     citations: list[Citation]          # 仅实际被引用的条目
     prompt_versions: dict[str, str]    # 如 {"condense_classify": "3", "generate": "5"}
+    prompt_version: str                # 如 "cc3.judge2.gen5" → messages.prompt_version
     llm_model: str
     usage: TokenUsage
     timings: dict[str, int]
@@ -127,6 +132,8 @@ class RagState(TypedDict, total=False):
 | generate | 带编号上下文生成，流式输出 | `temperature`=0.2、`max_tokens`=800、`llm_model` | 上游错误 → 抛出，由 chat.service 写 `answer_type=error` |
 | postprocess | 解析 `[n]` 标号 → 引用；标号越界删除；输出检查（安全设计 §3.4）；无任何引用时 `degraded += ["no_citation"]`（仅 kb_qa 分支经过本节点）；**标识符一致性护栏**（M2.5，设计讨论 0002）：回答中匹配订单号（`[A-Za-z0-9-]{8,32}` 且含 ≥ 6 位数字）/ 手机号（`1[3-9]\d{9}`）样式的字符串，若不等于当前 facts 中同类键（`order_no` / `phone`，未撤回）的值、也不出现在本轮用户消息与送入生成的资料中，则 `degraded += ["identifier_mismatch"]`、计数 `aics_identifier_mismatch_total`、trace 记录（脱敏）；只检测与告警，不阻断、不改写（流式输出已发送） | — | — |
 | refuse / handoff | 返回兜底话术 / 转人工话术，设置 `answer_type` 与 `handoff_reason` | `fallback_text`、`handoff.text` | — |
+
+**judge 的 `decision_reason` 取值（M2.3）**：`no_candidates`（无候选，不调用 LLM）、`below_threshold`、`above_gray_upper`、`gray_answerable`（灰区且 `judge_with_llm=false`）、`judge_llm_yes` / `judge_llm_no`、`judge_failed`；postprocess 另有 `output_filtered`（输出检查替换为兜底话术，`answer_type=refused`）与 `empty_answer`。分类 / 改写 / judge 调用固定关闭模型推理（`thinking=false`），generate 按 `rag_config.llm_thinking`（默认 false）。LLM 熔断在节点层（`rag.llm.LlmGateway`）：分类熔断 → 兜底 kb_qa（`upstream_error`），judge 熔断 → `judge_failed`，generate 熔断 → 抛 `UPSTREAM_UNAVAILABLE`。
 
 **rerank 失败规则（与非功能需求一致，唯一规则）**：rerank 调用超时或出错（含重试后）→ 按 RRF 顺序取前 `rerank_top_n`，记 `degraded += ["rerank_failed"]`；因 RRF 分数与 rerank 阈值不可比，judge 改由 LLM 判断（不看 `judge_with_llm` 开关）；LLM 判断也失败 → 不可答。`enable_rerank=false` 时同样走 LLM 判断，但不记 degraded。
 
@@ -199,7 +206,8 @@ description: kb_qa 生成回答的 system 提示词
 
 ## 6. 流式输出
 - `run_rag` 产出内部事件，`chat.service` 转换为 SSE（格式见《开放接口参考》）：`start` → `trace`（仅 debug）→ `citations`（**仅当 route=kb_qa 且 judge 判定可答后、generate 输出第一个 token 之前**发送一次，内容为送入生成的候选来源）→ `delta`* → `end`。拒答、转人工及所有非 kb_qa 分支不发 `citations`。
-- 实现：`graph.astream(..., stream_mode=["messages", "custom"])`，`messages` 取 generate 节点 token，`custom` 用于 judge 之后推送 `citations` 候选与 debug trace。
+- 实现（M2.3，设计讨论 0004 A2）：`graph.astream(..., stream_mode=["custom", "values"])`；generate 节点自己把 token 作为 `DeltaEvent` 写入 custom 流（分类 / judge 的 token 不会进入回答流），`citations` 与 debug `trace` 同走 custom 流，最终状态取 `values` 最后一帧转为 `RagResult`。拒答、转人工与非 kb_qa 分支的话术作为一次性 `delta` 发出。依赖（`RagPorts`、`LlmGateway`）经 LangGraph 运行上下文（`context_schema`）注入，不进入状态。
+- 越界引用标号只在最终 `RagResult.answer` 中删除（delta 已发出无法撤回），客户端以 `end` 事件中的 answer / citations 为准。
 - 客户端断开：chat.service 取消图执行，已生成部分照样落库并标 `interrupted=true`（`answer_type` 按已做出的决策，通常为 `answer`）；中断轮次不更新 `refusal_streak`。
 - 落库后的压缩判断见[对话上下文管理 §7](07-对话上下文管理.md)。
 

@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### 新增（M2.3 RAG 图（单轮），2026-10-16）
+- 依赖 `langgraph`；`rag.graph.run_rag(RagInput, RagPorts)`：guard → load_context → condense_classify → route → retrieve → fuse → rerank → judge → generate / refuse / handoff → postprocess，非 kb_qa 意图走固定话术分支；流事件 trace（debug）→ citations → delta → `RagResult`；`run_rag_collect` 供阻塞接口 / 评测。
+- `rag.schemas`：`RunMode`、`RagInput`（含 `AppProfile`、`HandoffConfig`、`tags`）、`RagResult`、`Citation`、`IntentInfo`、`TokenUsage`；`RagPorts` 新增 `llm` / `vector` / `reranker`。
+- `rag.intent`：`IntentResult` 校验与 §5.2.2 兜底链；提示词 `condense_classify` / `condense` / `generate` / `judge`（v1）与 `prompt_version` 串。
+- `rag.llm.LlmGateway`：LLM 节点级熔断（每模型一个，只计网络 / 超时 / 429 / 5xx）；`providers.llm.is_upstream_failure`。
+- 模型注册表 `thinking`（`none` / `toggle`）与 `chat_model(thinking=...)`；`rag_config.llm_thinking`（默认 false）。
+- `rag.citations`：`[n]` / `[1][2]` / `[1,2]` / 全角括号解析、越界删除、输出检查（规则泄露替换为兜底话术）。
+- 冒烟脚本 `scripts/e2e_m2/smoke_m23.py`（结果见 M1 测试报告 §11）；设计讨论 0004。
+
+### 修复
+- 集成测试 `test_app_rag_update_checks_doc_override_window` 按 `app_id` 计数，消除偶发失败。
+
 ### 新增（M2.2b 检索设置、标签过滤、补充问题与命中测试，2026-10-16）
 - `rag_config.retrieval_mode`（hybrid / vector / fulltext）、`fusion`（weighted / rrf）、`vector_weight`、`vector_score_threshold`、`default_tags`；**默认融合改为加权 `vector_weight=0.7`**（ADR-0015，评测见 M1 测试报告 §10）。
 - 迁移 `0008`：`documents.tags`（GIN）与 `chunk_questions`。
