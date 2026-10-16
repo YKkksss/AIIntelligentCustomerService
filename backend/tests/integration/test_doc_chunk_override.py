@@ -150,7 +150,9 @@ async def test_app_rag_update_checks_doc_override_window(env: dict[str, Any]) ->
     await h.drain()
     async with env["sessions"]() as s:
         n = await s.scalar(
-            select(func.count()).select_from(Document).where(Document.chunk_config.is_(None))
+            select(func.count())
+            .select_from(Document)
+            .where(Document.app_id == app_id, Document.chunk_config.is_(None))
         )
     assert n == 1
     reg = ModelRegistry.model_validate(
