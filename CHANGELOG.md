@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### 文档（M3.2 子步骤计划，2026-10-17）
+- 开发计划新增 M3.2 子步骤计划（[开放接口参考 §4](../04-api/02-开放接口参考.md) 的 9 个端点）：① 只读接口（列表 / 详情 / 切块列表 + `KnowledgeService` 三个方法 + 开放接口清单与隔离用例同步）；② `core/idempotency`（先于写接口落地）；③ 写接口（上传流式限额、URL 导入、替换、重建、`PATCH`、删除、`FILE_TOO_LARGE`、统一 `DOCUMENT_NOT_FOUND`、`python-multipart`）；④ 文档。含验收（接入指南 curl 原样可跑）、预算（< 0.1 元）与不在本步的范围。
+
 ### 新增（M3.1 API Key 收尾，2026-10-17）
 - `last_used_at` 聚合：`modules/apikeys/keyusage.py` 在鉴权成功（限流通过）后向 `{prefix}keyuse:{yyyymmddHHMM}`（UTC 分钟桶）写一个字段并设 TTL 900 s，不写库；beat 任务 `aics.flush_key_usage`（maintenance 队列，每 60 秒，`expires` 55 秒）读最近 11 个桶（当前分钟只读不删、历史桶读后 `DEL`），按键取最大时间戳后用一条 `UPDATE api_keys SET last_used_at = greatest(last_used_at, to_timestamp(:ts))` 落库。分桶使过去的桶不可变，无需 Lua、无 `HGETALL`/`HDEL` 竞态；Redis 故障只记 warning、不影响鉴权。
 - Key 的 IP 白名单：客户端 IP 取 `request.client.host`，只有它本身落在新配置 `AICS_TRUSTED_PROXIES`（逗号分隔 CIDR，默认空）内时才采信 `X-Forwarded-For` 的最右侧非可信地址（链中出现无法解析的地址按未知处理）；白名单外或地址未知 → `403 IP_NOT_ALLOWED`（`details.client_ip`），判定在 scope 与限流**之前**，被拒请求不消耗配额。解析与判定复用 `core.netguard`（新增 `resolve_client_ip`、`Allowlist.ip_allowed`），`core.security.Principal` 增加 `client_ip`，缓存记录带 `ip_allowlist`（命中 60 秒缓存照样生效），`set_ip_allowlist` 写后立即删缓存；`AICS_TRUSTED_PROXIES` 非法值启动即失败。CLI：`apikey create --ip`（可重复）与 `apikey allowip`。
