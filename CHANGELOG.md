@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### 新增（M3.1 API Key 收尾，2026-10-17）
+- `last_used_at` 聚合：`modules/apikeys/keyusage.py` 在鉴权成功（限流通过）后向 `{prefix}keyuse:{yyyymmddHHMM}`（UTC 分钟桶）写一个字段并设 TTL 900 s，不写库；beat 任务 `aics.flush_key_usage`（maintenance 队列，每 60 秒，`expires` 55 秒）读最近 11 个桶（当前分钟只读不删、历史桶读后 `DEL`），按键取最大时间戳后用一条 `UPDATE api_keys SET last_used_at = greatest(last_used_at, to_timestamp(:ts))` 落库。分桶使过去的桶不可变，无需 Lua、无 `HGETALL`/`HDEL` 竞态；Redis 故障只记 warning、不影响鉴权。
+- Key 的 IP 白名单：客户端 IP 取 `request.client.host`，只有它本身落在新配置 `AICS_TRUSTED_PROXIES`（逗号分隔 CIDR，默认空）内时才采信 `X-Forwarded-For` 的最右侧非可信地址（链中出现无法解析的地址按未知处理）；白名单外或地址未知 → `403 IP_NOT_ALLOWED`（`details.client_ip`），判定在 scope 与限流**之前**，被拒请求不消耗配额。解析与判定复用 `core.netguard`（新增 `resolve_client_ip`、`Allowlist.ip_allowed`），`core.security.Principal` 增加 `client_ip`，缓存记录带 `ip_allowlist`（命中 60 秒缓存照样生效），`set_ip_allowlist` 写后立即删缓存；`AICS_TRUSTED_PROXIES` 非法值启动即失败。CLI：`apikey create --ip`（可重复）与 `apikey allowip`。
+- 开放接口清单 `backend/tests/open_api.py` 与跨应用隔离回归集 `tests/integration/test_isolation_pg.py`：A 应用 Key 访问 B 应用的接口 / 会话一律 404；`tests/unit/test_open_api_coverage.py` 在新增 `/api/v1/apps/{app_id}/...` 路由而没登记用例时失败（设计讨论 0009 D22）。
+- `tests/fake_redis.py` 支持 `hset` / `hgetall` / `hdel`；`AICS_TRUSTED_PROXIES` 增加启动校验（非 CIDR 直接启动失败，避免静默地不信任任何代理）。
+
+### 文档（M3.1，2026-10-17）
+- 新增 `docs/06-development/10-M3测试报告.md`（§1–§5：执行记录、① `last_used_at`、② IP 白名单、③ 隔离回归集、预算与结论）。
+- 参数默认值与依据补 M3.1 一节（桶粒度 / 回看窗口 / TTL / beat 周期 / `AICS_TRUSTED_PROXIES` / 判定位置）；实现现状与代码地图、配置与环境变量、接口规范（`IP_NOT_ALLOWED` 已实现）、模块划分、安全设计、接手开发指南（进度与下一步改为 M3.2）、开发计划（M3.1 打 ✅ + 状态块 + 3 项待复验）。
+
 ### 文档（交接与 M3–v1.0 规划，2026-10-17）
 - 新增交接文档：`docs/00-handoff/01-接手开发指南.md`（阅读顺序、约定、工作流与覆盖率门槛、常设规则、环境、模型与成本、待复验清单、已知差距、从 M3.1 开始的第一步）与 `02-实现现状与代码地图.md`。
 - 新增 `docs/00-planning/06-后续里程碑详细计划.md`：M3.1–M6.5 每个子步骤的模块设计、数据 / 接口变更、实现要点与坑、测试、验收与真实模型预算；迁移编号预分配 0011–0020。
