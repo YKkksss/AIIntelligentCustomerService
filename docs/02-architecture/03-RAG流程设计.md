@@ -19,6 +19,7 @@ flowchart TD
   RT -- chitchat --> CL[chitchat_reply LLM]
   RT -- out_of_scope --> O[out_of_scope_reply]
   RT -- clarify --> Q[clarify_reply]
+  RT -- recall --> RC[recall_reply 依据记忆回答]
   RT -- kb_qa --> R[retrieve 混合检索<br/>向量 + 关键词 并行]
   R --> F[fuse 融合（加权 / RRF）]
   F --> K[rerank 重排序]
@@ -29,7 +30,7 @@ flowchart TD
   X -- 否 --> N[refuse 兜底话术]
   A --> P[postprocess 引用解析/校验]
   P --> E([结束：返回 RagResult])
-  B & H & N & CT & CL & O & Q --> E
+  B & H & N & CT & CL & O & Q & RC --> E
 ```
 > 意图识别细节（规则层、兜底链、无历史并行模式）见[意图识别 §5–§6](08-意图识别.md)；历史组装见[对话上下文管理 §6](07-对话上下文管理.md)。
 
@@ -95,7 +96,7 @@ class RagState(TypedDict, total=False):
     recalled: list[RecalledSnippet]   # 按需回查片段（enable_history_recall）
     context_usage: dict[str, int]     # 各部分 token
     rewritten_query: str
-    intent: Literal["kb_qa", "chitchat", "human", "out_of_scope", "action", "clarify", "blocked"]
+    intent: Literal["kb_qa", "chitchat", "human", "out_of_scope", "action", "clarify", "recall", "blocked"]
     intent_confidence: float
     intent_source: Literal["rule", "vector", "llm", "fallback"]
     intent_detail: dict               # raw_intent、raw_confidence、fallback_reason、rule_hit、mode
