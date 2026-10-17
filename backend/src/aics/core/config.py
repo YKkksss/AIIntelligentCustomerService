@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from ipaddress import ip_network
 from typing import Annotated, Any, Literal
 
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -108,6 +109,17 @@ class Settings(BaseSettings):
     @classmethod
     def _csv(cls, v: Any) -> Any:
         return _split_csv(v)
+
+    @field_validator("trusted_proxies")
+    @classmethod
+    def _trusted_cidrs(cls, v: list[str]) -> list[str]:
+        """可信代理必须是 CIDR：配错时启动即失败，避免静默地不信任任何代理。"""
+        for item in v:
+            try:
+                ip_network(item, strict=False)
+            except ValueError as exc:
+                raise ValueError(f"AICS_TRUSTED_PROXIES 只接受 CIDR，非法值：{item}") from exc
+        return v
 
     @field_validator("jwt_secret")
     @classmethod

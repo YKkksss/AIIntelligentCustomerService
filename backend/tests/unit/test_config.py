@@ -33,6 +33,17 @@ def test_empty_allowlist(monkeypatch: pytest.MonkeyPatch) -> None:
     assert make().url_fetch_allowlist == []
 
 
+def test_trusted_proxies_accepts_cidrs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AICS_TRUSTED_PROXIES", "10.0.0.0/8, 2001:db8::/32")
+    assert make().trusted_proxies == ["10.0.0.0/8", "2001:db8::/32"]
+
+
+def test_trusted_proxies_rejects_non_cidr(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AICS_TRUSTED_PROXIES", "10.0.0.0/8,nginx")
+    with pytest.raises(ValidationError, match="CIDR"):
+        make()
+
+
 def test_secrets_not_in_repr() -> None:
     s = get_settings()
     assert "x" * 64 not in repr(s)
