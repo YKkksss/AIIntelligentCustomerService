@@ -4,8 +4,25 @@
 
 ## [Unreleased]
 
+### 新增（M3.2 知识库开放接口，2026-10-17）
+- 知识库开放接口 9 个端点（`modules/knowledge/router.py`，`prefix=/api/v1/apps/{app_id}`）：只读 `GET /documents`（`status` / `q` / `page` / `page_size`）、`GET /documents/{id}`、`GET /documents/{id}/chunks`（仅生效版本）用 `kb:read`；写 `POST /documents`、`POST /documents/url`、`PUT /documents/{id}/file`、`POST /documents/{id}/reindex`、`PATCH /documents/{id}`（标题 / 元数据立即生效）、`DELETE /documents/{id}`（204）用 `kb:write`。上传按 1 MB 分块流式累加、超 `AICS_UPLOAD_MAX_MB` 立即 `413 FILE_TOO_LARGE`（不整体读入内存），扩展名快速拒绝，魔数仍由 `ingest.parsers` 判定。
+- 幂等键 `core/idempotency.py`：`Idempotency-Key` 依赖，`SET {prefix}idem:{key_id}:{key} NX EX 86400` 写占位，成功后覆写为 `{state:done,status,body}` 供回放；同键异体 `409 IDEMPOTENCY_CONFLICT`、处理中 `409 CONFLICT`；非 2xx 与异常删占位；Redis 故障放行并告警；键长 ≤128（超长 422）、回放体 ≤64 KB。上传与替换接入。
+- `KnowledgeRuntime`（`modules/knowledge/runtime.py`）与 `main.build_knowledge_runtime`：知识库路由按 chat 同样的方式从 `app.state` 取运行时，测试可注入假实现；`TASK_QUEUES` 迁到 `modules/knowledge/service.py` 作为任务→队列的唯一来源，`cli._task_queues()` 复用。
+- `KnowledgeService` 新增 `list_documents` / `get_document` / `list_chunks` / `update_document`；`ingest/repository.py` 新增分页与 ILIKE 转义（`like_pattern`、`page_for_app`、`page_for_document`）；新依赖 `python-multipart`（`pyproject.toml` + `uv.lock`）。
+- 修 `KnowledgeRuntime` 的接线缺陷：`service()` 曾把文件存储当向量库传、漏传必填 `storage`，`build_knowledge_runtime` 又传了 `KnowledgeService` 不接受的 `reranker`——真实 lifespan 下任何知识库路由都会 `TypeError`（假运行时单测与本机跑不了的集成测试都照不到），已修复并补形参映射回归用例。
+- 统一 `DocumentNotFoundError`：原先 `ingest/service.py`（`NOT_FOUND`）与 `modules/knowledge/service.py`（`DOCUMENT_NOT_FOUND`）各一份，现合并到 `core/errors.py` 一份（码值 `DOCUMENT_NOT_FOUND`），因为 import-linter 层次契约禁止 `ingest → modules`。
+
+### 测试（M3.2，2026-10-17）
+- 新增 `tests/unit/test_idempotency.py`（占位 / 回放 / 冲突 / 放行 / 异常清理）、`tests/integration/test_knowledge_api_pg.py`（真 PG + 假嵌入器与假抓取器：上传、去重、幂等回放与冲突、替换未变、PATCH、删除、URL 导入、413/400）；`tests/unit/test_knowledge_api.py` 扩到读写 9 个端点与运行时接线回归；`tests/integration/test_isolation_pg.py` 补文档级与写接口的跨应用 404；`tests/open_api.py` 清单扩到 11 条（清单守卫要求“挂载了才能登记”）；`tests/fake_redis.py` 的 `set` 支持 `nx`。
+- 本机门禁：`ruff check` / `ruff format --check` 全绿、`lint-imports` 13 kept、提示词锁 8 个 ok、`pytest -q` 727 passed（1 例 Windows 符号链接环境失败）、覆盖率 81%。
+
+### 文档（M3.2，2026-10-17）
+- [M3 测试报告](docs/06-development/10-M3测试报告.md) 增 §6–§9（只读接口、幂等键与写接口、隔离用例扩展、预算与结论）；[参数默认值与依据](docs/06-development/09-参数默认值与依据.md) 增 M3.2 一节（分页 / `q` 上限 / 幂等 TTL 与长度上限 / 1 MB 分块 / metadata 8 KB / URL 2048 / `python-multipart`）。
+- [实现现状与代码地图](docs/00-handoff/02-实现现状与代码地图.md) 更新里程碑（M3.2 ✅）、knowledge 与 core 行、HTTP 表 9 条、测试计数（53 个单测文件 / 462 个用例、81%）、已知差距（去掉重复异常类、加超限错误码跨入口不一致）；[接口规范](docs/04-api/01-接口规范.md) 错误码表把 `FILE_TOO_LARGE`、`IDEMPOTENCY_CONFLICT` 移入已实现并补幂等实现细节；[开放接口参考](docs/04-api/02-开放接口参考.md) §4 标注已实现；[模块划分](docs/02-architecture/02-模块划分.md)、[技术选型](docs/02-architecture/06-技术选型.md)（`python-multipart` 版本）同步。
+- [待解决问题清单](docs/00-planning/07-待解决问题清单.md) 清扫：`kb:*` scope 已落地（归档）、`FILE_TOO_LARGE` / `IDEMPOTENCY_CONFLICT` 已实现、新增 ISSUE-32（超限错误码跨入口不一致）、ISSUE-33（幂等占位被强杀后残留 24 小时）、ISSUE-34（`%TEMP%` 下的 `struct.py` 遮蔽标准库）、ISSUE-35 / ISSUE-36（本步偏差）、归档 ISSUE-31（运行时接线缺陷）；[开发计划](docs/00-planning/03-开发计划.md) M3.2 打 ✅ + 状态块 + 2 项待复验。
+
 ### 文档（M3.2 子步骤计划，2026-10-17）
-- 开发计划新增 M3.2 子步骤计划（[开放接口参考 §4](../04-api/02-开放接口参考.md) 的 9 个端点）：① 只读接口（列表 / 详情 / 切块列表 + `KnowledgeService` 三个方法 + 开放接口清单与隔离用例同步）；② `core/idempotency`（先于写接口落地）；③ 写接口（上传流式限额、URL 导入、替换、重建、`PATCH`、删除、`FILE_TOO_LARGE`、统一 `DOCUMENT_NOT_FOUND`、`python-multipart`）；④ 文档。含验收（接入指南 curl 原样可跑）、预算（< 0.1 元）与不在本步的范围。
+- 开发计划新增 M3.2 子步骤计划（[开放接口参考 §4](docs/04-api/02-开放接口参考.md) 的 9 个端点）：① 只读接口（列表 / 详情 / 切块列表 + `KnowledgeService` 三个方法 + 开放接口清单与隔离用例同步）；② `core/idempotency`（先于写接口落地）；③ 写接口（上传流式限额、URL 导入、替换、重建、`PATCH`、删除、`FILE_TOO_LARGE`、统一 `DOCUMENT_NOT_FOUND`、`python-multipart`）；④ 文档。含验收（接入指南 curl 原样可跑）、预算（< 0.1 元）与不在本步的范围。
 
 ### 新增（M3.1 API Key 收尾，2026-10-17）
 - `last_used_at` 聚合：`modules/apikeys/keyusage.py` 在鉴权成功（限流通过）后向 `{prefix}keyuse:{yyyymmddHHMM}`（UTC 分钟桶）写一个字段并设 TTL 900 s，不写库；beat 任务 `aics.flush_key_usage`（maintenance 队列，每 60 秒，`expires` 55 秒）读最近 11 个桶（当前分钟只读不删、历史桶读后 `DEL`），按键取最大时间戳后用一条 `UPDATE api_keys SET last_used_at = greatest(last_used_at, to_timestamp(:ts))` 落库。分桶使过去的桶不可变，无需 Lua、无 `HGETALL`/`HDEL` 竞态；Redis 故障只记 warning、不影响鉴权。
