@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### 文档（交接与 M3–v1.0 规划，2026-10-17）
+- 新增交接文档：`docs/00-handoff/01-接手开发指南.md`（阅读顺序、约定、工作流与覆盖率门槛、常设规则、环境、模型与成本、待复验清单、已知差距、从 M3.1 开始的第一步）与 `02-实现现状与代码地图.md`。
+- 新增 `docs/00-planning/06-后续里程碑详细计划.md`：M3.1–M6.5 每个子步骤的模块设计、数据 / 接口变更、实现要点与坑、测试、验收与真实模型预算；迁移编号预分配 0011–0020。
+- 新增设计讨论 0009（文档审计 A1–A16、规划决策 D1–D22）、ADR-0016（会话事件 outbox 与事件流补发）、ADR-0017（模块依赖合同修订与横切能力注入）。
+- 按代码更正文档：项目目录结构、模块划分（状态列、handoff → apps）、技术选型（SSE 为手写实现）、数据库设计（`rag_config` 实际结构、`conversation_events`）、错误码（`DOCUMENT_NOT_FOUND` 等）、配置项、测试策略（全包 80% 门槛）、开发环境、开发计划（默认分支、tag 现状、M5.6 / M5.7）；未实现的部分统一加"实现状态"说明。
+
 ### 新增（M2.7 会话生命周期，2026-10-17）
 - `chat.lifecycle.sweep()`：按应用生效 `session_config` 发空闲提醒（`system/idle_notice`）并关闭空闲会话（`close_reason=idle`，`system/idle_closed`）。条件单行更新，重复 / 并发执行幂等；排除 eval 与暂停状态（accepted、wait 模式的 pending）；不补发过期提醒；配置无效回落平台默认；跳过 deleting 应用；有批量上限与事件钩子（设计讨论 0008）。
 - Celery 任务 `aics.idle_sweep`（maintenance 队列），beat 每 30 秒（`expires` 25 秒）；`aics-cli sweep-idle`。
@@ -31,7 +37,7 @@
 - 长对话记忆评测 `scripts/e2e_m2/eval_m25.py` + `memory_cases`（11 段 24–60 轮）；`history_token_budget` 评测后保持 3000（M1 测试报告 §13，设计讨论 0006）。
 
 ### 新增（M2.4 意图识别，2026-10-16）
-- `rag.intent` 规则层：归一化、AC 自动机词表匹配、敏感词 / 转人工词 / 连续拒答 / 寒暄完全匹配与模板（内置 4 类 32 词，可被应用覆盖；greeting 用应用开场白 `AppProfile.greeting`）；`next_refusal_streak` 供 M2.6。
+- `rag.intent` 规则层：归一化、AC 自动机词表匹配、敏感词 / 转人工词 / 连续拒答 / 寒暄完全匹配与模板（内置 4 类 31 词，可被应用覆盖；greeting 用应用开场白 `AppProfile.greeting`）；`next_refusal_streak` 供 M2.6。
 - guard 节点与分支：`blocked_reply`（敏感词）、规则转人工（`rule:keyword` / `rule:max_refusals`）、寒暄模板与 LLM 寒暄回复（提示词 `chitchat` v1，失败回落模板）。
 - 无历史时意图分类与检索并行，非 kb_qa 取消检索。
 - 超范围误判兜底 `scope_check`：`intent.out_of_scope_check`（默认 true）、`out_of_scope_override_score`（默认 0.8），强重排证据改判 kb_qa（设计讨论 0005）。
