@@ -7,6 +7,7 @@ from typing import Any
 from uuid import UUID
 
 from aics.ingest.service import run_cleanup_job, run_reconcile_job, run_sweep_job
+from aics.modules.apikeys.keyusage import KEY_USAGE_FLUSH_TASK, run_key_usage_flush_job
 from aics.modules.chat.lifecycle import IDLE_SWEEP_TASK, run_idle_sweep_job
 from aics.tasks.celery_app import celery_app
 
@@ -47,3 +48,9 @@ def sweep_knowledge() -> dict[str, int]:
 def idle_sweep() -> dict[str, Any]:
     """Every 30 s (beat): idle notice and idle close (会话生命周期 §2.2); idempotent."""
     return asyncio.run(run_idle_sweep_job())
+
+
+@celery_app.task(name=KEY_USAGE_FLUSH_TASK, queue="maintenance")
+def flush_key_usage() -> dict[str, int]:
+    """Every 60 s (beat): fold the key-usage buckets into `api_keys.last_used_at` (M3.1)."""
+    return asyncio.run(run_key_usage_flush_job())

@@ -3,7 +3,7 @@
 `ApiKeyService` creates / revokes keys (the plaintext is returned once). `ApiKeyAuthenticator`
 implements `core.security.Authenticator`: bearer parsing → cached lookup by prefix
 (`{prefix}apikey:{key_prefix}`, 60 s, deleted on revoke) → HMAC check → revoked / expired →
-app binding and status → scope → rate limits.
+app binding and status → scope → rate limits → usage marker (see `keyusage`).
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from aics.core.errors import (
 from aics.core.security import Principal
 from aics.db.models import ApiKey
 from aics.db.models.apikey import API_KEY_SCOPES
-from aics.modules.apikeys import keys
+from aics.modules.apikeys import keys, keyusage
 from aics.modules.apikeys.ratelimit import Limits, RateLimiter
 from aics.modules.apikeys.repository import ApiKeyRepository
 
@@ -180,6 +180,8 @@ class ApiKeyAuthenticator:
             raise ForbiddenError(details={"required_scope": list(any_scope)})
         key_id = UUID(rec["id"])
         headers = await self.limiter.hit(Limits(key_id, rec["rpm_limit"], rec["daily_quota"]))
+        # last_used_at is folded in by the beat task aics.flush_key_usage (best-effort).
+        await keyusage.record_use(self.redis, self.redis_prefix, key_id)
         return Principal(
             app_id=app_id, key_id=key_id, key_prefix=prefix, scopes=scopes, rate_headers=headers
         )

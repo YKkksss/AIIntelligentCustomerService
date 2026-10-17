@@ -1,4 +1,4 @@
-"""Minimal in-memory async Redis for unit tests (get / set ex / delete / incr / expire /
+"""Minimal in-memory async Redis for unit tests (get / set ex / delete / incr / expire / hash /
 pipeline). `fail=True` makes every call raise RedisError."""
 
 from __future__ import annotations
@@ -24,6 +24,12 @@ class _Pipe:
 
     def expire(self, key: str, ttl: int) -> None:
         self.ops.append(("expire", (key, ttl)))
+
+    def hset(self, key: str, field: str, value: Any) -> None:
+        self.ops.append(("hset", (key, field, value)))
+
+    def hgetall(self, key: str) -> None:
+        self.ops.append(("hgetall", (key,)))
 
     async def execute(self) -> list[Any]:
         return [await getattr(self.r, op)(*args) for op, args in self.ops]
@@ -63,6 +69,27 @@ class FakeRedis:
         self._check()
         self.ttl[key] = ttl
         return True
+
+    async def hset(self, key: str, field: str, value: Any) -> int:
+        self._check()
+        h = self.data.setdefault(key, {})
+        created = field not in h
+        h[field] = str(value)
+        return int(created)
+
+    async def hgetall(self, key: str) -> dict[str, str]:
+        self._check()
+        return dict(self.data.get(key) or {})
+
+    async def hdel(self, key: str, *fields: str) -> int:
+        self._check()
+        h = self.data.get(key)
+        if not isinstance(h, dict):
+            return 0
+        removed = sum(h.pop(f, None) is not None for f in fields)
+        if not h:
+            self.data.pop(key, None)
+        return removed
 
     def pipeline(self, transaction: bool = True) -> _Pipe:
         self._check()

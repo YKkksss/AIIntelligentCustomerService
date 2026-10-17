@@ -76,3 +76,33 @@ def test_idle_sweep_task_and_cli_call_the_job(monkeypatch: object, capsys: objec
     assert maintenance.idle_sweep() == out
     assert main(["sweep-idle"]) == 0
     assert '"closed": 3' in capsys.readouterr().out  # type: ignore[attr-defined]
+
+
+def test_key_usage_flush_task_routed_and_scheduled_every_60s() -> None:
+    from aics.modules.apikeys import keyusage
+    from aics.tasks import maintenance  # noqa: F401
+    from aics.tasks.celery_app import KEY_USAGE_FLUSH_INTERVAL_S, celery_app
+
+    name = keyusage.KEY_USAGE_FLUSH_TASK
+    assert name in celery_app.tasks
+    assert celery_app.conf.task_routes[name]["queue"] == "maintenance"
+    entry = celery_app.conf.beat_schedule["flush-key-usage"]
+    assert entry["task"] == name
+    assert entry["schedule"] == KEY_USAGE_FLUSH_INTERVAL_S == 60
+    assert entry["schedule"] == keyusage.KEY_USAGE_FLUSH_INTERVAL_S
+    assert 0 < entry["options"]["expires"] < entry["schedule"]
+
+
+def test_key_usage_flush_task_calls_the_job(monkeypatch: object) -> None:
+    import pytest
+
+    from aics.tasks import maintenance
+
+    out = {"keys": 3, "buckets": 2}
+
+    async def fake_job(settings: object = None) -> dict:
+        return out
+
+    mp: pytest.MonkeyPatch = monkeypatch  # type: ignore[assignment]
+    mp.setattr(maintenance, "run_key_usage_flush_job", fake_job)
+    assert maintenance.flush_key_usage() == out

@@ -4,7 +4,7 @@
   celery -A aics.tasks.celery_app worker -Q ingest,context,eval,maintenance --pool=threads -c 4 -l info
   celery -A aics.tasks.celery_app beat -l info
 队列固定为 ingest / context / eval / maintenance（ADR-0003、ADR-0008）。beat 表随里程碑补充
-（M1 cleanup、M2 idle_sweep 每 30 秒、M4 aggregate_daily_stats）。
+（M1 cleanup、M2 idle_sweep 每 30 秒、M3.1 flush_key_usage 每 60 秒、M4 aggregate_daily_stats）。
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from aics.core.config import CELERY_QUEUES, get_settings
 from aics.core.logging import configure_logging
 
 IDLE_SWEEP_INTERVAL_S = 30.0  # = chat.lifecycle.IDLE_SWEEP_INTERVAL_S (tests keep them equal)
+KEY_USAGE_FLUSH_INTERVAL_S = 60.0  # = apikeys.keyusage.KEY_USAGE_FLUSH_INTERVAL_S
 
 
 def create_celery() -> Celery:
@@ -54,6 +55,13 @@ def create_celery() -> Celery:
                 "schedule": IDLE_SWEEP_INTERVAL_S,
                 "options": {"expires": IDLE_SWEEP_INTERVAL_S - 5},
             },
+            # M3.1：Key 最近使用时间（Redis 分桶 → api_keys.last_used_at）。丢掉一轮不清零：
+            # 下一轮读到同一批未过期的桶，桶里保留的是最大时间戳。
+            "flush-key-usage": {
+                "task": "aics.flush_key_usage",
+                "schedule": KEY_USAGE_FLUSH_INTERVAL_S,
+                "options": {"expires": KEY_USAGE_FLUSH_INTERVAL_S - 5},
+            },
         },
         broker_connection_retry_on_startup=True,
     )
@@ -67,6 +75,7 @@ def create_celery() -> Celery:
         "aics.sweep_knowledge": {"queue": "maintenance", "routing_key": "maintenance"},
         "aics.compact_conversation": {"queue": "context", "routing_key": "context"},
         "aics.idle_sweep": {"queue": "maintenance", "routing_key": "maintenance"},
+        "aics.flush_key_usage": {"queue": "maintenance", "routing_key": "maintenance"},
     }
     return app
 
