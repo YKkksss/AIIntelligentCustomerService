@@ -49,8 +49,12 @@ class FakeRedis:
         self._check()
         return self.data.get(key)
 
-    async def set(self, key: str, value: Any, ex: int | None = None) -> bool:
+    async def set(
+        self, key: str, value: Any, ex: int | None = None, nx: bool | None = None
+    ) -> bool | None:
         self._check()
+        if nx and key in self.data:
+            return None
         self.data[key] = value
         if ex is not None:
             self.ttl[key] = ex

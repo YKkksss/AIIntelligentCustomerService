@@ -8,6 +8,7 @@ M1 阶段只有 service 与 `aics-cli`，HTTP 路由随 M3（开放接口 `/api/
 from __future__ import annotations
 
 import hashlib
+import json
 import posixpath
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -61,6 +62,8 @@ CLEANUP_TASK = "aics.cleanup_document"
 RETOKENIZE_TASK = "aics.retokenize_app"
 RECONCILE_TASK = "aics.reconcile"
 TITLE_MAX_CHARS = 200
+#: `PATCH /documents/{id}` 的 metadata 上限（序列化后字节数，防滥用）
+METADATA_MAX_BYTES = 8192
 BUSY_STATUSES = frozenset({"queued", "parsing", "indexing", "deleting"})
 #: 任务名 → 队列（与 `aics.tasks.celery_app.task_routes` 一致；`aics-cli` 复用同一份表）
 TASK_QUEUES = {
@@ -956,6 +959,31 @@ class KnowledgeService:
             app_id, doc.id, doc.index_version, limit=size, offset=offset
         )
         return ChunkPage(items=rows, total=total, page=p, page_size=size)
+
+    # ------------------------------------------------------------------ 开放接口：写
+    async def update_document(
+        self,
+        app_id: UUID,
+        document_id: UUID,
+        *,
+        title: str | None = None,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> Document:
+        """改标题 / 元数据（开放接口 §4 `PATCH`）：立即生效，无需重建（标题不在向量 payload 里）。"""
+        await self._app(app_id)
+        if title is not None and not title.strip():
+            raise ValidationAppError(message="标题不能为空")
+        if metadata is not None:
+            body = json.dumps(dict(metadata), ensure_ascii=False, default=str)
+            if len(body.encode()) > METADATA_MAX_BYTES:
+                raise ValidationAppError(message=f"metadata 超过 {METADATA_MAX_BYTES} 字节")
+        doc = await self._doc(app_id, document_id, lock=True)
+        if title is not None:
+            doc.title = _clean_title(title, doc.title)
+        if metadata is not None:
+            doc.metadata_ = dict(metadata)
+        await self.session.commit()
+        return doc
 
     # ------------------------------------------------------------------ 查询
     async def retrievable_chunk_count(self, app_id: UUID) -> int:

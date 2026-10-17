@@ -3,6 +3,10 @@
 与 `modules.chat.runtime.ChatRuntime` 同一套路：`main` 在 lifespan 里 build 一份放进
 `app.state.knowledge_runtime`，路由通过 `request.app.state.knowledge_runtime` 取用；
 集成测试可以先把 `app.state.knowledge_runtime` 换成用 fake 依赖构建的实例（与 chat 一致）。
+
+字段名对齐 `KnowledgeService` 的形参：`storage` = 文件存储（`aics.storage.Storage`），
+`vector` = Qdrant（`QdrantVectorStore`，service 里的 `store`）。写错过一次（把 storage 当
+store 传），`tests/unit/test_knowledge_api.py::test_runtime_wires_service_dependencies` 兜底。
 """
 
 from __future__ import annotations
@@ -16,8 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from aics.ingest.parsers.url import FetchedUrl
 from aics.modules.knowledge.service import KnowledgeService
-from aics.providers.base import EmbeddingProvider, RerankProvider
-from aics.storage import Storage
+from aics.providers.base import EmbeddingProvider
+from aics.storage import Storage, get_storage
 from aics.vectorstore import QdrantVectorStore
 
 Enqueue = Callable[[str, Sequence[Any]], None]
@@ -27,10 +31,9 @@ Fetcher = Callable[[str], Awaitable[FetchedUrl]]
 @dataclass(frozen=True)
 class KnowledgeRuntime:
     sessions: async_sessionmaker[AsyncSession]
-    store: Storage | None = None
-    embedder: EmbeddingProvider | None = None
+    storage: Storage | None = None
     vector: QdrantVectorStore | None = None
-    reranker: RerankProvider | None = None
+    embedder: EmbeddingProvider | None = None
     enqueue: Enqueue | None = None
     fetcher: Fetcher | None = None
 
@@ -43,10 +46,9 @@ class KnowledgeRuntime:
     def service(self, session: AsyncSession) -> KnowledgeService:
         return KnowledgeService(
             session,
-            store=self.store,
+            storage=self.storage or get_storage(),
+            store=self.vector,
             embedder=self.embedder,
-            vector=self.vector,
-            reranker=self.reranker,
             enqueue=self.enqueue,
             fetcher=self.fetcher,
         )

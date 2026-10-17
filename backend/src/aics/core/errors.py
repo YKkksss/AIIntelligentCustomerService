@@ -65,6 +65,12 @@ class ConflictError(AppError):
     code, status, message = "CONFLICT", 409, "资源状态冲突"
 
 
+class FileTooLargeError(AppError):
+    """上传超过 `AICS_UPLOAD_MAX_MB`（接口规范 §4：413 `FILE_TOO_LARGE`）。"""
+
+    code, status, message = "FILE_TOO_LARGE", 413, "文件超过大小上限"
+
+
 class ValidationAppError(AppError):
     code, status, message = "VALIDATION_ERROR", 422, "参数校验失败"
 

@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse
 from aics import __version__
 from aics.core.config import Settings, get_settings
 from aics.core.errors import AppError, error_body
+from aics.core.idempotency import Idempotency
 from aics.core.logging import RequestLogMiddleware, configure_logging
 from aics.db.engine import dispose_engine, get_sessionmaker
 from aics.health import router as health_router
@@ -78,7 +79,7 @@ def build_chat_runtime(s: Settings) -> ChatRuntime:
 
 
 def build_knowledge_runtime(s: Settings) -> KnowledgeRuntime:
-    """Composition root of knowledge.service: 本地存储、Qdrant、嵌入器、重排器与任务投递。
+    """Composition root of knowledge.service: 本地存储、Qdrant、嵌入器与任务投递。
 
     入队按 `TASK_QUEUES` 指定队列（与 `tasks.celery_app.task_routes` 一致）；投递失败只记日志，
     文档停在 queued/parsing，由 `aics.sweep_knowledge` 兜底（流水线 §7）。
@@ -107,10 +108,9 @@ def build_knowledge_runtime(s: Settings) -> KnowledgeRuntime:
 
     return KnowledgeRuntime(
         sessions=sessions,
-        store=build_storage(s),
+        storage=build_storage(s),
         embedder=get_embedder(),
         vector=get_vector_store(),
-        reranker=get_reranker(),
         enqueue=enqueue,
     )
 
@@ -119,6 +119,10 @@ def build_knowledge_runtime(s: Settings) -> KnowledgeRuntime:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     s = get_settings()
     redis = aioredis.from_url(s.redis_url)
+    # Idempotency keys of the open write API (`core.idempotency`); Redis is also the
+    # authenticator cache, so one client serves both.
+    app.state.redis = redis
+    app.state.idempotency = Idempotency(redis, prefix=s.redis_prefix)
     # Open-API authentication (core.security.Authenticator), implemented by modules.apikeys.
     app.state.authenticator = ApiKeyAuthenticator(
         get_sessionmaker(),

@@ -38,7 +38,7 @@ async def new_key(pg: dict[str, Any], redis: Any, app_id: UUID) -> str:
     pepper = get_settings().api_key_pepper.get_secret_value()
     async with pg["sessions"]() as s:
         _, plain = await ApiKeyService(s, pepper=pepper, redis=redis).create(
-            app_id, name="isolation-it", scopes=["chat", "kb:read"], rpm_limit=1000
+            app_id, name="isolation-it", scopes=["chat", "kb:read", "kb:write"], rpm_limit=1000
         )
         await s.commit()
     return plain
@@ -64,6 +64,18 @@ async def new_document(pg: dict[str, Any], app_id: UUID, title: str) -> UUID:
 
 def auth(key: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {key}"}
+
+
+#: multipart 路由（`tests/open_api.py` 里 body 为 None）：隔离用例自己造文件
+MULTIPART_ROUTES = {
+    ("POST", "/api/v1/apps/{app_id}/documents"),
+    ("PUT", "/api/v1/apps/{app_id}/documents/{document_id}/file"),
+}
+MULTIPART_FILE = {"file": ("退货政策.md", "# 退货\n7 天内可退回。".encode(), "text/markdown")}
+
+
+def _payload(method: str, path: str, body: dict[str, Any] | None) -> dict[str, Any]:
+    return {"files": MULTIPART_FILE} if (method, path) in MULTIPART_ROUTES else {"json": body}
 
 
 def build_app(pg: dict[str, Any], redis: Any) -> FastAPI:
@@ -119,7 +131,9 @@ async def test_cross_app_key_is_404(
 ) -> None:
     url = path.format(app_id=iso["app_b"], conversation_id=iso["conv_b"], document_id=iso["doc_b"])
 
-    r = await iso["client"].request(method, url, json=body, headers=auth(iso["key_a"]))
+    r = await iso["client"].request(
+        method, url, headers=auth(iso["key_a"]), **_payload(method, path, body)
+    )
 
     assert r.status_code == 404, r.text
     assert r.json()["error"]["code"] == "APP_NOT_FOUND"
@@ -204,3 +218,43 @@ async def test_own_document_is_readable(iso: dict[str, Any]) -> None:
     )
     assert r.status_code == 200, r.text
     assert r.json() == {"items": [], "total": 0, "page": 1, "page_size": 20}
+
+
+async def test_cross_app_document_write_is_404(iso: dict[str, Any]) -> None:
+    """A 的 Key + A 的路径 + B 的文档 id：改标题 / 替换 / 重建 / 删除一律 404。"""
+    base = f"/api/v1/apps/{iso['app_a']}/documents/{iso['doc_b']}"
+    calls = [
+        ("PATCH", base, {"json": {"title": "改名"}}),
+        ("PUT", f"{base}/file", {"files": MULTIPART_FILE}),
+        ("POST", f"{base}/reindex", {}),
+        ("DELETE", base, {}),
+    ]
+
+    for method, url, kwargs in calls:
+        r = await iso["client"].request(method, url, headers=auth(iso["key_a"]), **kwargs)
+        assert r.status_code == 404, f"{method} {url}: {r.text}"
+        assert r.json()["error"]["code"] == "DOCUMENT_NOT_FOUND"
+
+
+async def test_own_document_can_be_patched_and_deleted(iso: dict[str, Any]) -> None:
+    """正向对照（写）：改标题立即生效；删除后 204，列表里立刻消失（软删 + 异步清理）。"""
+    base = f"/api/v1/apps/{iso['app_a']}/documents/{iso['doc_a']}"
+    headers = auth(iso["key_a"])
+
+    r = await iso["client"].patch(
+        base, json={"title": "退货政策 v2", "metadata": {"owner": "售后"}}, headers=headers
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["title"] == "退货政策 v2"
+
+    r = await iso["client"].delete(base, headers=headers)
+    assert r.status_code == 204, r.text
+    assert r.content == b""
+
+    r = await iso["client"].get(base, headers=headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "deleting"
+
+    r = await iso["client"].get(f"/api/v1/apps/{iso['app_a']}/documents", headers=headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["total"] == 0

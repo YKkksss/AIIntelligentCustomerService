@@ -21,8 +21,14 @@ OPEN_API: list[tuple[str, str, dict[str, Any] | None]] = [
     ("POST", "/api/v1/apps/{app_id}/chat", {"question": "退货怎么退？"}),
     ("GET", "/api/v1/apps/{app_id}/conversations/{conversation_id}/messages", None),
     ("GET", "/api/v1/apps/{app_id}/documents", None),
+    ("POST", "/api/v1/apps/{app_id}/documents", None),  # multipart：由隔离用例单独构造
+    ("POST", "/api/v1/apps/{app_id}/documents/url", {"url": "https://example.com/a.md"}),
     ("GET", "/api/v1/apps/{app_id}/documents/{document_id}", None),
+    ("PATCH", "/api/v1/apps/{app_id}/documents/{document_id}", {"title": "改名"}),
+    ("DELETE", "/api/v1/apps/{app_id}/documents/{document_id}", None),
     ("GET", "/api/v1/apps/{app_id}/documents/{document_id}/chunks", None),
+    ("PUT", "/api/v1/apps/{app_id}/documents/{document_id}/file", None),  # multipart
+    ("POST", "/api/v1/apps/{app_id}/documents/{document_id}/reindex", None),
 ]
 
 
