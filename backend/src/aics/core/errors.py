@@ -39,6 +39,16 @@ class ConversationNotFoundError(NotFoundError):
     code, message = "CONVERSATION_NOT_FOUND", "会话不存在"
 
 
+class DocumentNotFoundError(NotFoundError):
+    """Document missing or not owned by the app (open API: 404 DOCUMENT_NOT_FOUND).
+
+    放在 core 而不是 `modules.knowledge`：入库流水线（ingest，L2 之下）也要抛同一个错误码，
+    而 ingest 不允许反向 import 模块层（import-linter 层次合同）。
+    """
+
+    code, message = "DOCUMENT_NOT_FOUND", "文档不存在"
+
+
 class UnauthenticatedError(AppError):
     code, status, message = "UNAUTHENTICATED", 401, "缺少或无效的凭证"
 

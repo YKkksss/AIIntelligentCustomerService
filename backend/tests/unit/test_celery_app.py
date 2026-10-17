@@ -21,14 +21,16 @@ def test_ingest_tasks_registered_and_routed() -> None:
 
 
 def test_maintenance_tasks_beat_and_cli_queue_map() -> None:
-    from aics.cli import TASK_QUEUES
+    from aics.cli import _task_queues
+    from aics.modules.knowledge.service import TASK_QUEUES
     from aics.tasks import ingest, maintenance  # noqa: F401
     from aics.tasks.celery_app import celery_app
 
     routes = celery_app.conf.task_routes
     for name in ("aics.reconcile", "aics.sweep_knowledge"):
         assert name in celery_app.tasks and routes[name]["queue"] == "maintenance"
-    # CLI 不 import aics.tasks，按任务名投递：队列必须与 task_routes 一致
+    # CLI 不 import aics.tasks，按任务名投递：队列映射的唯一来源是 knowledge 服务的 TASK_QUEUES
+    assert _task_queues() is TASK_QUEUES
     assert {k: routes[k]["queue"] for k in TASK_QUEUES} == TASK_QUEUES
     beat = {v["task"] for v in celery_app.conf.beat_schedule.values()}
     assert {"aics.reconcile", "aics.sweep_knowledge"} <= beat

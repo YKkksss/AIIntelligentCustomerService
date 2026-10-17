@@ -12,6 +12,14 @@ from sqlalchemy import delete, func, select, update
 from aics.db.models import Chunk, ChunkParent, ChunkQuestion, Document, Job
 from aics.db.scoped import AppScopedRepository
 
+MAX_PAGE_SIZE = 200  # 与 db.scoped 一致（接口层上限 100，见接口规范 §5）
+
+
+def like_pattern(q: str) -> str:
+    """`%` / `_` / `\` 转义后的 ILIKE 模式（配合 `escape="\\\\"`），用户输入不会变成通配符。"""
+    escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
 
 class DocumentRepository(AppScopedRepository[Document]):
     model = Document
@@ -21,6 +29,38 @@ class DocumentRepository(AppScopedRepository[Document]):
             Document.content_hash == content_hash, Document.deleted_at.is_(None)
         )
         return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def page_for_app(
+        self,
+        app_id: UUID,
+        *,
+        status: str | None = None,
+        q: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[Document], int]:
+        """开放接口的文档列表：按创建时间倒序，`q` 在标题上 ILIKE，软删除的文档不返回。
+
+        返回 `(rows, total)`；`total` 是同一条件的总数（过滤后），供页码分页使用。
+        """
+        conds: list[object] = [Document.deleted_at.is_(None)]
+        if status is not None:
+            conds.append(Document.status == status)
+        if q:
+            conds.append(Document.title.ilike(like_pattern(q), escape="\\"))
+        stmt = (
+            self._scoped(app_id)
+            .where(*conds)
+            .order_by(Document.created_at.desc(), Document.id.desc())
+            .limit(min(max(limit, 1), MAX_PAGE_SIZE))
+            .offset(max(offset, 0))
+        )
+        rows = list((await self.session.execute(stmt)).scalars())
+        count_stmt = (
+            select(func.count()).select_from(Document).where(Document.app_id == app_id, *conds)
+        )
+        total = int((await self.session.execute(count_stmt)).scalar_one())
+        return rows, total
 
     async def get_for_update(self, app_id: UUID, document_id: UUID) -> Document | None:
         stmt = self._scoped(app_id).where(Document.id == document_id).with_for_update()
@@ -97,6 +137,32 @@ class ChunkRepository(AppScopedRepository[Chunk]):
             .order_by(Chunk.ordinal)
         )
         return list((await self.session.execute(stmt)).scalars())
+
+    async def page_for_document(
+        self,
+        app_id: UUID,
+        document_id: UUID,
+        index_version: int,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[Chunk], int]:
+        """切块列表（开放接口 §4）：只取生效构建号，按 `ordinal` 升序，返回 `(rows, total)`。"""
+        conds: list[object] = [
+            Chunk.document_id == document_id,
+            Chunk.index_version == index_version,
+        ]
+        stmt = (
+            self._scoped(app_id)
+            .where(*conds)
+            .order_by(Chunk.ordinal)
+            .limit(min(max(limit, 1), MAX_PAGE_SIZE))
+            .offset(max(offset, 0))
+        )
+        rows = list((await self.session.execute(stmt)).scalars())
+        count_stmt = select(func.count()).select_from(Chunk).where(Chunk.app_id == app_id, *conds)
+        total = int((await self.session.execute(count_stmt)).scalar_one())
+        return rows, total
 
 
 class ChunkParentRepository(AppScopedRepository[ChunkParent]):

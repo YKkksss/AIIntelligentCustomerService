@@ -5,7 +5,7 @@
 1. 在本文件的 `OPEN_API` 里补一行（否则 `tests/unit/test_open_api_coverage.py` 会让 CI 失败）；
 2. 在 `tests/integration/test_isolation_pg.py` 里补资源级 404 用例（设计讨论 0009 D22）。
 
-`{app_id}` 与 `{conversation_id}` 由测试填充；`body` 是请求体模板（GET 为 None）。
+`{app_id}`、`{conversation_id}` 与 `{document_id}` 由测试填充；`body` 是请求体模板（GET 为 None）。
 """
 
 from __future__ import annotations
@@ -20,6 +20,9 @@ _SKIP_METHODS = frozenset({"HEAD", "OPTIONS"})
 OPEN_API: list[tuple[str, str, dict[str, Any] | None]] = [
     ("POST", "/api/v1/apps/{app_id}/chat", {"question": "退货怎么退？"}),
     ("GET", "/api/v1/apps/{app_id}/conversations/{conversation_id}/messages", None),
+    ("GET", "/api/v1/apps/{app_id}/documents", None),
+    ("GET", "/api/v1/apps/{app_id}/documents/{document_id}", None),
+    ("GET", "/api/v1/apps/{app_id}/documents/{document_id}/chunks", None),
 ]
 
 

@@ -24,13 +24,12 @@ PLANNED = {
 }
 
 
-# L4 入口之间互不 import：按任务名经 broker 投递（队列与 tasks.celery_app 的 task_routes 一致）
-TASK_QUEUES = {
-    "aics.ingest_document": "ingest",
-    "aics.retokenize_app": "ingest",
-    "aics.cleanup_document": "maintenance",
-    "aics.reconcile": "maintenance",
-}
+# L4 入口之间互不 import：按任务名经 broker 投递。队列映射的唯一来源是 knowledge 服务
+# （`TASK_QUEUES`），与 tasks.celery_app 的 task_routes 保持一致。
+def _task_queues() -> dict[str, str]:
+    from aics.modules.knowledge.service import TASK_QUEUES
+
+    return TASK_QUEUES
 
 
 def _celery_enqueue(task: str, args: Sequence[Any]) -> None:
@@ -39,7 +38,7 @@ def _celery_enqueue(task: str, args: Sequence[Any]) -> None:
     from aics.core.config import get_settings
 
     client = Celery("aics-cli", broker=get_settings().celery_broker_url)
-    q = TASK_QUEUES[task]
+    q = _task_queues()[task]
     client.send_task(task, args=list(args), queue=q, routing_key=q, exchange="aics")
 
 

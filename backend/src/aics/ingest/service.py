@@ -23,7 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from aics.core.config import Settings, get_settings
-from aics.core.errors import AppError
+from aics.core.errors import AppError, DocumentNotFoundError
 from aics.core.textsearch import tokenize_for_index
 from aics.db.base import new_id
 from aics.db.models import App, Chunk, ChunkParent, Document, Job
@@ -49,12 +49,6 @@ RETOKENIZE_BATCH = 500
 SWEEP_STALE_AFTER_S = 3600  # 每个进度批包含 embed_batch × 4 条（嵌入器内部再按 embed_batch 拆）
 
 CleanupEnqueuer = Callable[[UUID, int, str | None], Awaitable[None] | None]
-
-
-class DocumentNotFoundError(AppError):
-    code = "NOT_FOUND"
-    status = 404
-    message = "文档不存在"
 
 
 class _Cancelled(Exception):

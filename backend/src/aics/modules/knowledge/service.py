@@ -22,7 +22,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from aics.core.config import get_settings
-from aics.core.errors import AppError, NotFoundError, ValidationAppError
+from aics.core.errors import (
+    AppError,
+    DocumentNotFoundError,
+    NotFoundError,
+    ValidationAppError,
+)
 from aics.db.models import App, Chunk, ChunkQuestion, Document, Job
 from aics.db.models.knowledge import MAX_TAGS, QUESTION_MAX_CHARS, QUESTION_SOURCES, TAG_MAX_CHARS
 from aics.ingest.parsers import MIME_TYPES, detect_file_type, parse_bytes
@@ -57,6 +62,13 @@ RETOKENIZE_TASK = "aics.retokenize_app"
 RECONCILE_TASK = "aics.reconcile"
 TITLE_MAX_CHARS = 200
 BUSY_STATUSES = frozenset({"queued", "parsing", "indexing", "deleting"})
+#: 任务名 → 队列（与 `aics.tasks.celery_app.task_routes` 一致；`aics-cli` 复用同一份表）
+TASK_QUEUES = {
+    INGEST_TASK: "ingest",
+    RETOKENIZE_TASK: "ingest",
+    CLEANUP_TASK: "maintenance",
+    RECONCILE_TASK: "maintenance",
+}
 
 Enqueue = Callable[[str, Sequence[Any]], None]
 Fetcher = Callable[[str], Awaitable[FetchedUrl]]
@@ -97,10 +109,6 @@ def normalize_questions(questions: Sequence[str]) -> list[str]:
     return out
 
 
-class DocumentNotFoundError(NotFoundError):
-    code, message = "DOCUMENT_NOT_FOUND", "文档不存在"
-
-
 @dataclass(frozen=True)
 class UploadResult:
     document: Document
@@ -126,6 +134,33 @@ class RebuildAppResult:
 
 def content_hash(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+PAGE_DEFAULT = 20
+PAGE_MAX = 100
+
+
+@dataclass(frozen=True)
+class DocumentPage:
+    items: list[Document]
+    total: int
+    page: int
+    page_size: int
+
+
+@dataclass(frozen=True)
+class ChunkPage:
+    items: list[Chunk]
+    total: int
+    page: int
+    page_size: int
+
+
+def page_args(page: int, page_size: int) -> tuple[int, int, int]:
+    """页码分页归一化（接口规范 §5）：page>=1、1<=page_size<=100，返回 (page, page_size, offset)。"""
+    p = max(int(page), 1)
+    size = min(max(int(page_size), 1), PAGE_MAX)
+    return p, size, (p - 1) * size
 
 
 def _now() -> datetime:
@@ -879,6 +914,48 @@ class KnowledgeService:
         await self.session.commit()
         self._send(RECONCILE_TASK, [str(app_id) if app_id else None, str(job.id)])
         return job
+
+    # ------------------------------------------------------------------ 开放接口：读
+    async def list_documents(
+        self,
+        app_id: UUID,
+        *,
+        status: str | None = None,
+        q: str | None = None,
+        page: int = 1,
+        page_size: int = PAGE_DEFAULT,
+    ) -> DocumentPage:
+        """文档列表（开放接口 §4）：按创建时间倒序，`q` 在标题上 ILIKE（通配符转义），软删除不返回。"""
+        await self._app(app_id)
+        p, size, offset = page_args(page, page_size)
+        rows, total = await self.docs.page_for_app(
+            app_id, status=status, q=(q or "").strip() or None, limit=size, offset=offset
+        )
+        return DocumentPage(items=rows, total=total, page=p, page_size=size)
+
+    async def get_document(self, app_id: UUID, document_id: UUID) -> Document:
+        """单篇详情（开放接口 §4）：不存在或不属于本应用 → 404 `DOCUMENT_NOT_FOUND`。"""
+        await self._app(app_id)
+        return await self._doc(app_id, document_id)
+
+    async def list_chunks(
+        self,
+        app_id: UUID,
+        document_id: UUID,
+        *,
+        page: int = 1,
+        page_size: int = PAGE_DEFAULT,
+    ) -> ChunkPage:
+        """切块列表（开放接口 §4）：只返回生效构建号（`index_version`）的切块，按 `ordinal` 升序。"""
+        await self._app(app_id)
+        doc = await self._doc(app_id, document_id)
+        p, size, offset = page_args(page, page_size)
+        if doc.index_version <= 0:
+            return ChunkPage(items=[], total=0, page=p, page_size=size)
+        rows, total = await self.chunks.page_for_document(
+            app_id, doc.id, doc.index_version, limit=size, offset=offset
+        )
+        return ChunkPage(items=rows, total=total, page=p, page_size=size)
 
     # ------------------------------------------------------------------ 查询
     async def retrievable_chunk_count(self, app_id: UUID) -> int:

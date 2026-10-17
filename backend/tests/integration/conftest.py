@@ -66,6 +66,9 @@ async def pg(pg_migrated: str) -> AsyncIterator[dict[str, Any]]:
             # messages / facts / fact history cascade from conversations
             await s.execute(delete(Conversation).where(Conversation.app_id.in_(ids)))
             await s.execute(delete(ApiKey).where(ApiKey.app_id.in_(ids)))
+            # 知识库文档：切块/父块随文档级联，Job 与 Document 需显式删除（M3.2 起用例会建文档）
+            for m in (Chunk, ChunkParent, Job, Document):
+                await s.execute(delete(m).where(m.app_id.in_(ids)))
             await s.execute(delete(App).where(App.id.in_(ids)))
             await s.execute(delete(User).where(User.id == user_id))
             await s.commit()

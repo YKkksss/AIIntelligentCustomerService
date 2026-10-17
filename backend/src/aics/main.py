@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
+from typing import Any
 from uuid import UUID
 
 import redis.asyncio as aioredis
@@ -29,8 +30,12 @@ from aics.modules.apikeys.service import ApiKeyAuthenticator
 from aics.modules.chat.router import router as chat_router
 from aics.modules.chat.runtime import ChatRuntime
 from aics.modules.knowledge.chunk_search import PgChunkSearch
+from aics.modules.knowledge.router import router as knowledge_router
+from aics.modules.knowledge.runtime import KnowledgeRuntime
+from aics.modules.knowledge.service import TASK_QUEUES
 from aics.providers import get_embedder, get_llm, get_reranker
 from aics.rag.retrieval import EmbeddingVectorSearch
+from aics.storage import build_storage
 from aics.vectorstore import get_vector_store
 
 log = structlog.get_logger()
@@ -72,6 +77,44 @@ def build_chat_runtime(s: Settings) -> ChatRuntime:
     )
 
 
+def build_knowledge_runtime(s: Settings) -> KnowledgeRuntime:
+    """Composition root of knowledge.service: 本地存储、Qdrant、嵌入器、重排器与任务投递。
+
+    入队按 `TASK_QUEUES` 指定队列（与 `tasks.celery_app.task_routes` 一致）；投递失败只记日志，
+    文档停在 queued/parsing，由 `aics.sweep_knowledge` 兜底（流水线 §7）。
+    """
+    sessions = get_sessionmaker()
+    broker = Celery("aics-api", broker=s.celery_broker_url)
+
+    def send(task: str, args: list[Any]) -> None:
+        queue = TASK_QUEUES.get(task, "maintenance")
+        try:
+            broker.send_task(
+                task,
+                args=args,
+                queue=queue,
+                routing_key=queue,
+                exchange="aics",
+                retry=True,
+                retry_policy={"max_retries": 2, "interval_start": 0.2, "interval_step": 0.5},
+            )
+        except Exception as e:  # noqa: BLE001 - 投递失败不阻断请求，sweep 会补
+            log.warning("knowledge.enqueue_failed", task=task, error_type=type(e).__name__)
+
+    def enqueue(task: str, args: Sequence[Any]) -> None:
+        # Publishing is blocking network I/O: keep it off the event loop.
+        asyncio.get_running_loop().run_in_executor(None, send, task, list(args))
+
+    return KnowledgeRuntime(
+        sessions=sessions,
+        store=build_storage(s),
+        embedder=get_embedder(),
+        vector=get_vector_store(),
+        reranker=get_reranker(),
+        enqueue=enqueue,
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     s = get_settings()
@@ -86,6 +129,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     if getattr(app.state, "chat_runtime", None) is None:  # tests may install their own
         app.state.chat_runtime = build_chat_runtime(s)
+    if getattr(app.state, "knowledge_runtime", None) is None:  # tests may install their own
+        app.state.knowledge_runtime = build_knowledge_runtime(s)
     log.info("app.started", env=s.env, version=__version__)
     yield
     await app.state.chat_runtime.drain()
@@ -145,6 +190,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(chat_router)
+    app.include_router(knowledge_router)
     return app
 
 
