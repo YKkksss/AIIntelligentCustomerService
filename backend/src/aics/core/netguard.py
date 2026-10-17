@@ -1,5 +1,7 @@
 """出站 URL 安全校验（防 SSRF，安全设计 §4）：URL 导入与出站 Webhook 共用。
 
+另含入站请求的客户端地址判定 `resolve_client_ip`（可信代理 + X-Forwarded-For，接口规范 §2）。
+
 规则：
 - 只允许 http/https；拒绝带用户名密码的 URL；端口只允许 80/443/8080/8443（命中白名单的目标不限端口）。
 - 解析 DNS 后**所有**地址都必须是公网地址：拒绝私网、回环、链路本地（含 169.254.169.254 云元数据）、
@@ -137,3 +139,33 @@ def check_peer_ip(host: str, peer_ip: str | None, allow: Allowlist) -> None:
     if peer_ip is None or allow.host_allowed(host):
         return
     check_ip(ipaddress.ip_address(peer_ip), allow)
+
+
+def resolve_client_ip(
+    peer: str | None, forwarded_for: str | None, trusted: Allowlist
+) -> IPAddress | None:
+    """入站请求的客户端地址（M3.1 IP 白名单）。
+
+    只有直接对端本身落在可信代理内时才采信 `X-Forwarded-For`，并从右往左取第一个不在可信代理内的
+    地址（最右侧的不可信地址就是客户端）；其余情况一律以 TCP 对端地址为准，请求头不影响判定。
+    链中出现无法解析的地址时返回 None（宁可不放行，也不猜）。
+    """
+    if peer is None:
+        return None
+    try:
+        current: IPAddress = ipaddress.ip_address(peer.strip())
+    except ValueError:
+        return None
+    if not trusted.ip_allowed(current):
+        return current
+    for raw in reversed((forwarded_for or "").split(",")):
+        entry = raw.strip()
+        if not entry:
+            continue
+        try:
+            candidate: IPAddress = ipaddress.ip_address(entry)
+        except ValueError:
+            return None
+        if not trusted.ip_allowed(candidate):
+            return candidate
+    return current

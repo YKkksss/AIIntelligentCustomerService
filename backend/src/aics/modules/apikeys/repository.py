@@ -38,6 +38,18 @@ class ApiKeyRepository(AppScopedRepository[ApiKey]):
         )
         return list((await self.session.execute(stmt)).scalars())
 
+    async def set_ip_allowlist(
+        self, app_id: UUID, key_id: UUID, networks: list[object] | None
+    ) -> str | None:
+        """Replace the key's IP allowlist (`None` = 不限制); returns its prefix or None."""
+        stmt = (
+            update(ApiKey)
+            .where(ApiKey.app_id == app_id, ApiKey.id == key_id)
+            .values(ip_allowlist=networks)
+            .returning(ApiKey.prefix)
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
     async def get_by_prefix_all_apps(self, prefix: str) -> tuple[ApiKey, str] | None:
         """Authentication lookup before the app is known: (key, apps.status)."""
         stmt = (

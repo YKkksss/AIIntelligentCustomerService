@@ -2,8 +2,9 @@
 
 - `reindex --app ID [--document ID] [--inline]`：建重建任务并投递 Celery（`--inline` 在本进程直接执行构建）。
 - `reconcile [--app ID] [--inline]`：PG 与 Qdrant 对账；`--inline` 直接执行并输出 JSON，有差异时退出码 1。
-- `apikey create --app ID --name N --scopes chat[,kb:read…] [--rpm 60] [--quota N] [--expires-days N]`：
-  创建开放接口 Key，明文只在此输出一次；`apikey revoke --app ID --id KEY_ID`：吊销（M2.6）。
+- `apikey create --app ID --name N --scopes chat[,kb:read…] [--rpm 60] [--quota N] [--expires-days N]
+  [--ip CIDR]…`：创建开放接口 Key，明文只在此输出一次；`apikey revoke --app ID --id KEY_ID`：吊销（M2.6）；
+  `apikey allowip --app ID --id KEY_ID [--ip CIDR]…`：设置 / 清空 IP 白名单，不传 `--ip` 即清空（M3.1）。
 - bootstrap-admin（M4）、eval（M5）随里程碑实现。
 """
 
@@ -140,12 +141,18 @@ async def _apikey(args: argparse.Namespace) -> int:
                     rpm_limit=args.rpm,
                     daily_quota=args.quota,
                     expires_at=expires,
+                    ip_allowlist=args.ip,
                 )
                 await session.commit()
                 out = {"id": str(row.id), "prefix": row.prefix, "scopes": row.scopes, "key": plain}
                 print(json.dumps(out, ensure_ascii=False))
                 print("该 Key 只显示这一次，请妥善保存。", file=sys.stderr)
                 return 0
+            if args.apikey_cmd == "allowip":
+                ok = await svc.set_ip_allowlist(args.app, args.id, args.ip)
+                await session.commit()
+                print(json.dumps({"id": str(args.id), "ip_allowlist": args.ip or None, "ok": ok}))
+                return 0 if ok else 1
             ok = await svc.revoke(args.app, args.id)
             await session.commit()
             print(json.dumps({"id": str(args.id), "revoked": ok}))
@@ -175,9 +182,22 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--rpm", type=int, default=60)
     c.add_argument("--quota", type=int, default=None)
     c.add_argument("--expires-days", type=int, default=None)
+    c.add_argument(
+        "--ip",
+        action="append",
+        default=None,
+        metavar="CIDR",
+        help="IP 白名单，可重复（如 --ip 10.0.0.0/8 --ip 2001:db8::/32）；不传 = 不限制",
+    )
     r = ak.add_parser("revoke", help="吊销 Key")
     r.add_argument("--app", required=True, type=UUID)
     r.add_argument("--id", required=True, type=UUID)
+    ai = ak.add_parser("allowip", help="设置 / 清空 Key 的 IP 白名单（立即生效）")
+    ai.add_argument("--app", required=True, type=UUID)
+    ai.add_argument("--id", required=True, type=UUID)
+    ai.add_argument(
+        "--ip", action="append", default=None, metavar="CIDR", help="不传 = 清空（不限制）"
+    )
     sub.add_parser("sweep-idle", help="立即执行一次空闲提醒 / 关闭扫描（本进程）")
     for name, help_ in PLANNED.items():
         sub.add_parser(name, help=help_)

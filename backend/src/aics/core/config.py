@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     data_encryption_key: SecretStr
     bootstrap_admin_email: str | None = None
     bootstrap_admin_password: SecretStr | None = None
+    # 反向代理（Nginx 等）所在网段：只有请求直接来自这些地址时才采信 X-Forwarded-For，
+    # 否则一律以 TCP 对端地址为准（IP 白名单，接口规范 §2）。默认空 = 不信任任何代理。
+    trusted_proxies: Annotated[list[str], NoDecode] = []
 
     # ---- 基础设施 ----
     db_url: str
@@ -101,7 +104,7 @@ class Settings(BaseSettings):
     rerank_api_key: SecretStr | None = None
     rerank_model: str = "qwen3.7-text-rerank"
 
-    @field_validator("cors_origins", "url_fetch_allowlist", mode="before")
+    @field_validator("cors_origins", "url_fetch_allowlist", "trusted_proxies", mode="before")
     @classmethod
     def _csv(cls, v: Any) -> Any:
         return _split_csv(v)

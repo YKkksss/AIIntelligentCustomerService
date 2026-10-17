@@ -1,8 +1,16 @@
 import pytest
 
-from aics.core.netguard import Allowlist, UrlNotAllowedError, check_peer_ip, check_url, is_public_ip
+from aics.core.netguard import (
+    Allowlist,
+    UrlNotAllowedError,
+    check_peer_ip,
+    check_url,
+    is_public_ip,
+    resolve_client_ip,
+)
 
 NONE = Allowlist.parse([])
+PROXY = Allowlist.parse(["172.17.0.0/16", "2001:db8::/32"])
 
 
 def res(mapping: dict[str, list[str]]):  # type: ignore[no-untyped-def]
@@ -89,3 +97,32 @@ def test_is_public_ip() -> None:
     assert is_public_ip(ipaddress.ip_address("8.8.8.8"))
     assert is_public_ip(ipaddress.ip_address("2001:4860:4860::8888"))
     assert not is_public_ip(ipaddress.ip_address("::ffff:10.0.0.1"))
+
+
+@pytest.mark.parametrize(
+    ("peer", "xff", "trusted", "expected"),
+    [
+        # 直连：一律以对端为准，绝不采信请求头
+        ("203.0.113.9", None, NONE, "203.0.113.9"),
+        ("203.0.113.9", "1.2.3.4", NONE, "203.0.113.9"),
+        ("203.0.113.9", "1.2.3.4", PROXY, "203.0.113.9"),
+        # 可信代理：取最右侧的不可信地址
+        ("172.17.0.5", "203.0.113.9", PROXY, "203.0.113.9"),
+        ("172.17.0.5", "1.2.3.4, 203.0.113.9", PROXY, "203.0.113.9"),
+        ("172.17.0.5", "203.0.113.9, 172.17.0.6", PROXY, "203.0.113.9"),  # 多级代理
+        ("172.17.0.5", "172.17.0.7, 172.17.0.6", PROXY, "172.17.0.5"),  # 链全可信 → 退回对端
+        ("172.17.0.5", None, PROXY, "172.17.0.5"),
+        ("172.17.0.5", "  ", PROXY, "172.17.0.5"),
+        ("[2001:db8::1]", "203.0.113.9", PROXY, None),  # 对端带方括号 → 解析失败
+        ("172.17.0.5", "8.8.8.8, ::ffff:203.0.113.9", PROXY, "::ffff:203.0.113.9"),
+        ("172.17.0.5", "203.0.113.9, garbage", PROXY, None),  # 链里有非法地址 → 不判定
+        ("not-an-ip", "203.0.113.9", PROXY, None),
+        (None, "203.0.113.9", PROXY, None),
+        ("2001:db8::5", "203.0.113.9", PROXY, "203.0.113.9"),
+    ],
+)
+def test_resolve_client_ip(
+    peer: str | None, xff: str | None, trusted: Allowlist, expected: str | None
+) -> None:
+    ip = resolve_client_ip(peer, xff, trusted)
+    assert (str(ip) if ip is not None else None) == expected

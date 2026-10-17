@@ -3,14 +3,16 @@
 `ApiKeyService` creates / revokes keys (the plaintext is returned once). `ApiKeyAuthenticator`
 implements `core.security.Authenticator`: bearer parsing → cached lookup by prefix
 (`{prefix}apikey:{key_prefix}`, 60 s, deleted on revoke) → HMAC check → revoked / expired →
-app binding and status → scope → rate limits → usage marker (see `keyusage`).
+app binding and status → IP allowlist (可信代理 + X-Forwarded-For) → scope → rate limits →
+usage marker (see `keyusage`).
 """
 
 from __future__ import annotations
 
 import contextlib
+import ipaddress
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -27,6 +29,7 @@ from aics.core.errors import (
     UnauthenticatedError,
     ValidationAppError,
 )
+from aics.core.netguard import Allowlist, resolve_client_ip
 from aics.core.security import Principal
 from aics.db.models import ApiKey
 from aics.db.models.apikey import API_KEY_SCOPES
@@ -54,8 +57,31 @@ class AppDisabledError(AppError):
     code, status, message = "APP_DISABLED", 403, "应用已停用"
 
 
+class IpNotAllowedError(AppError):
+    code, status, message = "IP_NOT_ALLOWED", 403, "IP 不在白名单内"
+
+
 def cache_key(redis_prefix: str, key_prefix: str) -> str:
     return f"{redis_prefix}apikey:{key_prefix}"
+
+
+def parse_ip_allowlist(items: Iterable[str] | None) -> list[Any] | None:
+    """CIDR（或单个 IP，按 /32、/128 处理）→ `ipaddress` 网络对象；空 → None（不限制）。
+
+    Raises ValidationAppError: 任一条目不是合法 CIDR（422，不交给 PostgreSQL 报 500）。
+    """
+    if not items:
+        return None
+    networks: list[Any] = []
+    errors: list[dict[str, Any]] = []
+    for raw in items:
+        try:
+            networks.append(ipaddress.ip_network(str(raw).strip(), strict=False))
+        except ValueError:
+            errors.append({"loc": ["ip_allowlist"], "msg": f"不是合法的 CIDR：{raw}"})
+    if errors:
+        raise ValidationAppError(details={"errors": errors})
+    return networks
 
 
 class ApiKeyService:
@@ -77,6 +103,7 @@ class ApiKeyService:
         rpm_limit: int = DEFAULT_RPM_LIMIT,
         daily_quota: int | None = None,
         expires_at: datetime | None = None,
+        ip_allowlist: Iterable[str] | None = None,
         created_by: UUID | None = None,
     ) -> tuple[ApiKey, str]:
         """Returns (row, plaintext key). The plaintext is never stored or logged."""
@@ -92,6 +119,7 @@ class ApiKeyService:
             errors.append({"loc": ["daily_quota"], "msg": "必须 ≥ 1 或为空"})
         if errors:
             raise ValidationAppError(details={"errors": errors})
+        networks = parse_ip_allowlist(ip_allowlist)
         for attempt in range(_CREATE_ATTEMPTS):
             plain = keys.generate_key()
             row = ApiKey(
@@ -102,6 +130,7 @@ class ApiKeyService:
                 scopes=list(dict.fromkeys(scopes)),
                 rpm_limit=rpm_limit,
                 daily_quota=daily_quota,
+                ip_allowlist=networks,
                 expires_at=expires_at,
                 created_by=created_by,
             )
@@ -127,6 +156,26 @@ class ApiKeyService:
         await self._invalidate(prefixes)
         return len(prefixes)
 
+    async def set_ip_allowlist(
+        self, app_id: UUID, key_id: UUID, cidrs: Iterable[str] | None
+    ) -> bool:
+        """Replace a key's IP allowlist (`None`/空 = 不限制) and drop its cached record.
+
+        Returns False when the key does not belong to the app. The cache is dropped immediately
+        so a tightened allowlist takes effect on the next request (安全设计 §2)."""
+        networks = parse_ip_allowlist(cidrs)
+        prefix = await self.repo.set_ip_allowlist(app_id, key_id, networks)
+        if prefix is None:
+            return False
+        await self._invalidate([prefix])
+        log.info(
+            "apikeys.ip_allowlist_set",
+            app_id=str(app_id),
+            prefix=prefix,
+            cidrs=[str(n) for n in networks or []],
+        )
+        return True
+
     async def _invalidate(self, prefixes: Sequence[str]) -> None:
         if self.redis is None or not prefixes:
             return
@@ -146,6 +195,7 @@ class ApiKeyAuthenticator:
         pepper: str,
         redis: Any,
         redis_prefix: str = "aics:",
+        trusted_proxies: str | Iterable[str] = (),
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self.sessions = sessions
@@ -153,10 +203,20 @@ class ApiKeyAuthenticator:
         self.redis = redis
         self.redis_prefix = redis_prefix
         self.limiter = RateLimiter(redis, prefix=redis_prefix)
+        # 只有直接对端落在这些网段内时才采信 X-Forwarded-For（core.netguard.resolve_client_ip）
+        self.trusted_proxies = Allowlist.parse(
+            trusted_proxies.split(",") if isinstance(trusted_proxies, str) else trusted_proxies
+        )
         self.clock = clock
 
     async def authenticate(
-        self, authorization: str | None, *, app_id: UUID, any_scope: tuple[str, ...]
+        self,
+        authorization: str | None,
+        *,
+        app_id: UUID,
+        any_scope: tuple[str, ...],
+        client_ip: str | None = None,
+        forwarded_for: str | None = None,
     ) -> Principal:
         key = keys.parse_bearer(authorization)
         if key is None:
@@ -175,6 +235,15 @@ class ApiKeyAuthenticator:
             raise AppNotFoundError()
         if rec["app_status"] == "disabled":
             raise AppDisabledError()
+        resolved_ip = resolve_client_ip(client_ip, forwarded_for, self.trusted_proxies)
+        allowed = rec.get("ip_allowlist")
+        if allowed and (
+            resolved_ip is None or not Allowlist.parse(allowed).ip_allowed(resolved_ip)
+        ):
+            # 白名单存在时拿不到客户端地址也不放行（安全设计 §2）
+            raise IpNotAllowedError(
+                details={"client_ip": str(resolved_ip) if resolved_ip is not None else None}
+            )
         scopes = frozenset(rec["scopes"])
         if not scopes.intersection(any_scope):
             raise ForbiddenError(details={"required_scope": list(any_scope)})
@@ -183,7 +252,12 @@ class ApiKeyAuthenticator:
         # last_used_at is folded in by the beat task aics.flush_key_usage (best-effort).
         await keyusage.record_use(self.redis, self.redis_prefix, key_id)
         return Principal(
-            app_id=app_id, key_id=key_id, key_prefix=prefix, scopes=scopes, rate_headers=headers
+            app_id=app_id,
+            key_id=key_id,
+            key_prefix=prefix,
+            scopes=scopes,
+            client_ip=resolved_ip,
+            rate_headers=headers,
         )
 
     async def _lookup(self, prefix: str) -> dict[str, Any] | None:
@@ -207,6 +281,8 @@ class ApiKeyAuthenticator:
             "scopes": list(row.scopes),
             "rpm_limit": row.rpm_limit,
             "daily_quota": row.daily_quota,
+            # CIDR 列（asyncpg 读回 ipaddress 网络对象）：缓存里统一存字符串，便于 JSON 序列化
+            "ip_allowlist": [str(n) for n in row.ip_allowlist] if row.ip_allowlist else None,
             "expires_at": row.expires_at.isoformat() if row.expires_at else None,
             "revoked": row.revoked_at is not None,
             "app_status": app_status,

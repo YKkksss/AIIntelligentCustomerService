@@ -1,4 +1,7 @@
-"""M2.6 ① API key format, rate limiter and authenticator decisions (接口规范 §2 / §6)."""
+"""M2.6 ① API key format, rate limiter and authenticator decisions (接口规范 §2 / §6).
+
+M3.1 ② 追加：IP 白名单（可信代理 + X-Forwarded-For 解析、白名单命中 / 拒绝、缓存失效）。
+"""
 
 from __future__ import annotations
 
@@ -98,7 +101,9 @@ def _rec(**kw: Any) -> dict[str, Any]:
     return rec
 
 
-def _auth(rec: dict[str, Any] | None, key: str) -> tuple[ApiKeyAuthenticator, FakeRedis]:
+def _auth(
+    rec: dict[str, Any] | None, key: str, *, trusted: str = ""
+) -> tuple[ApiKeyAuthenticator, FakeRedis]:
     r = FakeRedis()
     if rec is not None:
         rec["key_hash"] = rec["key_hash"] or keys.hash_key(key, PEPPER)
@@ -108,7 +113,8 @@ def _auth(rec: dict[str, Any] | None, key: str) -> tuple[ApiKeyAuthenticator, Fa
         def __call__(self) -> Any:
             raise AssertionError("cache hit expected")
 
-    return ApiKeyAuthenticator(NoDb(), pepper=PEPPER, redis=r), r  # type: ignore[arg-type]
+    auth = ApiKeyAuthenticator(NoDb(), pepper=PEPPER, redis=r, trusted_proxies=trusted)  # type: ignore[arg-type]
+    return auth, r
 
 
 async def test_authenticate_success_from_cache() -> None:
@@ -170,6 +176,8 @@ async def test_authenticate_missing_header() -> None:
         ({"name": "k", "scopes": ["admin"]}, "scopes"),
         ({"name": "k", "scopes": ["chat"], "rpm_limit": 0}, "rpm_limit"),
         ({"name": "k", "scopes": ["chat"], "daily_quota": 0}, "daily_quota"),
+        ({"name": "k", "scopes": ["chat"], "ip_allowlist": ["10.0.0.0/33"]}, "ip_allowlist"),
+        ({"name": "k", "scopes": ["chat"], "ip_allowlist": ["办公室"]}, "ip_allowlist"),
     ],
 )
 async def test_create_validation(kw: dict[str, Any], field: str) -> None:
@@ -180,6 +188,131 @@ async def test_create_validation(kw: dict[str, Any], field: str) -> None:
         await svc.create(APP, **kw)
     assert ei.value.code == "VALIDATION_ERROR"
     assert [e["loc"] for e in ei.value.details["errors"]] == [[field]]
+
+
+@pytest.mark.parametrize(
+    "items,expected",
+    [
+        (None, None),
+        ([], None),
+        (["10.0.0.0/8"], ["10.0.0.0/8"]),
+        ([" 192.168.1.5 "], ["192.168.1.5/32"]),  # 单个 IP 按 /32
+        (["2001:db8::1"], ["2001:db8::1/128"]),
+        (["10.1.2.3/8"], ["10.0.0.0/8"]),  # 按掩码归一化（strict=False）
+        (["10.0.0.0/8", "2001:db8::/32"], ["10.0.0.0/8", "2001:db8::/32"]),
+    ],
+)
+def test_parse_ip_allowlist_normalizes(items: list[str] | None, expected: list[str] | None) -> None:
+    from aics.modules.apikeys.service import parse_ip_allowlist
+
+    nets = parse_ip_allowlist(items)
+    assert (None if nets is None else [str(n) for n in nets]) == expected
+
+
+async def test_ip_allowlist_allows_listed_address() -> None:
+    k = keys.generate_key()
+    auth, _ = _auth(_rec(ip_allowlist=["10.0.0.0/8", "2001:db8::/32"]), k)
+
+    p = await auth.authenticate(
+        f"Bearer {k}", app_id=APP, any_scope=("chat",), client_ip="10.9.8.7"
+    )
+    assert str(p.client_ip) == "10.9.8.7"
+    p6 = await auth.authenticate(
+        f"Bearer {k}", app_id=APP, any_scope=("chat",), client_ip="2001:db8::9"
+    )
+    assert str(p6.client_ip) == "2001:db8::9"
+
+
+@pytest.mark.parametrize(
+    ("client_ip", "xff", "trusted"),
+    [
+        ("203.0.113.9", None, ""),  # 不在白名单
+        (None, None, ""),  # 拿不到地址 → 不放行
+        ("203.0.113.9", "10.1.2.3", ""),  # 直连时伪造 XFF 无效
+        ("198.51.100.7", "10.1.2.3", "172.17.0.0/16"),  # 对端不可信 → 仍以对端为准
+        ("172.17.0.5", "1.2.3.4, 203.0.113.9", "172.17.0.0/16"),  # 可信代理但客户端不在白名单
+        ("172.17.0.5", "203.0.113.9, garbage", "172.17.0.0/16"),  # 链非法 → 不判定
+    ],
+)
+async def test_ip_allowlist_rejections(
+    client_ip: str | None, xff: str | None, trusted: str
+) -> None:
+    k = keys.generate_key()
+    auth, _ = _auth(_rec(ip_allowlist=["10.0.0.0/8"]), k, trusted=trusted)
+
+    with pytest.raises(AppError) as ei:
+        await auth.authenticate(
+            f"Bearer {k}",
+            app_id=APP,
+            any_scope=("chat",),
+            client_ip=client_ip,
+            forwarded_for=xff,
+        )
+
+    assert (ei.value.code, ei.value.status) == ("IP_NOT_ALLOWED", 403)
+    assert "client_ip" in ei.value.details
+
+
+async def test_ip_allowlist_behind_trusted_proxy_uses_forwarded_client() -> None:
+    k = keys.generate_key()
+    auth, _ = _auth(_rec(ip_allowlist=["10.0.0.0/8"]), k, trusted="172.17.0.0/16, 172.18.0.0/16")
+
+    p = await auth.authenticate(
+        f"Bearer {k}",
+        app_id=APP,
+        any_scope=("chat",),
+        client_ip="172.17.0.5",
+        forwarded_for="10.1.2.3, 172.18.0.9",
+    )
+
+    assert str(p.client_ip) == "10.1.2.3"
+
+
+async def test_key_without_allowlist_accepts_any_address() -> None:
+    k = keys.generate_key()
+    auth, _ = _auth(_rec(), k)
+
+    p = await auth.authenticate(
+        f"Bearer {k}", app_id=APP, any_scope=("chat",), client_ip="203.0.113.9"
+    )
+
+    assert str(p.client_ip) == "203.0.113.9"
+
+
+async def test_set_ip_allowlist_validates_and_invalidates_cache() -> None:
+    from aics.modules.apikeys.service import ApiKeyService
+
+    row_prefix = "aics_AAAAAA"
+    seen: list[Any] = []
+
+    class Repo:
+        def __init__(self, s: Any) -> None:
+            pass
+
+        async def set_ip_allowlist(self, app_id: Any, key_id: Any, networks: Any) -> str | None:
+            seen.append(networks)
+            return row_prefix if key_id == KEY_ID else None
+
+    import aics.modules.apikeys.service as svc_mod
+
+    orig = svc_mod.ApiKeyRepository
+    svc_mod.ApiKeyRepository = Repo  # type: ignore[misc]
+    try:
+        r = FakeRedis()
+        r.data[cache_key("aics:", row_prefix)] = "{}"
+        svc = ApiKeyService(None, pepper=PEPPER, redis=r)  # type: ignore[arg-type]
+
+        assert await svc.set_ip_allowlist(APP, KEY_ID, ["10.0.0.0/8"])
+        assert [str(n) for n in seen[0]] == ["10.0.0.0/8"]
+        assert cache_key("aics:", row_prefix) not in r.data  # 立即失效，改严即刻生效
+        assert await svc.set_ip_allowlist(APP, KEY_ID, None)  # 清空 = 不限制
+        assert seen[1] is None
+        assert not await svc.set_ip_allowlist(APP, uuid.uuid4(), ["10.0.0.0/8"])  # 不属于该应用
+        with pytest.raises(AppError) as ei:
+            await svc.set_ip_allowlist(APP, KEY_ID, ["nope"])
+        assert ei.value.code == "VALIDATION_ERROR"
+    finally:
+        svc_mod.ApiKeyRepository = orig  # type: ignore[misc]
 
 
 async def test_lookup_falls_back_to_db_and_caches() -> None:
@@ -195,6 +328,7 @@ async def test_lookup_falls_back_to_db_and_caches() -> None:
         scopes=["chat"],
         rpm_limit=5,
         daily_quota=None,
+        ip_allowlist=None,
         expires_at=None,
         revoked_at=None,
     )

@@ -1,7 +1,10 @@
 """M2.6 ① (integration): API keys in PG + real Redis behind a FastAPI route.
 
 Covers: wrong key 401, revoked / expired codes, scope 403, A-app key on B app 404, revoke
-invalidates the 60 s cache immediately, rpm limit 429 with Retry-After, X-RateLimit headers."""
+invalidates the 60 s cache immediately, rpm limit 429 with Retry-After, X-RateLimit headers.
+
+M3.1 ② 追加：IP 白名单（真实 TCP 对端地址 + 可信代理转发头、改严立即生效、清空即放行）。
+"""
 
 from __future__ import annotations
 
@@ -22,10 +25,14 @@ pytestmark = pytest.mark.integration
 PEPPER = "x" * 40
 
 
-def make_app(pg: dict[str, Any], redis: Any) -> FastAPI:
+def make_app(pg: dict[str, Any], redis: Any, *, trusted: str = "") -> FastAPI:
     app = FastAPI()
     app.state.authenticator = ApiKeyAuthenticator(
-        pg["sessions"], pepper=PEPPER, redis=redis, redis_prefix="aics_it:"
+        pg["sessions"],
+        pepper=PEPPER,
+        redis=redis,
+        redis_prefix="aics_it:",
+        trusted_proxies=trusted,
     )
 
     @app.exception_handler(AppError)
@@ -122,3 +129,56 @@ async def test_app_deleting_and_disabled(pg: dict[str, Any], redis_it: Any) -> N
             await redis_it.delete(f"aics_it:apikey:{key[:12]}")  # skip the 60 s cache
             r = await c.get(f"/api/v1/apps/{a}/ping", headers=h)
             assert r.json()["error"]["code"] == code
+
+
+async def call_from(
+    app: FastAPI, url: str, key: str, *, client: tuple[str, int], xff: str | None = None
+) -> httpx.Response:
+    """One request with a chosen TCP peer address (and optional X-Forwarded-For)."""
+    headers = {"Authorization": f"Bearer {key}"}
+    if xff is not None:
+        headers["X-Forwarded-For"] = xff
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app, client=client), base_url="http://t"
+    ) as c:
+        return await c.get(url, headers=headers)
+
+
+async def test_ip_allowlist_enforced_and_cleared(pg: dict[str, Any], redis_it: Any) -> None:
+    a = pg["app_a"]
+    key_id, key = await create_key(pg, redis_it, a, ip_allowlist=["10.0.0.0/8"])
+    app = make_app(pg, redis_it)
+    url = f"/api/v1/apps/{a}/ping"
+
+    allowed = await call_from(app, url, key, client=("10.1.2.3", 5000))
+    assert allowed.status_code == 200
+    denied = await call_from(app, url, key, client=("203.0.113.9", 5000))
+    assert denied.status_code == 403
+    assert denied.json()["error"]["code"] == "IP_NOT_ALLOWED"
+    assert denied.json()["error"]["details"]["client_ip"] == "203.0.113.9"
+
+    async with pg["sessions"]() as s:
+        svc = ApiKeyService(s, pepper=PEPPER, redis=redis_it, redis_prefix="aics_it:")
+        assert await svc.set_ip_allowlist(a, key_id, None)  # 清空 = 不限制
+        await s.commit()
+
+    assert (await call_from(app, url, key, client=("203.0.113.9", 5000))).status_code == 200
+
+
+async def test_ip_allowlist_uses_forwarded_client_behind_trusted_proxy(
+    pg: dict[str, Any], redis_it: Any
+) -> None:
+    a = pg["app_a"]
+    _, key = await create_key(pg, redis_it, a, ip_allowlist=["10.0.0.0/8"])
+    trusted = make_app(pg, redis_it, trusted="172.17.0.0/16")
+    untrusted = make_app(pg, redis_it)  # 未配置可信代理
+    url = f"/api/v1/apps/{a}/ping"
+
+    # 对端是可信代理：真实客户端取自 X-Forwarded-For
+    ok = await call_from(trusted, url, key, client=("172.17.0.5", 5000), xff="10.1.2.3")
+    assert ok.status_code == 200
+    bad = await call_from(trusted, url, key, client=("172.17.0.5", 5000), xff="203.0.113.9")
+    assert bad.json()["error"]["code"] == "IP_NOT_ALLOWED"
+    # 同一个请求头，直连时会被忽略：以对端地址为准
+    spoofed = await call_from(untrusted, url, key, client=("203.0.113.9", 5000), xff="10.1.2.3")
+    assert spoofed.json()["error"]["code"] == "IP_NOT_ALLOWED"

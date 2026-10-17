@@ -82,6 +82,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         pepper=s.api_key_pepper.get_secret_value(),
         redis=redis,
         redis_prefix=s.redis_prefix,
+        trusted_proxies=s.trusted_proxies,
     )
     if getattr(app.state, "chat_runtime", None) is None:  # tests may install their own
         app.state.chat_runtime = build_chat_runtime(s)
