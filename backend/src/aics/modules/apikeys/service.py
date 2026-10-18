@@ -4,7 +4,8 @@
 implements `core.security.Authenticator`: bearer parsing → cached lookup by prefix
 (`{prefix}apikey:{key_prefix}`, 60 s, deleted on revoke) → HMAC check → revoked / expired →
 app binding and status → IP allowlist (可信代理 + X-Forwarded-For) → scope → rate limits →
-usage marker (see `keyusage`).
+usage marker (see `keyusage`). `authenticate_key` (M3.3, `/v1/*`) runs the same chain without
+the app-in-path comparison.
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ from aics.core.errors import (
     UnauthenticatedError,
     ValidationAppError,
 )
-from aics.core.netguard import Allowlist, resolve_client_ip
+from aics.core.netguard import Allowlist, IPAddress, resolve_client_ip
 from aics.core.security import Principal
 from aics.db.models import ApiKey
 from aics.db.models.apikey import API_KEY_SCOPES
@@ -218,6 +219,33 @@ class ApiKeyAuthenticator:
         client_ip: str | None = None,
         forwarded_for: str | None = None,
     ) -> Principal:
+        rec, prefix, resolved_ip = await self._resolve(authorization, client_ip, forwarded_for)
+        # A key of another app, or an app being deleted, looks like a missing app (接口规范 §2).
+        if UUID(rec["app_id"]) != app_id or rec["app_status"] == "deleting":
+            raise AppNotFoundError()
+        return await self._admit(rec, prefix, resolved_ip, any_scope)
+
+    async def authenticate_key(
+        self,
+        authorization: str | None,
+        *,
+        any_scope: tuple[str, ...],
+        client_ip: str | None = None,
+        forwarded_for: str | None = None,
+    ) -> Principal:
+        """`/v1/*` 鉴权（M3.3）：路径里没有 `app_id`，应用由 Key 本身决定。
+
+        与 `authenticate` 同一条链，只少了「Key 是否属于路径里的应用」这一次比对；应用处于
+        删除中仍然按「应用不存在」处理。"""
+        rec, prefix, resolved_ip = await self._resolve(authorization, client_ip, forwarded_for)
+        if rec["app_status"] == "deleting":
+            raise AppNotFoundError()
+        return await self._admit(rec, prefix, resolved_ip, any_scope)
+
+    async def _resolve(
+        self, authorization: str | None, client_ip: str | None, forwarded_for: str | None
+    ) -> tuple[dict[str, Any], str, IPAddress | None]:
+        """Bearer → 缓存 / 库 → HMAC → 吊销 → 过期；不消耗配额、不写使用标记。"""
         key = keys.parse_bearer(authorization)
         if key is None:
             raise UnauthenticatedError()
@@ -230,12 +258,19 @@ class ApiKeyAuthenticator:
         expires = rec["expires_at"]
         if expires is not None and datetime.fromisoformat(expires) <= self.clock():
             raise ApiKeyExpiredError()
-        # A key of another app, or an app being deleted, looks like a missing app (接口规范 §2).
-        if UUID(rec["app_id"]) != app_id or rec["app_status"] == "deleting":
-            raise AppNotFoundError()
+        resolved_ip = resolve_client_ip(client_ip, forwarded_for, self.trusted_proxies)
+        return rec, prefix, resolved_ip
+
+    async def _admit(
+        self,
+        rec: dict[str, Any],
+        prefix: str,
+        resolved_ip: IPAddress | None,
+        any_scope: tuple[str, ...],
+    ) -> Principal:
+        """应用状态 → IP 白名单 → scope → 限流 → 使用标记 → Principal。"""
         if rec["app_status"] == "disabled":
             raise AppDisabledError()
-        resolved_ip = resolve_client_ip(client_ip, forwarded_for, self.trusted_proxies)
         allowed = rec.get("ip_allowlist")
         if allowed and (
             resolved_ip is None or not Allowlist.parse(allowed).ip_allowed(resolved_ip)
@@ -252,7 +287,7 @@ class ApiKeyAuthenticator:
         # last_used_at is folded in by the beat task aics.flush_key_usage (best-effort).
         await keyusage.record_use(self.redis, self.redis_prefix, key_id)
         return Principal(
-            app_id=app_id,
+            app_id=UUID(rec["app_id"]),
             key_id=key_id,
             key_prefix=prefix,
             scopes=scopes,

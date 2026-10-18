@@ -18,6 +18,10 @@
 
 The turn task is independent of the HTTP response, so persistence after a disconnect is not
 subject to the server's cancellation of the response stream.
+
+Stateless turns (M3.3, OpenAI 兼容且不带 `X-AICS-Conversation-Id`): the history travels with the
+request (`TurnRequest.inline_history`), so the turn neither writes facts nor compacts; the
+conversation created for it is closed right after the turn with `close_reason=stateless`.
 """
 
 from __future__ import annotations
@@ -42,6 +46,7 @@ from aics.modules.chat.runtime import ChatRuntime
 from aics.modules.chat.schemas import NewConversation, NewMessage
 from aics.rag.graph import run_rag
 from aics.rag.intent.rules import next_refusal_streak
+from aics.rag.ports import ChatTurn
 from aics.rag.schemas import (
     AppProfile,
     Citation,
@@ -77,6 +82,10 @@ class TurnRequest:
     api_key_id: UUID | None = None
     created_by: UUID | None = None
     tags: list[str] | None = None
+    # 无状态请求（OpenAI 兼容）：历史随请求提供，不读服务端存储，也不做记忆写入
+    inline_history: list[ChatTurn] | None = None
+    # 请求级覆盖（temperature / max_tokens），只作用于本轮，不改应用配置
+    rag_overrides: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -177,6 +186,7 @@ class _Prepared:
     refusal_streak: int
     last_assistant_was_clarify: bool
     system_reply: str | None = None
+    stateless: bool = False
 
 
 class TurnHandle:
@@ -326,6 +336,7 @@ class ChatService:
                 refusal_streak=conv.refusal_streak,
                 last_assistant_was_clarify=bool(last is not None and last.intent == "clarify"),
                 system_reply=system_reply,
+                stateless=req.conversation_id is None,
             )
 
     # ------------------------------------------------------------ execute
@@ -340,6 +351,8 @@ class ChatService:
             log.exception("chat.turn_crashed", conversation_id=str(p.conversation_id))
             await h.queue.put(ErrorEvent("INTERNAL_ERROR", "服务内部错误", 500))
         finally:
+            if p.stateless:  # 无状态轮次本轮即关：成功 / 报错 / 客户端中断三条路径都收口
+                await self._close_stateless(p)
             await h.queue.put(None)
 
     async def _run_silent_turn(self, h: TurnHandle) -> None:
@@ -365,12 +378,16 @@ class ChatService:
         )
 
     def _rag_input(self, p: _Prepared) -> RagInput:
+        cfg = p.config.rag
+        if p.req.rag_overrides:  # 请求级参数只影响本轮（OpenAI 兼容取 min(请求, 应用配置)）
+            cfg = cfg.model_copy(update=p.req.rag_overrides)
         return RagInput(
             app_id=p.req.app_id,
             conversation_id=p.conversation_id,
             question=p.req.question,
+            inline_history=p.req.inline_history,
             user_message_id=p.user_message_id,
-            config=p.config.rag,
+            config=cfg,
             profile=p.profile,
             handoff=p.config.handoff,
             tags=p.req.tags,
@@ -551,6 +568,8 @@ class ChatService:
         """Facts from slots, then the compaction check (对话上下文管理 §7 / §8.2).
 
         Memory problems never fail a turn that has already been answered."""
+        if p.stateless:
+            return  # 无状态轮次不写事实、不压缩：历史随请求来，会话本轮即关
         cfg = p.config.rag
         memory = self.runtime.memory
         try:
@@ -580,6 +599,26 @@ class ChatService:
         except Exception as e:
             log.warning(
                 "chat.memory_after_turn_failed",
+                conversation_id=str(p.conversation_id),
+                error_type=type(e).__name__,
+            )
+
+    async def _close_stateless(self, p: _Prepared) -> None:
+        """无状态轮次收尾：本轮建出的会话立即关闭（`close_reason=stateless`，设计讨论 0009 D7）。
+
+        条件单行更新，重复调用无副作用；这类会话已关闭，不会被 `idle_sweep` 扫到、也不会产生
+        空闲提醒。关闭失败只记日志——回答已经落库，不影响本轮结果。"""
+        try:
+            async with self.runtime.sessions() as s:
+                closed = await ConversationRepository(s).close(
+                    p.req.app_id, p.conversation_id, reason="stateless"
+                )
+                await s.commit()
+            if closed:
+                log.info("chat.stateless_closed", conversation_id=str(p.conversation_id))
+        except Exception as e:
+            log.warning(
+                "chat.stateless_close_failed",
                 conversation_id=str(p.conversation_id),
                 error_type=type(e).__name__,
             )

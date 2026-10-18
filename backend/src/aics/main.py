@@ -24,7 +24,8 @@ from aics.core.idempotency import Idempotency
 from aics.core.logging import RequestLogMiddleware, configure_logging
 from aics.db.engine import dispose_engine, get_sessionmaker
 from aics.health import router as health_router
-from aics.memory.compactor import CompactParams
+from aics.memory.compactor import Compactor, CompactParams
+from aics.memory.locks import RedisLock
 from aics.memory.service import COMPACT_TASK, MemoryService
 from aics.memory.units import pg_units
 from aics.modules.apikeys.service import ApiKeyAuthenticator
@@ -42,9 +43,12 @@ from aics.vectorstore import get_vector_store
 log = structlog.get_logger()
 
 
-def build_chat_runtime(s: Settings) -> ChatRuntime:
+def build_chat_runtime(s: Settings, *, redis: Any | None = None) -> ChatRuntime:
     """Composition root of chat.service: PG keyword search, Qdrant vectors, rerank, LLM and
-    memory (online compaction is enqueued to the `context` queue by task name)."""
+    memory (online compaction is enqueued to the `context` queue by task name).
+
+    `redis` 同时供记忆压缩锁与临时摘要使用（OpenAI 兼容的无状态请求用临时摘要压缩请求内历史，
+    M3.3）；不传 Redis 时退化为纯裁剪，`openai_temp_summary` 不生效。"""
     sessions = get_sessionmaker()
     broker = Celery("aics-api", broker=s.celery_broker_url)
 
@@ -68,13 +72,18 @@ def build_chat_runtime(s: Settings) -> ChatRuntime:
             None, send, app_id, conversation_id, version, params
         )
 
+    compactor = (
+        Compactor(pg_units(sessions), get_llm(), RedisLock(redis, s.redis_prefix))
+        if redis is not None
+        else None
+    )
     return ChatRuntime(
         sessions=sessions,
         chunk_search=PgChunkSearch(sessions),
         vector=EmbeddingVectorSearch(get_embedder(), get_vector_store()),
         reranker=get_reranker(),
         llm=get_llm(),
-        memory=MemoryService(pg_units(sessions), enqueue_compaction=enqueue),
+        memory=MemoryService(pg_units(sessions), compactor=compactor, enqueue_compaction=enqueue),
     )
 
 
@@ -132,7 +141,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         trusted_proxies=s.trusted_proxies,
     )
     if getattr(app.state, "chat_runtime", None) is None:  # tests may install their own
-        app.state.chat_runtime = build_chat_runtime(s)
+        app.state.chat_runtime = build_chat_runtime(s, redis=redis)
     if getattr(app.state, "knowledge_runtime", None) is None:  # tests may install their own
         app.state.knowledge_runtime = build_knowledge_runtime(s)
     log.info("app.started", env=s.env, version=__version__)

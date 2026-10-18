@@ -16,6 +16,7 @@ from aics.memory.service import MemoryService
 from aics.memory.store import InMemoryConversationStore
 from aics.memory.units import in_memory_units
 from aics.modules.apps.service import AppService
+from aics.modules.chat import service as chat_service
 from aics.modules.chat.runtime import ChatRuntime
 from aics.modules.chat.service import (
     ChatService,
@@ -26,6 +27,7 @@ from aics.modules.chat.service import (
     TurnResult,
     _Prepared,
 )
+from aics.rag.ports import ChatTurn
 from aics.rag.schemas import AppProfile, CitationsEvent, DeltaEvent
 from tests.chat_support import KB, responder
 from tests.rag_support import FakeKB, FakeLLMProvider, node_of
@@ -45,12 +47,14 @@ def runtime(llm: FakeLLMProvider) -> ChatRuntime:
     )
 
 
-def prepared(question: str, dispatch: str = "rag", **kw: Any) -> _Prepared:
+def prepared(
+    question: str, dispatch: str = "rag", *, req: dict[str, Any] | None = None, **kw: Any
+) -> _Prepared:
     cfg = AppService(None).build_config(  # type: ignore[arg-type]
         rag_config=None, handoff_config=None, session_config=None, chunk_config=None
     )
     return _Prepared(
-        req=TurnRequest(app_id=APP, question=question),
+        req=TurnRequest(app_id=APP, question=question, **(req or {})),
         t0=time.perf_counter(),
         config=cfg,
         profile=AppProfile(name="商城", fallback_text="暂时无法回答"),
@@ -177,3 +181,79 @@ async def test_next_event_timeout() -> None:
     with pytest.raises(TimeoutError):
         await h.next_event(0.01)
     await asyncio.wait_for(h.result(), 5)
+
+
+# ---------------------------------------------------------------- 无状态轮次（M3.3 ②）
+async def test_stateless_turn_closes_the_conversation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """无状态轮次结束即关闭本轮建出的会话（`close_reason=stateless`），三条出口都收口。"""
+    svc, _ = service(FakeLLMProvider(responder), monkeypatch)
+    closed: list[tuple[Any, str]] = []
+
+    class Sessions:
+        def __init__(self) -> None:
+            self.commits = 0
+
+        def __call__(self) -> Sessions:
+            return self
+
+        async def __aenter__(self) -> Any:
+            return self
+
+        async def __aexit__(self, *exc: Any) -> bool:
+            return False
+
+        async def commit(self) -> None:
+            self.commits += 1
+
+    class Repo:
+        def __init__(self, session: Any) -> None:
+            self.session = session
+
+        async def close(self, app_id: Any, cid: Any, *, reason: str, at: Any = None) -> bool:
+            closed.append((cid, reason))
+            return True
+
+    monkeypatch.setattr(chat_service, "ConversationRepository", Repo)
+    sessions = Sessions()
+    monkeypatch.setattr(svc.runtime, "sessions", sessions)
+    p = prepared("退货要几天？", stateless=True)
+    await drain(TurnHandle(svc, p))
+    assert closed == [(p.conversation_id, "stateless")] and sessions.commits == 1
+
+
+async def test_stateless_turn_skips_memory(monkeypatch: pytest.MonkeyPatch) -> None:
+    """无状态轮次既不写事实也不压缩：会话随即关闭，没有可压缩的服务端历史。"""
+    svc, _ = service(FakeLLMProvider(responder), monkeypatch)
+    calls: list[str] = []
+
+    async def capture(*a: Any, **k: Any) -> list[Any]:
+        calls.append("capture_slots")
+        return []
+
+    async def compact(*a: Any, **k: Any) -> tuple[str, Any]:
+        calls.append("maybe_compact")
+        return ("none", None)
+
+    monkeypatch.setattr(svc.runtime.memory, "capture_slots", capture)
+    monkeypatch.setattr(svc.runtime.memory, "maybe_compact", compact)
+    await drain(TurnHandle(svc, prepared("退货要几天？", stateless=True)))
+    assert calls == []
+    await drain(TurnHandle(svc, prepared("退货要几天？")))
+    assert calls == ["capture_slots", "maybe_compact"]
+
+
+def test_rag_overrides_apply_to_the_current_turn_only() -> None:
+    """请求级参数只覆盖本轮的配置副本，绝不改应用配置（M3.3 OpenAI 参数取 min）。"""
+    svc = ChatService(runtime(FakeLLMProvider(responder)))
+    p = prepared("退货要几天？", req={"rag_overrides": {"rerank_top_n": 1, "max_tokens": 100}})
+    cfg = svc._rag_input(p).config
+    assert cfg.rerank_top_n == 1 and cfg.max_tokens == 100
+    assert p.config.rag.rerank_top_n != 1 and p.config.rag.max_tokens != 100
+
+
+def test_inline_history_reaches_the_rag_input() -> None:
+    """请求内历史一路传到 RagInput，由 memory 按无状态路径组装。"""
+    svc = ChatService(runtime(FakeLLMProvider(responder)))
+    hist = [ChatTurn(role="user", content="上一句"), ChatTurn(role="assistant", content="上一答")]
+    p = prepared("退货要几天？", req={"inline_history": hist})
+    assert svc._rag_input(p).inline_history == hist

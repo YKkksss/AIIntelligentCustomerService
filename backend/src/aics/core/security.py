@@ -53,6 +53,22 @@ class Authenticator(Protocol):
         RATE_LIMITED / QUOTA_EXCEEDED (with Retry-After)."""
         ...
 
+    async def authenticate_key(
+        self,
+        authorization: str | None,
+        *,
+        any_scope: tuple[str, ...],
+        client_ip: str | None = None,
+        forwarded_for: str | None = None,
+    ) -> Principal:
+        """Validate the bearer key on a path that carries no `app_id` (OpenAI 兼容 `/v1/*`).
+
+        The application is the one the key belongs to; the rest of the chain (HMAC, revoked /
+        expired / disabled, IP allowlist, scope, rate limits) is identical to `authenticate`.
+        A deleting app still looks like a missing app, but there is no app to compare against.
+        """
+        ...
+
 
 def require_scope(*any_scope: str) -> Callable[[Request, UUID], Awaitable[Principal]]:
     """FastAPI dependency for routes under `/api/v1/apps/{app_id}/...`."""
@@ -64,6 +80,25 @@ def require_scope(*any_scope: str) -> Callable[[Request, UUID], Awaitable[Princi
         principal = await auth.authenticate(
             request.headers.get("authorization"),
             app_id=app_id,
+            any_scope=any_scope,
+            client_ip=request.client.host if request.client else None,
+            forwarded_for=request.headers.get("x-forwarded-for"),
+        )
+        request.state.principal = principal
+        return principal
+
+    return dependency
+
+
+def require_key_scope(*any_scope: str) -> Callable[[Request], Awaitable[Principal]]:
+    """FastAPI dependency for routes without `app_id` in the path (M3.3 `/v1/*`)."""
+
+    async def dependency(request: Request) -> Principal:
+        auth: Authenticator | None = getattr(request.app.state, "authenticator", None)
+        if auth is None:  # pragma: no cover - wiring error; never serve unauthenticated
+            raise AppError(message="鉴权未配置")
+        principal = await auth.authenticate_key(
+            request.headers.get("authorization"),
             any_scope=any_scope,
             client_ip=request.client.host if request.client else None,
             forwarded_for=request.headers.get("x-forwarded-for"),

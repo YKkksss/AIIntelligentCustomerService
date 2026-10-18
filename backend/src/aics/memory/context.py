@@ -191,7 +191,9 @@ class ContextAssembler:
         self.temp_summarizer = temp_summarizer
 
     async def load(self, q: ContextQuery) -> LoadedContext:
-        if q.conversation_id is None:
+        # 无状态请求：没有会话（OpenAI 兼容不带会话头），或历史由调用方随请求提供
+        # （带会话头的请求也可以自带历史，此时以请求内历史为准，不读服务端存储）。
+        if q.conversation_id is None or q.inline_history is not None:
             return await self._from_inline(q)
         cid = q.conversation_id
         facts: dict[str, str] = {}

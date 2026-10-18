@@ -62,8 +62,11 @@ class MemoryService:
         self.temp_summarizer = temp_summarizer
 
     async def load_context(self, q: ContextQuery) -> LoadedContext:
-        """Read-only assembly (§6.2); stateless requests never touch the database."""
-        if q.conversation_id is None:
+        """Read-only assembly (§6.2); stateless requests never touch the database.
+
+        Stateless = no conversation, or the caller supplied the history of this request
+        (`inline_history`); both skip facts / summary / recall of the server-side store."""
+        if q.conversation_id is None or q.inline_history is not None:
             return await ContextAssembler(
                 InMemoryConversationStore(), temp_summarizer=self.temp_summarizer
             ).load(q)

@@ -24,9 +24,11 @@ class MemoryPortAdapter:
                 budget=req.budget,
                 keep_recent_turns=req.keep_recent_turns,
                 enable_facts=req.enable_facts,
-                inline_history=[HistoryMessage(t.role, t.content) for t in req.inline_history]
-                if req.inline_history
-                else None,
+                inline_history=(
+                    [HistoryMessage(t.role, t.content) for t in req.inline_history]
+                    if req.inline_history is not None
+                    else None
+                ),
                 temp_summary=req.temp_summary,
                 exclude_message_id=req.exclude_message_id,
             )

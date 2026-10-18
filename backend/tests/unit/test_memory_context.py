@@ -255,3 +255,11 @@ async def test_stateless_temp_summary() -> None:
         )
     )
     assert not seen and ctx.flags == [] and ctx.recent_turns == 3
+
+
+async def test_inline_history_wins_over_the_stored_conversation() -> None:
+    """M3.3 ②：带会话头的请求也可以自带历史，此时以请求内历史为准，不读服务端存储。"""
+    store, cid = setup([("服务端问", "服务端答")])
+    ctx = await load(store, q(cid, inline_history=inline(2), temp_summary=False))
+    assert [m.content for m in ctx.history] == ["问0", "答0", "问1", "答1"]
+    assert ctx.facts == {} and ctx.summary is None and ctx.usage["facts"] == 0

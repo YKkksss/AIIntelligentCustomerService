@@ -363,3 +363,67 @@ async def test_lookup_falls_back_to_db_and_caches() -> None:
         assert (await down.authenticate(f"Bearer {k}", app_id=APP, any_scope=("chat",))).key_id
     finally:
         svc_mod.ApiKeyRepository = orig  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------- M3.3 ② /v1/* 鉴权
+async def test_authenticate_key_uses_the_key_app() -> None:
+    """`/v1/*` 的路径里没有 app_id：应用由 Key 本身决定，不做路径比对。"""
+    k = keys.generate_key()
+    auth, _ = _auth(_rec(), k)
+    p = await auth.authenticate_key(f"Bearer {k}", any_scope=("chat",))
+    assert p.app_id == APP and p.key_id == KEY_ID
+    assert p.rate_headers["X-RateLimit-Limit"] == "60"
+
+
+@pytest.mark.parametrize(
+    "rec_kw,code,status",
+    [
+        ({"app_status": "deleting"}, "APP_NOT_FOUND", 404),
+        ({"app_status": "disabled"}, "APP_DISABLED", 403),
+        ({"revoked": True}, "API_KEY_REVOKED", 401),
+        ({"key_hash": "0" * 64}, "UNAUTHENTICATED", 401),
+    ],
+)
+async def test_authenticate_key_rejections(rec_kw: dict[str, Any], code: str, status: int) -> None:
+    k = keys.generate_key()
+    auth, _ = _auth(_rec(**rec_kw), k)
+    with pytest.raises(AppError) as ei:
+        await auth.authenticate_key(f"Bearer {k}", any_scope=("chat",))
+    assert (ei.value.code, ei.value.status) == (code, status)
+
+
+async def test_authenticate_key_requires_scope() -> None:
+    k = keys.generate_key()
+    auth, _ = _auth(_rec(scopes=["kb:read"]), k)
+    with pytest.raises(AppError) as ei:
+        await auth.authenticate_key(f"Bearer {k}", any_scope=("chat",))
+    assert (ei.value.code, ei.value.status) == ("FORBIDDEN", 403)
+    assert ei.value.details == {"required_scope": ["chat"]}
+
+
+async def test_authenticate_key_enforces_the_ip_allowlist() -> None:
+    k = keys.generate_key()
+    auth, _ = _auth(_rec(ip_allowlist=["10.0.0.0/8"]), k)
+    with pytest.raises(AppError) as ei:
+        await auth.authenticate_key(f"Bearer {k}", any_scope=("chat",), client_ip="192.168.1.5")
+    assert ei.value.code == "IP_NOT_ALLOWED"
+    p = await auth.authenticate_key(f"Bearer {k}", any_scope=("chat",), client_ip="10.1.2.3")
+    assert str(p.client_ip) == "10.1.2.3"
+
+
+async def test_require_key_scope_authenticates_without_an_app_in_the_path() -> None:
+    """`core.security.require_key_scope` 是 `/v1/*` 路由的依赖：没有 app_id 参数。"""
+    from types import SimpleNamespace
+
+    from aics.core.security import require_key_scope
+
+    k = keys.generate_key()
+    auth, _ = _auth(_rec(), k)
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(authenticator=auth)),
+        headers={"authorization": f"Bearer {k}", "x-forwarded-for": "10.9.9.9"},
+        client=SimpleNamespace(host="127.0.0.1"),
+        state=SimpleNamespace(),
+    )
+    principal = await require_key_scope("chat")(request)
+    assert principal.app_id == APP and request.state.principal is principal

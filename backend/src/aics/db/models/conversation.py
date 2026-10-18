@@ -32,7 +32,7 @@ from aics.db.base import Base, new_id
 # Kept here (L1) so that every layer validates against one definition.
 CONVERSATION_CHANNELS = ("api", "openai", "debug", "eval")
 CONVERSATION_STATUSES = ("active", "closed")
-CLOSE_REASONS = ("idle", "handoff_idle", "app_deleted", "eval_done")
+CLOSE_REASONS = ("idle", "handoff_idle", "app_deleted", "eval_done", "stateless")
 HANDOFF_STATUSES = ("none", "pending", "accepted", "released")
 HANDOFF_END_REASONS = ("agent", "admin", "queue_timeout", "offline", "accepted_idle")
 CALLBACK_REASONS = ("queue_timeout", "offline")

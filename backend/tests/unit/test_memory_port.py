@@ -64,6 +64,23 @@ async def test_stateless_inline_history_trimmed_by_budget() -> None:
     assert res.trace["context"]["recent_turns"] < 30
 
 
+async def test_empty_inline_history_still_wins() -> None:
+    """M3.3 ②：空历史列表也必须走请求内路径，否则会去读服务端会话（OpenAI 兼容不上送历史）。"""
+    store = InMemoryConversationStore()
+    cid = store.create_conversation(APP)
+    store.add_message(APP, cid, "user", "服务端问题")
+    store.add_message(APP, cid, "assistant", "服务端回答")
+    adapter = MemoryPortAdapter(MemoryService(in_memory_units(store)))
+    llm = FakeLLMProvider(make_responder())
+    from aics.rag.config import AppRagConfig
+
+    res, _ = await run_rag_collect(
+        inp("几天到账", conversation_id=cid, inline_history=[], config=AppRagConfig()),
+        ports(kb_with({}), llm, memory=adapter),
+    )
+    assert res.trace["context"]["recent_turns"] == 0
+
+
 def test_masking_and_tokens_and_metrics() -> None:
     assert mask_phone("13812345678") == "138****5678"
     assert mask_order("2026101400123") == "*********0123"
