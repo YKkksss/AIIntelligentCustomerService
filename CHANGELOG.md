@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### 工程（M3.4 ① 依赖合同修订，2026-10-17）
+- import-linter 依赖合同按 [ADR-0017](docs/02-architecture/adr/0017-模块依赖合同修订与横切能力注入.md) 修订：`handoff 只可依赖 chat、webhooks` → `handoff 只可依赖 chat、webhooks、apps`（转人工要读应用的 `handoff_config`），`chat` / `handoff` / `eval` / `feedback` 四条「X 只可依赖…」合同加 `allow_indirect_imports = true`（只约束直接 import），消除「经允许的直接依赖叠加出的间接链路被误判违规」的老问题（待解决问题清单 ISSUE-28）；分层合同与 `rag` / `memory` / `ingest` / `core` 的 forbidden 合同不变，仍检查间接依赖。
+- 门禁：`lint-imports` 13 kept / 0 broken（191 files、945 dependencies）。
+
 ### 开发环境（本机 Docker 依赖服务与集成复验，2026-10-17）
 - 本机 Docker 起一套与服务器同版本的依赖服务：`docker/compose.yaml`（PostgreSQL 16.15 / Redis 8.2 含与服务器一致的 ACL / RabbitMQ 4.3 / Qdrant v1.18.2，端口只绑 `127.0.0.1`，数据在 `docker/volumes/`），`docker/dev-stack.ps1`（`dev-stack.cmd` 封装）提供 init / up / down / status / check / logs / reset / test；`docker\dev-stack.cmd test` 注入 `AICS_TEST_*` 后在本机跑 `pytest -m integration`，**集成套件 190 项全部通过**（此前开发机只能整批反选）。`deploy/dev/` 下只起 Qdrant 的独立 compose 归并进 `docker/`（ADR-0002 与部署文档同步）。
 - 首次真实跑通立刻查出并修复 5 个缺陷：`alembic.ini` 的中文注释让 Alembic 按 locale 解码失败（中文 Windows 下每条集成用例的 `alembic upgrade head` 都报 `UnicodeDecodeError`）；`keyusage.merge_buckets` 只认 `str` 而真实 Redis 返回 `bytes`，`last_used_at` 在生产环境永远不会更新；路由在会话关闭后序列化 ORM 对象触发 `DetachedInstanceError`（新增 `KnowledgeService._fresh()` 统一在会话内刷新）；**M3.3 的无状态判定回归**——「`conversation_id is None` 即无状态」把原生 `/chat` 首轮也当成无状态（关会话 + 跳过记忆写入），导致原生接口多轮记忆整体失效，改为显式 `TurnRequest.stateless`、仅 `/v1` 缺 `X-AICS-Conversation-Id` 时置位；集成套件自身五处问题（Redis ACL 前缀、teardown 顺序、`source_type`、两条无校验力的断言、`reindex` 的作业名）。

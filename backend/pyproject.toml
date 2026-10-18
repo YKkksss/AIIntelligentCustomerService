@@ -98,8 +98,12 @@ source = ["aics"]
 omit = ["src/aics/cli.py"]
 
 # ---------------- import-linter（模块划分 §3 依赖规则）----------------
-# 说明：L3 模块之间只允许 chat→apps、chat→webhooks、handoff→chat、handoff→webhooks、eval→chat、feedback→eval，
-# 用逐模块的 forbidden 合同表达；apps / knowledge 投递 Celery 任务按任务名 send_task，不 import aics.tasks。
+# 说明：L3 模块之间只允许 chat→apps、chat→webhooks、handoff→chat、handoff→webhooks、handoff→apps、
+# eval→chat、feedback→eval，用逐模块的 forbidden 合同表达。这几条“X 只可依赖…”的合同设
+# `allow_indirect_imports = true`（ADR-0017）：由允许的直接依赖叠加出的间接依赖
+# （handoff→chat→apps、eval→chat→apps/webhooks）是设计预期，所以只约束直接 import；
+# 分层合同与 rag / memory / ingest / core 的 forbidden 合同不变，仍检查间接依赖。
+# apps / knowledge 投递 Celery 任务按任务名 send_task，不 import aics.tasks。
 [tool.importlinter]
 root_package = "aics"
 include_external_packages = true
@@ -185,21 +189,29 @@ name = "chat 只可依赖 apps、webhooks"
 type = "forbidden"
 source_modules = ["aics.modules.chat"]
 forbidden_modules = ["aics.modules.auth", "aics.modules.apikeys", "aics.modules.audit", "aics.modules.stats", "aics.modules.knowledge", "aics.modules.eval", "aics.modules.feedback", "aics.modules.handoff", "aics.ingest"]
+# 只约束直接 import（ADR-0017）：经允许的直接依赖叠加出的间接链路是设计预期
+allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
-name = "handoff 只可依赖 chat、webhooks"
+name = "handoff 只可依赖 chat、webhooks、apps"
 type = "forbidden"
 source_modules = ["aics.modules.handoff"]
-forbidden_modules = ["aics.modules.auth", "aics.modules.apikeys", "aics.modules.audit", "aics.modules.stats", "aics.modules.knowledge", "aics.modules.apps", "aics.modules.eval", "aics.modules.feedback"]
+forbidden_modules = ["aics.modules.auth", "aics.modules.apikeys", "aics.modules.audit", "aics.modules.stats", "aics.modules.knowledge", "aics.modules.eval", "aics.modules.feedback"]
+# handoff→chat→apps（经 chat 写消息、读 handoff_config）是设计允许的间接链路（ADR-0017）
+allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 name = "eval 只可依赖 chat"
 type = "forbidden"
 source_modules = ["aics.modules.eval"]
 forbidden_modules = ["aics.modules.auth", "aics.modules.apikeys", "aics.modules.audit", "aics.modules.stats", "aics.modules.knowledge", "aics.modules.apps", "aics.modules.webhooks", "aics.modules.feedback", "aics.modules.handoff"]
+# eval→chat→apps / webhooks 是设计允许的间接链路（ADR-0017）
+allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 name = "feedback 只可依赖 eval"
 type = "forbidden"
 source_modules = ["aics.modules.feedback"]
 forbidden_modules = ["aics.modules.auth", "aics.modules.apikeys", "aics.modules.audit", "aics.modules.stats", "aics.modules.knowledge", "aics.modules.apps", "aics.modules.webhooks", "aics.modules.chat", "aics.modules.handoff"]
+# feedback→eval→chat 是设计允许的间接链路（ADR-0017）
+allow_indirect_imports = true
