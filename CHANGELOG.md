@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### 文档（M3.3 子步骤计划，2026-10-17）
+- 新增 M3.3 子步骤计划（[开发计划](../docs/00-planning/03-开发计划.md)）：① 无状态会话与请求级历史（迁移 `0011` 放开 `close_reason=stateless`、`TurnRequest.inline_history` / `rag_overrides`、无状态裁剪与临时摘要接线、本轮即关会话、`authenticate_key` + `require_key_scope`）；② OpenAI 兼容路由（`/v1/models`、`/v1/chat/completions` 阻塞与流式、`/v1/*` 专属 OpenAI 风格错误体）；③ 用例与隔离清单（开放接口清单支持第二条前缀、官方 `openai` SDK 集成用例）；④ 文档收尾。预算 0 元（真实模型演示改为服务器复验项）。
+
 ### 新增（M3.2 知识库开放接口，2026-10-17）
 - 知识库开放接口 9 个端点（`modules/knowledge/router.py`，`prefix=/api/v1/apps/{app_id}`）：只读 `GET /documents`（`status` / `q` / `page` / `page_size`）、`GET /documents/{id}`、`GET /documents/{id}/chunks`（仅生效版本）用 `kb:read`；写 `POST /documents`、`POST /documents/url`、`PUT /documents/{id}/file`、`POST /documents/{id}/reindex`、`PATCH /documents/{id}`（标题 / 元数据立即生效）、`DELETE /documents/{id}`（204）用 `kb:write`。上传按 1 MB 分块流式累加、超 `AICS_UPLOAD_MAX_MB` 立即 `413 FILE_TOO_LARGE`（不整体读入内存），扩展名快速拒绝，魔数仍由 `ingest.parsers` 判定。
 - 幂等键 `core/idempotency.py`：`Idempotency-Key` 依赖，`SET {prefix}idem:{key_id}:{key} NX EX 86400` 写占位，成功后覆写为 `{state:done,status,body}` 供回放；同键异体 `409 IDEMPOTENCY_CONFLICT`、处理中 `409 CONFLICT`；非 2xx 与异常删占位；Redis 故障放行并告警；键长 ≤128（超长 422）、回放体 ≤64 KB。上传与替换接入。
