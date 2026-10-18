@@ -242,13 +242,14 @@ async def test_stateless_turn_skips_memory(monkeypatch: pytest.MonkeyPatch) -> N
     assert calls == ["capture_slots", "maybe_compact"]
 
 
-def test_rag_overrides_apply_to_the_current_turn_only() -> None:
-    """请求级参数只覆盖本轮的配置副本，绝不改应用配置（M3.3 OpenAI 参数取 min）。"""
+def test_rag_overrides_only_narrow_and_never_touch_the_app_config() -> None:
+    """请求级参数只覆盖本轮配置副本，且只能收窄：`min(请求, 应用配置)`（M3.3 OpenAI 兼容）。"""
     svc = ChatService(runtime(FakeLLMProvider(responder)))
-    p = prepared("退货要几天？", req={"rag_overrides": {"rerank_top_n": 1, "max_tokens": 100}})
+    p = prepared("退货要几天？", req={"rag_overrides": {"temperature": 0.9, "max_tokens": 5000}})
     cfg = svc._rag_input(p).config
-    assert cfg.rerank_top_n == 1 and cfg.max_tokens == 100
-    assert p.config.rag.rerank_top_n != 1 and p.config.rag.max_tokens != 100
+    assert cfg is not p.config.rag  # 改的是副本
+    assert cfg.temperature == 0.2 and cfg.max_tokens == 800  # 取应用配置（更小者）
+    assert p.config.rag.temperature == 0.2 and p.config.rag.max_tokens == 800
 
 
 def test_inline_history_reaches_the_rag_input() -> None:

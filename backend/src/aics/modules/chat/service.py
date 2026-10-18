@@ -49,6 +49,7 @@ from aics.rag.intent.rules import next_refusal_streak
 from aics.rag.ports import ChatTurn
 from aics.rag.schemas import (
     AppProfile,
+    AppRagConfig,
     Citation,
     CitationsEvent,
     DeltaEvent,
@@ -154,6 +155,30 @@ def dispatch_of(handoff_status: str, ai_mode: str) -> Dispatch:
     if handoff_status == "pending" and ai_mode == "wait":
         return "wait"
     return "rag"
+
+
+#: 请求级参数只允许这两个键（`TurnRequest.rag_overrides`），且只能收窄。
+OVERRIDABLE = ("temperature", "max_tokens")
+
+
+def clamp_overrides(cfg: AppRagConfig, overrides: dict[str, Any]) -> dict[str, Any]:
+    """请求级参数 → 本轮配置覆盖：`min(请求, 应用配置)`，其它键与非数值一律忽略。
+
+    OpenAI 兼容接口对 `temperature` / `max_tokens` 只承诺「受应用上限约束」（开放接口参考 §3），
+    所以这里静默收窄而不是报错；`model_copy(update=…)` 绕过校验，取值必须先在这里过滤。
+    """
+    out: dict[str, Any] = {}
+    temperature = overrides.get("temperature")
+    if (
+        isinstance(temperature, int | float)
+        and not isinstance(temperature, bool)
+        and temperature >= 0
+    ):
+        out["temperature"] = min(float(temperature), float(cfg.temperature))
+    max_tokens = overrides.get("max_tokens")
+    if isinstance(max_tokens, int) and not isinstance(max_tokens, bool) and max_tokens >= 1:
+        out["max_tokens"] = min(max_tokens, int(cfg.max_tokens))
+    return out
 
 
 def profile_of(app: Any) -> AppProfile:
@@ -379,8 +404,8 @@ class ChatService:
 
     def _rag_input(self, p: _Prepared) -> RagInput:
         cfg = p.config.rag
-        if p.req.rag_overrides:  # 请求级参数只影响本轮（OpenAI 兼容取 min(请求, 应用配置)）
-            cfg = cfg.model_copy(update=p.req.rag_overrides)
+        if p.req.rag_overrides:  # 请求级参数只影响本轮
+            cfg = cfg.model_copy(update=clamp_overrides(cfg, p.req.rag_overrides))
         return RagInput(
             app_id=p.req.app_id,
             conversation_id=p.conversation_id,

@@ -29,6 +29,8 @@ from aics.memory.locks import RedisLock
 from aics.memory.service import COMPACT_TASK, MemoryService
 from aics.memory.units import pg_units
 from aics.modules.apikeys.service import ApiKeyAuthenticator
+from aics.modules.chat import openai
+from aics.modules.chat.openai_router import router as openai_router
 from aics.modules.chat.router import router as chat_router
 from aics.modules.chat.runtime import ChatRuntime
 from aics.modules.knowledge.chunk_search import PgChunkSearch
@@ -156,6 +158,11 @@ def _rid(request: Request) -> str | None:
     return request.scope.get("state", {}).get("request_id")
 
 
+def _openai_path(request: Request) -> bool:
+    """`/v1/*` 的鉴权与应答都是 OpenAI 形状（开放接口参考 §3），错误体也要跟着换。"""
+    return request.url.path.startswith("/v1/")
+
+
 def create_app() -> FastAPI:
     s = get_settings()  # 配置校验失败在这里直接抛出，进程退出
     # prod 强制 JSON 日志
@@ -180,8 +187,13 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(AppError)
     async def _app_error(request: Request, exc: AppError) -> JSONResponse:
+        body = (
+            openai.error_body(exc.code, exc.message, exc.status)
+            if _openai_path(request)
+            else error_body(exc.code, exc.message, _rid(request), exc.details)
+        )
         return JSONResponse(
-            error_body(exc.code, exc.message, _rid(request), exc.details),
+            body,
             status_code=exc.status,
             headers=exc.headers or None,
         )
@@ -189,6 +201,10 @@ def create_app() -> FastAPI:
     @app.exception_handler(RequestValidationError)
     async def _validation(request: Request, exc: RequestValidationError) -> JSONResponse:
         details = {"errors": [{"loc": e["loc"], "msg": e["msg"]} for e in exc.errors()]}
+        if _openai_path(request):
+            return JSONResponse(
+                openai.error_body("INVALID_REQUEST", "参数校验失败", 422), status_code=422
+            )
         return JSONResponse(
             error_body("VALIDATION_ERROR", "参数校验失败", _rid(request), details),
             status_code=422,
@@ -197,13 +213,17 @@ def create_app() -> FastAPI:
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
         log.exception("app.unhandled_error", error_type=type(exc).__name__)
-        return JSONResponse(
-            error_body("INTERNAL_ERROR", "服务内部错误", _rid(request)), status_code=500
+        body = (
+            openai.error_body("INTERNAL_ERROR", "服务内部错误", 500)
+            if _openai_path(request)
+            else error_body("INTERNAL_ERROR", "服务内部错误", _rid(request))
         )
+        return JSONResponse(body, status_code=500)
 
     app.include_router(health_router)
     app.include_router(chat_router)
     app.include_router(knowledge_router)
+    app.include_router(openai_router)
     return app
 
 
