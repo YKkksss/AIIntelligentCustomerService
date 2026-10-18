@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### 文档（M3.4 子步骤计划，2026-10-17）
+- 新增 M3.4 子步骤计划（[开发计划](docs/00-planning/03-开发计划.md)）：① import-linter 合同改造（ADR-0017，`allow_indirect_imports`，对应待解决问题清单 ISSUE-28）；② `modules/handoff` 状态机与坐席接口（条件单行更新 + `409 HANDOFF_STATE_CONFLICT`、人工消息走 `chat.service`）；③ 服务时间与三种超时（`core/schedule.py` 纯函数、`handoff.sweep`、`idle_sweep` 先 handoff 后 lifecycle、留 `events.emit` TODO 给 M3.5）；④ 用例（状态迁移表、并发 accept、sweep 幂等、DST 时区、开放接口清单 5 条）；⑤ 文档收尾。预算 < 0.1 元。
+
 ### 新增（M3.3 OpenAI 兼容接口，2026-10-17）
 - OpenAI 兼容接口 `modules/chat/openai_router.py`：`GET /v1/models`（返回 Key 所属应用）与 `POST /v1/chat/completions`（阻塞 + `stream=true`），全部走 `ChatService.start_turn(channel="openai")`，不另拼流程；响应为 `chat.completion` + `aics` 扩展字段（`message_id` / `conversation_id` / `previous_conversation_id` / `reply_by` / `handoff_status` / `answer_type` / `handoff` / `intent` / `citations`），流式每 delta 一个 `chat.completion.chunk`、末 chunk 带扩展字段后 `data: [DONE]`，心跳沿用 SSE 注释行。
 - 无状态会话与请求级历史：不带 `X-AICS-Conversation-Id` 时历史只来自请求 `messages`（按应用 `history_token_budget` 裁剪，超预算走请求内临时摘要，15 秒超时、失败退回纯裁剪），新建的会话本轮结束即以 `close_reason=stateless` 关闭（迁移 `0011` 重建 CHECK，`CLOSE_REASONS` 增第 5 个值），不压缩、不产生空闲提醒；带了该头则与原生接口一致，跨应用 `404 conversation_not_found`、`model` 不匹配 `404 model_not_found`。
