@@ -106,6 +106,9 @@ async def env(ingest_migrated: str, tmp_path: Path) -> AsyncIterator[dict[str, A
         yield ctx
     finally:
         async with sessions() as s:
+            # 用例会经 API 建 Key（M3.2 起）与文档，删 App 前必须先把它们清掉，否则外键报错
+            await s.execute(delete(Conversation).where(Conversation.app_id == app_id))
+            await s.execute(delete(ApiKey).where(ApiKey.app_id == app_id))
             for m in (Chunk, ChunkParent, Job, Document):
                 await s.execute(delete(m).where(m.app_id == app_id))
             await s.execute(delete(App).where(App.id == app_id))

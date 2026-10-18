@@ -63,14 +63,17 @@ async def chat_completions(
     """阻塞与流式共用一条路径：`stream=true` 走 SSE，每个 delta 一个 `chat.completion.chunk`。"""
     model = _same_app(body.model, principal)
     parsed = openai.parse(body)
+    conversation_id = openai.parse_conversation_id(x_aics_conversation_id)
     req = TurnRequest(
         app_id=principal.app_id,
         question=parsed.question,
-        conversation_id=openai.parse_conversation_id(x_aics_conversation_id),
+        conversation_id=conversation_id,
         external_user_id=parsed.user,
         channel="openai",
         api_key_id=principal.key_id,
         inline_history=parsed.history or None,
+        # 不带会话头 = 无状态（本轮建出的会话本轮即关）；带了会话头就是正常持久会话。
+        stateless=conversation_id is None,
         rag_overrides=openai.overrides(body),
     )
     handle = await _service(request).start_turn(req)

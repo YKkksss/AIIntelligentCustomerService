@@ -33,6 +33,9 @@ deploy/dev/.env
 *.log
 /data/
 eval_reports/
+# 以 backend 为工作目录运行（scripts/dev.ps1）时产生
+backend/storage/
+backend/logs/
 
 # 镜像导出
 docker/images/*.tar

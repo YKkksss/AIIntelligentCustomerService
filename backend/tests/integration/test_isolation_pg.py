@@ -54,7 +54,7 @@ async def new_document(pg: dict[str, Any], app_id: UUID, title: str) -> UUID:
         doc = Document(
             app_id=app_id,
             title=title,
-            source_type="upload",
+            source_type="file",  # ck_documents_source_type 只允许 file / url
             content_hash=f"{uuid.uuid4().hex}{uuid.uuid4().hex}",
             status="done",
             progress=100,

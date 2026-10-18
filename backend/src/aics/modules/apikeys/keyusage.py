@@ -62,13 +62,18 @@ async def record_use(redis: Any, prefix: str, key_id: UUID, *, now: float | None
         log.warning("apikeys.key_usage_unavailable", error_type=type(e).__name__)
 
 
+def _text(raw: Any) -> str:
+    """Redis replies are bytes unless the client sets `decode_responses` (ours does not)."""
+    return raw.decode() if isinstance(raw, (bytes, bytearray)) else str(raw)
+
+
 def merge_buckets(buckets: Iterable[Mapping[str, Any]]) -> dict[UUID, int]:
     """`{key_id: unix_ts}` keeping the newest timestamp; unparsable entries are dropped."""
     newest: dict[UUID, int] = {}
     for bucket in buckets:
         for raw_id, raw_ts in bucket.items():
             try:
-                key_id, ts = UUID(str(raw_id)), int(raw_ts)
+                key_id, ts = UUID(_text(raw_id)), int(_text(raw_ts))
             except (ValueError, TypeError):
                 continue
             if ts > newest.get(key_id, 0):

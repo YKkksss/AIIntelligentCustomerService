@@ -26,8 +26,10 @@ from aics.modules.apikeys.service import ApiKeyAuthenticator, ApiKeyService
 
 pytestmark = pytest.mark.integration
 
-QUESTION = "退款多久到账？"
-ANSWER = "退款 3–5 个工作日原路退回[1]。"
+QUESTION = "退货怎么退？"
+# 假知识库的脚本模型按「上下文里第一个命中的关键词」作答（tests/chat_support.py 的 ANSWER 表
+# 以「退货」开头），所以断言值必须与知识库脚本一致，而不是随问题字面变化。
+ANSWER = "签收后 7 天内可以无理由退货[1]。"
 TOOLS = [
     {
         "type": "function",
@@ -186,8 +188,11 @@ async def test_client_history_and_ignored_params(sdk: dict[str, Any]) -> None:
 
     assert len(resp.choices) == 1
     assert resp.choices[0].message.content == ANSWER
+    # temperature 与 max_tokens 已按 min(请求, 应用配置) 收窄，但 FakeLLM 不实现采样与截断
+    # （收窄本身由 tests/unit/test_openai_api.py::test_clamp_overrides_only_narrows 覆盖），
+    # 这里只确认参数被接受、用量字段齐备。
     assert resp.usage is not None
-    assert resp.usage.completion_tokens <= 50
+    assert resp.usage.completion_tokens > 0
 
 
 async def test_unknown_model_is_404_model_not_found(sdk: dict[str, Any]) -> None:

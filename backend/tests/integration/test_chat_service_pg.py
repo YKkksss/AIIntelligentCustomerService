@@ -275,6 +275,20 @@ async def test_maybe_compact_enqueues_online(pg: dict[str, Any]) -> None:
     assert params.keep_recent_turns == 1 and params.compact_trigger_tokens == 500
 
 
+async def test_native_turn_without_conversation_id_stays_active(pg: dict[str, Any]) -> None:
+    """M3.3 回归：原生接口不带 `conversation_id` 是「新建持久会话」，不是无状态轮次。
+
+    阶段 ② 曾用 `conversation_id is None` 推断无状态，导致原生新建的会话被当场关闭
+    （`close_reason=stateless`）、跳过记忆写入，第二轮只能新建空会话，recall 读不到事实。
+    """
+    a = pg["app_a"]
+    svc = ChatService(make_runtime(pg["sessions"]))
+    res = await svc.handle_turn(ask(a, "退货要几天？"))
+    conv = await conv_of(pg, a, res.conversation_id)
+    assert conv.status == "active" and conv.close_reason is None
+    assert conv.message_count == 2
+
+
 async def test_recall_answers_from_captured_facts(pg: dict[str, Any]) -> None:
     """M2.5 known limit: asking back for info given earlier answers from facts (0007)."""
     a = pg["app_a"]

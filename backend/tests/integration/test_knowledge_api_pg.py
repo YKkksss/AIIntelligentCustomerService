@@ -17,7 +17,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from ingest_support import FakeEmbedder
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from aics.core.config import get_settings
 from aics.core.idempotency import HEADER as IDEMPOTENCY_HEADER
@@ -28,7 +28,7 @@ from aics.main import create_app
 from aics.modules.apikeys.service import ApiKeyAuthenticator, ApiKeyService
 from aics.modules.knowledge import router as knowledge_router
 from aics.modules.knowledge.runtime import KnowledgeRuntime
-from aics.modules.knowledge.service import INGEST_TASK, RETOKENIZE_TASK
+from aics.modules.knowledge.service import INGEST_TASK
 
 pytestmark = pytest.mark.integration
 
@@ -93,6 +93,20 @@ async def count_documents(env: dict[str, Any]) -> int:
             select(func.count()).select_from(Document).where(Document.app_id == env["app_id"])
         )
     return int(total or 0)
+
+
+async def mark_done(env: dict[str, Any], document_id: str) -> None:
+    """本套用例不跑 worker：上传只建出 `queued` 文档，替身把首建跑完再测 replace / reindex。
+
+    否则 `DOCUMENT_BUSY` 分支会把它们挡在 409（这是真实生产语义，不是测试缺陷）。
+    """
+    async with env["sessions"]() as s:
+        await s.execute(
+            update(Document)
+            .where(Document.app_id == env["app_id"], Document.id == uuid.UUID(document_id))
+            .values(status="done", progress=100, index_version=1, chunk_count=1)
+        )
+        await s.commit()
 
 
 @pytest.fixture
@@ -231,6 +245,7 @@ async def test_replace_with_identical_content_is_unchanged(api: dict[str, Any]) 
     url = f"/api/v1/apps/{api['app_id']}/documents"
     created = await api["client"].post(url, files=_file(), headers=auth(api["key"]))
     document_id = created.json()["id"]
+    await mark_done(api["env"], document_id)
 
     r = await api["client"].put(
         f"{url}/{document_id}/file", files=_file(), headers=auth(api["key"])
@@ -242,17 +257,19 @@ async def test_replace_with_identical_content_is_unchanged(api: dict[str, Any]) 
     assert len(api["sent"]) == 1  # 内容没变 → 不投递新作业
 
 
-async def test_reindex_returns_202_and_enqueues_retokenize(api: dict[str, Any]) -> None:
+async def test_reindex_returns_202_and_enqueues_ingest(api: dict[str, Any]) -> None:
+    """文档级重建走 `aics.ingest_document`（应用级重新分词 `aics.retokenize_app` 是另一个作业）。"""
     url = f"/api/v1/apps/{api['app_id']}/documents"
     created = await api["client"].post(url, files=_file(), headers=auth(api["key"]))
     document_id = created.json()["id"]
+    await mark_done(api["env"], document_id)
 
     r = await api["client"].post(f"{url}/{document_id}/reindex", headers=auth(api["key"]))
 
     assert r.status_code == 202, r.text
     assert r.json()["id"] == document_id
     assert r.json()["job_id"]
-    assert api["sent"][-1][0] == RETOKENIZE_TASK
+    assert api["sent"][-1][0] == INGEST_TASK
 
 
 async def test_unknown_app_id_under_another_keys_path_is_404(api: dict[str, Any]) -> None:

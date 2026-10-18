@@ -389,6 +389,7 @@ def test_chat_completions_blocking(monkeypatch: pytest.MonkeyPatch) -> None:
     assert sent.app_id == APP and sent.question == "现在的问题" and sent.channel == "openai"
     assert sent.api_key_id == fake.key_id and sent.external_user_id == "u-1"
     assert sent.conversation_id is None
+    assert sent.stateless is True  # 不带会话头 = 无状态（M3.3 回归：不能靠 conversation_id 推断）
     assert sent.inline_history == [
         ChatTurn(role="user", content="第一问"),
         ChatTurn(role="assistant", content="第一答"),
@@ -431,6 +432,7 @@ def test_chat_completions_passes_the_conversation_header(monkeypatch: pytest.Mon
     headers = {**auth_header(), "X-AICS-Conversation-Id": str(cid)}
     assert c.post("/v1/chat/completions", json=body(), headers=headers).status_code == 200
     assert service.calls[0].conversation_id == cid
+    assert service.calls[0].stateless is False  # 带会话头 = 持久会话，本轮不关闭
 
 
 def test_chat_completions_rejects_a_bad_conversation_header(

@@ -31,7 +31,7 @@ def make_app(pg: dict[str, Any], redis: Any, *, trusted: str = "") -> FastAPI:
         pg["sessions"],
         pepper=PEPPER,
         redis=redis,
-        redis_prefix="aics_it:",
+        redis_prefix="aics:it:",
         trusted_proxies=trusted,
     )
 
@@ -54,7 +54,7 @@ def make_app(pg: dict[str, Any], redis: Any, *, trusted: str = "") -> FastAPI:
 
 async def create_key(pg: dict[str, Any], redis: Any, app_id: UUID, **kw: Any) -> tuple[UUID, str]:
     async with pg["sessions"]() as s:
-        svc = ApiKeyService(s, pepper=PEPPER, redis=redis, redis_prefix="aics_it:")
+        svc = ApiKeyService(s, pepper=PEPPER, redis=redis, redis_prefix="aics:it:")
         row, plain = await svc.create(app_id, name="it", scopes=kw.pop("scopes", ["chat"]), **kw)
         await s.commit()
         return row.id, plain
@@ -86,7 +86,7 @@ async def test_auth_paths(pg: dict[str, Any], redis_it: Any) -> None:
         assert (await call(a, expired)).json()["error"]["code"] == "API_KEY_EXPIRED"
         # revoke → the cached record is dropped, next call fails immediately
         async with pg["sessions"]() as s:
-            svc = ApiKeyService(s, pepper=PEPPER, redis=redis_it, redis_prefix="aics_it:")
+            svc = ApiKeyService(s, pepper=PEPPER, redis=redis_it, redis_prefix="aics:it:")
             assert await svc.revoke(a, key_id)
             assert not await svc.revoke(a, key_id)  # idempotent
             assert not await svc.revoke(b, key_id)  # app-scoped
@@ -126,7 +126,7 @@ async def test_app_deleting_and_disabled(pg: dict[str, Any], redis_it: Any) -> N
             async with pg["sessions"]() as s:
                 await s.execute(update(App).where(App.id == a).values(status=status))
                 await s.commit()
-            await redis_it.delete(f"aics_it:apikey:{key[:12]}")  # skip the 60 s cache
+            await redis_it.delete(f"aics:it:apikey:{key[:12]}")  # skip the 60 s cache
             r = await c.get(f"/api/v1/apps/{a}/ping", headers=h)
             assert r.json()["error"]["code"] == code
 
@@ -158,7 +158,7 @@ async def test_ip_allowlist_enforced_and_cleared(pg: dict[str, Any], redis_it: A
     assert denied.json()["error"]["details"]["client_ip"] == "203.0.113.9"
 
     async with pg["sessions"]() as s:
-        svc = ApiKeyService(s, pepper=PEPPER, redis=redis_it, redis_prefix="aics_it:")
+        svc = ApiKeyService(s, pepper=PEPPER, redis=redis_it, redis_prefix="aics:it:")
         assert await svc.set_ip_allowlist(a, key_id, None)  # 清空 = 不限制
         await s.commit()
 

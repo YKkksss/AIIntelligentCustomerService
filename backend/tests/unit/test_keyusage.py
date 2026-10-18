@@ -89,6 +89,13 @@ def test_merge_buckets_keeps_the_newest_and_drops_garbage(
     assert keyusage.merge_buckets(buckets) == expected
 
 
+def test_merge_buckets_accepts_bytes_replies() -> None:
+    """真实 Redis 客户端不开 decode_responses，HGETALL 回的是 bytes（M3.1 只跑集成测试才暴露）。"""
+    buckets = [{KEY_ID.encode(): b"100", OTHER_ID.encode(): b"5"}]
+
+    assert keyusage.merge_buckets(buckets) == {UUID(KEY_ID): 100, UUID(OTHER_ID): 5}
+
+
 async def test_flush_folds_buckets_and_deletes_only_past_minutes() -> None:
     redis = FakeRedis()
     past = keyusage.bucket_key(PREFIX, NOW - 60)

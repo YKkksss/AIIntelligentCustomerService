@@ -22,6 +22,8 @@ subject to the server's cancellation of the response stream.
 Stateless turns (M3.3, OpenAI 兼容且不带 `X-AICS-Conversation-Id`): the history travels with the
 request (`TurnRequest.inline_history`), so the turn neither writes facts nor compacts; the
 conversation created for it is closed right after the turn with `close_reason=stateless`.
+Statelessness is declared explicitly (`TurnRequest.stateless`) because a missing `conversation_id`
+means "start a new persistent conversation" on the native API, not "stateless".
 """
 
 from __future__ import annotations
@@ -85,6 +87,10 @@ class TurnRequest:
     tags: list[str] | None = None
     # 无状态请求（OpenAI 兼容）：历史随请求提供，不读服务端存储，也不做记忆写入
     inline_history: list[ChatTurn] | None = None
+    # 显式声明的无状态轮次：本轮结束即关闭会话（`close_reason=stateless`），不写记忆、
+    # 不参与空闲扫描。**不能**用「没有 conversation_id」推断——原生接口不带
+    # `conversation_id` 的语义是「新建一个持久会话（M2.6）」，两者必须区分开。
+    stateless: bool = False
     # 请求级覆盖（temperature / max_tokens），只作用于本轮，不改应用配置
     rag_overrides: dict[str, Any] = field(default_factory=dict)
 
@@ -361,7 +367,7 @@ class ChatService:
                 refusal_streak=conv.refusal_streak,
                 last_assistant_was_clarify=bool(last is not None and last.intent == "clarify"),
                 system_reply=system_reply,
-                stateless=req.conversation_id is None,
+                stateless=req.stateless,
             )
 
     # ------------------------------------------------------------ execute

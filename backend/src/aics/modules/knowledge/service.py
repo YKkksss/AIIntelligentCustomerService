@@ -428,6 +428,12 @@ class KnowledgeService:
         )
 
     # ------------------------------------------------------------------ 替换
+    async def _fresh(self, doc: Document) -> Document:
+        """返回前重新加载文档：回滚会让实例过期，服务端 `onupdate` 的 `updated_at` 提交后也是过期的，
+        而路由是在会话关闭之后才序列化字段（脱离会话再读就是 `DetachedInstanceError`）。"""
+        await self.session.refresh(doc)
+        return doc
+
     async def replace_file(
         self,
         app_id: UUID,
@@ -455,9 +461,9 @@ class KnowledgeService:
         if digest == doc.content_hash:
             if override:
                 job = await self._apply_override_locked(app, doc, override, created_by)
-                return ReplaceResult(doc, job is None, job)
+                return ReplaceResult(await self._fresh(doc), job is None, job)
             await self.session.rollback()
-            return ReplaceResult(doc, True, None)
+            return ReplaceResult(await self._fresh(doc), True, None)
         other = await self.docs.get_by_hash(app_id, digest)
         if other is not None and other.id != doc.id:
             raise DuplicateDocumentError(details={"document_id": str(other.id)})
@@ -488,7 +494,7 @@ class KnowledgeService:
             await self.storage.delete(key)
             raise
         self._send(INGEST_TASK, [str(doc.id), str(job.id)])
-        return ReplaceResult(doc, False, job)
+        return ReplaceResult(await self._fresh(doc), False, job)
 
     # ------------------------------------------------------------------ 重建
     async def _rebuild_locked(
@@ -547,9 +553,11 @@ class KnowledgeService:
             if changed:
                 doc.chunk_config = new
             await self.session.commit()
+            await self._fresh(doc)
             return None
         job = await self._rebuild_locked(app.id, doc, created_by, override)
         await self.session.commit()
+        await self._fresh(doc)
         self._send(INGEST_TASK, [str(doc.id), str(job.id)])
         return job
 
@@ -626,7 +634,7 @@ class KnowledgeService:
                 await self.store.set_document_tags(app_id, doc.id, clean)
             except Exception:  # noqa: BLE001
                 log.warning("knowledge.tag_sync_failed", document_id=str(doc.id))
-        return doc
+        return await self._fresh(doc)
 
     # ------------------------------------------------------------------ 补充问题（M2.2b）
     async def _live_chunk(self, app_id: UUID, chunk_id: UUID) -> tuple[Chunk, Document]:
@@ -983,6 +991,9 @@ class KnowledgeService:
         if metadata is not None:
             doc.metadata_ = dict(metadata)
         await self.session.commit()
+        # updated_at 由服务端 onupdate 生成，提交后该列是 expired 的；脱离 session 再读会
+        # DetachedInstanceError（PATCH 应答正好要序列化它），所以在会话内刷新一次。
+        await self.session.refresh(doc)
         return doc
 
     # ------------------------------------------------------------------ 查询
