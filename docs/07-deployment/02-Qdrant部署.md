@@ -1,6 +1,6 @@
 # Qdrant（共用 KnowledgeFlow 实例）
 
-> 2026-10-15 起 AICS 不再部署自己的 Qdrant，改为共用 KnowledgeFlow 的实例（ADR-0002 修订）。原 `deploy/server/docker-compose.yml` 已移除；本机开发需要独立 Qdrant 时用 `deploy/dev/docker-compose.yml`（仅开发用）。
+> 2026-10-15 起 AICS 不再部署自己的 Qdrant，改为共用 KnowledgeFlow 的实例（ADR-0002 修订）。原 `deploy/server/docker-compose.yml` 已移除；本机开发需要独立 Qdrant 时用 `docker/compose.yaml`（见[开发环境搭建](../06-development/02-开发环境搭建.md)）。
 
 ## 1. 连接
 | 项 | 值 |
@@ -24,4 +24,4 @@ curl -s -H "api-key: <QDRANT_API_KEY>" http://192.168.110.86:6333/collections | 
 - 备份：只对 AICS 集合做快照（见[备份与恢复](04-备份与恢复.md)）；最可靠的恢复方式是从 PG 重建。
 
 ## 4. 本机开发（可选）
-`docker compose -f deploy/dev/docker-compose.yml up -d` 启动本机 Qdrant（同版本 v1.18.2，API Key 取 `deploy/dev/.env`），`.env` 中 `AICS_QDRANT_URL=http://localhost:6333`。
+`docker\dev-stack.cmd up`（或 `docker compose -f docker/compose.yaml up -d qdrant`）启动本机 Qdrant（同版本 v1.18.2，API Key 取 `docker/.env`，由 `dev-stack` 首次 `init` 生成），`.env` 中 `AICS_QDRANT_URL=http://localhost:6333`。本机开发默认用这一套（PG + Redis + RabbitMQ + Qdrant 四件套），服务器上的共用实例只在服务器复验时使用。

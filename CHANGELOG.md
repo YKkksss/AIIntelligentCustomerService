@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### 开发环境（本机 Docker 依赖服务与集成复验，2026-10-17）
+- 本机 Docker 起一套与服务器同版本的依赖服务：`docker/compose.yaml`（PostgreSQL 16.15 / Redis 8.2 含与服务器一致的 ACL / RabbitMQ 4.3 / Qdrant v1.18.2，端口只绑 `127.0.0.1`，数据在 `docker/volumes/`），`docker/dev-stack.ps1`（`dev-stack.cmd` 封装）提供 init / up / down / status / check / logs / reset / test；`docker\dev-stack.cmd test` 注入 `AICS_TEST_*` 后在本机跑 `pytest -m integration`，**集成套件 190 项全部通过**（此前开发机只能整批反选）。`deploy/dev/` 下只起 Qdrant 的独立 compose 归并进 `docker/`（ADR-0002 与部署文档同步）。
+- 首次真实跑通立刻查出并修复 5 个缺陷：`alembic.ini` 的中文注释让 Alembic 按 locale 解码失败（中文 Windows 下每条集成用例的 `alembic upgrade head` 都报 `UnicodeDecodeError`）；`keyusage.merge_buckets` 只认 `str` 而真实 Redis 返回 `bytes`，`last_used_at` 在生产环境永远不会更新；路由在会话关闭后序列化 ORM 对象触发 `DetachedInstanceError`（新增 `KnowledgeService._fresh()` 统一在会话内刷新）；**M3.3 的无状态判定回归**——「`conversation_id is None` 即无状态」把原生 `/chat` 首轮也当成无状态（关会话 + 跳过记忆写入），导致原生接口多轮记忆整体失效，改为显式 `TurnRequest.stateless`、仅 `/v1` 缺 `X-AICS-Conversation-Id` 时置位；集成套件自身五处问题（Redis ACL 前缀、teardown 顺序、`source_type`、两条无校验力的断言、`reindex` 的作业名）。
+- 门禁：集成 190 passed（本机 Docker 栈）；单元 795 passed / 1 failed（Windows 符号链接特权，环境问题）/ 191 deselected，覆盖率 81%；`ruff check` / `ruff format --check` / `lint-imports`（13 契约）/ `prompts check`（8 个）全绿；真实模型费用 0 元。
+
 ### 文档（M3.4 子步骤计划，2026-10-17）
 - 新增 M3.4 子步骤计划（[开发计划](docs/00-planning/03-开发计划.md)）：① import-linter 合同改造（ADR-0017，`allow_indirect_imports`，对应待解决问题清单 ISSUE-28）；② `modules/handoff` 状态机与坐席接口（条件单行更新 + `409 HANDOFF_STATE_CONFLICT`、人工消息走 `chat.service`）；③ 服务时间与三种超时（`core/schedule.py` 纯函数、`handoff.sweep`、`idle_sweep` 先 handoff 后 lifecycle、留 `events.emit` TODO 给 M3.5）；④ 用例（状态迁移表、并发 accept、sweep 幂等、DST 时区、开放接口清单 5 条）；⑤ 文档收尾。预算 < 0.1 元。
 
