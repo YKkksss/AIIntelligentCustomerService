@@ -86,3 +86,8 @@ Qdrant 只允许 `aics_` 前缀的集合（`AICS_QDRANT_COLLECTION_PREFIX` 默�
   （初始化脚本与 ACL 只在数据目录为空时执行），RabbitMQ 需要删掉 `volumes/rabbitmq` 再起。
 - 真实模型（DeepSeek / 百炼）仍然走外网，需要 `AICS_LLM_API_KEY`、`AICS_EMBED_API_KEY`、
   `AICS_RERANK_API_KEY`；集成测试用假模型，不需要真 Key。
+- 两个脚本的**编码约定**（改了会坏，见待解决问题清单 ISSUE-51）：`dev-stack.cmd` 必须保持
+  **纯 ASCII**——cmd.exe 用 OEM 代码页（中文 Windows 是 GBK）解析 `.cmd`，UTF-8 中文注释会被
+  拆错并当成命令执行；`dev-stack.ps1` 带 **UTF-8 BOM**——本机通常没有 `pwsh`，实际由
+  Windows PowerShell 5.1 执行，无 BOM 时它按 ANSI 读脚本、中文提示会乱码。
+- 本机没有 `pwsh` 时 `.cmd` 自动回退到 `powershell.exe`（5.1），行为一致，只是启动略慢。
