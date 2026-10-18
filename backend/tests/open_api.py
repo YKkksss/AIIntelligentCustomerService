@@ -29,6 +29,23 @@ _SKIP_METHODS = frozenset({"HEAD", "OPTIONS"})
 OPEN_API: list[tuple[str, str, dict[str, Any] | None]] = [
     ("POST", "/api/v1/apps/{app_id}/chat", {"question": "退货怎么退？"}),
     ("GET", "/api/v1/apps/{app_id}/conversations/{conversation_id}/messages", None),
+    ("GET", "/api/v1/apps/{app_id}/conversations/{conversation_id}/handoff", None),
+    (
+        "POST",
+        "/api/v1/apps/{app_id}/conversations/{conversation_id}/handoff/accept",
+        {"agent_id": "a_001"},
+    ),
+    (
+        "POST",
+        "/api/v1/apps/{app_id}/conversations/{conversation_id}/handoff/messages",
+        {"agent_id": "a_001", "content": "您好，我是人工客服"},
+    ),
+    (
+        "POST",
+        "/api/v1/apps/{app_id}/conversations/{conversation_id}/handoff/release",
+        {"agent_id": "a_001"},
+    ),
+    ("GET", "/api/v1/apps/{app_id}/handoffs", None),
     ("GET", "/api/v1/apps/{app_id}/documents", None),
     ("POST", "/api/v1/apps/{app_id}/documents", None),  # multipart：由隔离用例单独构造
     ("POST", "/api/v1/apps/{app_id}/documents/url", {"url": "https://example.com/a.md"}),

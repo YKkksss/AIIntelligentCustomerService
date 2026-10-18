@@ -37,10 +37,12 @@ from uuid import UUID
 
 import structlog
 from sqlalchemy import func
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from aics.core import metrics
 from aics.core.errors import AppError, ConversationNotFoundError
 from aics.db.base import new_id
+from aics.db.models.conversation import Message
 from aics.memory.compactor import CompactParams
 from aics.modules.apps.service import AppConfig, AppService
 from aics.modules.chat.repository import ConversationRepository, MessageRepository
@@ -589,6 +591,13 @@ class ChatService:
                     handoff_status=status,
                     handoff_reason=handoff_reason,
                     handoff_requested_at=func.now(),
+                    # 新一轮转人工：清掉上一轮的坐席与结束信息，坐席平台的队列才是干净的
+                    # （否则重新触发后 GET 会报出上次的坐席，§3.1）。
+                    handoff_agent_id=None,
+                    handoff_agent_name=None,
+                    handoff_accepted_at=None,
+                    handoff_released_at=None,
+                    handoff_end_reason=None,
                 )
             if values:
                 await convs.update(app_id, cid, **values)
@@ -659,6 +668,35 @@ def _ms(t0: float) -> int:
     return int((time.perf_counter() - t0) * 1000)
 
 
+async def append_agent_message(
+    session: AsyncSession,
+    app_id: UUID,
+    conversation_id: UUID,
+    *,
+    role: str,
+    content: str,
+    kind: str = "chat",
+    agent_id: str | None = None,
+    message_id: UUID | None = None,
+) -> Message:
+    """坐席消息与转人工系统提示的统一写入口（M3.4 ②，会话生命周期与转人工 §3.3）。
+
+    `modules.handoff` 不直接碰 `chat.repository`：消息行、`message_count`、`last_message_at`、
+    `last_activity_at`（非 system 才更新）与 `idle_notice_sent_at`（非 system 才清）的联动规则
+    只有 `MessageRepository.append` 一份，绕过它会让空闲扫描把坐席正在处理的会话判成空闲。
+
+    `allow_closed=True`：会话刚被空闲扫描关掉、坐席还要补最后一句时不至于 500。
+    """
+    data = NewMessage(role=role, kind=kind, content=content, agent_id=agent_id)
+    return await MessageRepository(session).append(
+        app_id,
+        conversation_id,
+        data,
+        allow_closed=True,
+        message_id=message_id,
+    )
+
+
 __all__ = [
     "CHANNEL_OF_MODE",
     "ChatService",
@@ -668,6 +706,7 @@ __all__ = [
     "TurnHandle",
     "TurnRequest",
     "TurnResult",
+    "append_agent_message",
     "citation_dict",
     "dispatch_of",
     "profile_of",

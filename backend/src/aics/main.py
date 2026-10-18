@@ -33,6 +33,8 @@ from aics.modules.chat import openai
 from aics.modules.chat.openai_router import router as openai_router
 from aics.modules.chat.router import router as chat_router
 from aics.modules.chat.runtime import ChatRuntime
+from aics.modules.handoff.router import router as handoff_router
+from aics.modules.handoff.runtime import HandoffRuntime
 from aics.modules.knowledge.chunk_search import PgChunkSearch
 from aics.modules.knowledge.router import router as knowledge_router
 from aics.modules.knowledge.runtime import KnowledgeRuntime
@@ -126,6 +128,14 @@ def build_knowledge_runtime(s: Settings) -> KnowledgeRuntime:
     )
 
 
+def build_handoff_runtime(s: Settings) -> HandoffRuntime:
+    """Composition root of `modules.handoff`: 坐席接口只需要会话工厂（M3.4 ②）。
+
+    转人工状态迁移只写 `conversations` / `messages`，模型与向量库都不参与，所以没有别的依赖。
+    """
+    return HandoffRuntime(sessions=get_sessionmaker())
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     s = get_settings()
@@ -146,6 +156,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.chat_runtime = build_chat_runtime(s, redis=redis)
     if getattr(app.state, "knowledge_runtime", None) is None:  # tests may install their own
         app.state.knowledge_runtime = build_knowledge_runtime(s)
+    if getattr(app.state, "handoff_runtime", None) is None:  # tests may install their own
+        app.state.handoff_runtime = build_handoff_runtime(s)
     log.info("app.started", env=s.env, version=__version__)
     yield
     await app.state.chat_runtime.drain()
@@ -223,6 +235,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(chat_router)
     app.include_router(knowledge_router)
+    app.include_router(handoff_router)
     app.include_router(openai_router)
     return app
 

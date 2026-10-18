@@ -65,6 +65,15 @@ class ConflictError(AppError):
     code, status, message = "CONFLICT", 409, "资源状态冲突"
 
 
+class HandoffStateConflictError(ConflictError):
+    """转人工状态迁移被抢先（M3.4 ②）：`details.handoff_status` 是数据库里的当前值。
+
+    条件单行 UPDATE 返回 0 行时抛出——坐席接口（开放接口参考 §5）与队列超时/空闲回收
+    （会话生命周期与转人工 §3.6、§3.8）都用它表示「状态已被别人改掉」。"""
+
+    code, message = "HANDOFF_STATE_CONFLICT", "转人工状态已变更"
+
+
 class FileTooLargeError(AppError):
     """上传超过 `AICS_UPLOAD_MAX_MB`（接口规范 §4：413 `FILE_TOO_LARGE`）。"""
 

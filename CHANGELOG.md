@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+### 新增（M3.4 ② 转人工状态机与坐席接口，2026-10-17）
+- 坐席接口 5 个端点（`modules/handoff/router.py`，`prefix=/api/v1/apps/{app_id}`）：`GET …/conversations/{id}/handoff`（状态查询，接受 `chat` 或 `handoff:write`）、`POST …/handoff/accept`（抢单接入，`pending → accepted`）、`POST …/handoff/messages`（坐席发言，201）、`POST …/handoff/release`（交还 AI）、`GET …/handoffs`（`pending` / `accepted` 队列，`id` 升序游标分页）用 `handoff:write`。
+- 状态迁移全部是**条件单行 UPDATE**（`WHERE app_id=… AND id=… AND handoff_status=…`，交还还限定会话仍 `active`）：受影响 0 行时重读数据库里的当前状态并抛 `409 HANDOFF_STATE_CONFLICT`（`details.handoff_status`），并发抢单因此只有一个成功；会话已关闭 → `409 CONVERSATION_CLOSED`（坐席接口不会自动开新会话）；不是接入的那个坐席发言或交还 → `403 FORBIDDEN`。抢单成功同时清掉上一轮遗留的坐席信息与释放时间戳。
+- `chat.service.append_agent_message(...)` 是坐席消息与系统提示（`handoff_accepted` / `handoff_released`）的唯一写入口：直接调 `chat.repository` 会把「`message_count` / `last_message_at` / `last_activity_at` / 清 `idle_notice_sent_at`」的联动规则抄成第二份，空闲扫描会误判；`accepted_text` / `released_text` 为空时不写系统提示（§3.5 允许 null）。
+- `core/schedule.py::in_service_hours(cfg, now)`：服务时间纯函数（区间左闭右开、不跨零点、按 `zoneinfo` 的本地钟面判定、未配置即 7×24、脏配置按不服务兜底）。放在 `core` 是为了避免 `chat` 与 `handoff` 互相依赖，入参用结构化协议 `WeeklyHours`，`rag.config.ServiceHours` 天然满足它（`core` 不许反向 import `rag`）。
+
+### 测试（M3.4 ②，2026-10-17）
+- 新增 `tests/unit/test_schedule.py`（15 例：左闭右开边界、多时段与午休、时区错位、夏令时 3 月切换、未配置 7×24、脏配置兜底）、`tests/unit/test_handoff_service.py`（18 例：抢单成功/被抢先/已关闭/不存在、坐席发言的「本人 + `accepted`」前置条件、交还的三种冲突、队列列表映射）、`tests/unit/test_handoff_api.py`（34 例：契约字段、`chat` 与 `handoff:write` 的 scope 组合、body 与 query 校验、409 / 403 / 404 映射、游标回传）。
+- `tests/open_api.py` 登记 5 条坐席路由（应用作用域 11 → 16），清单守卫继续在默认套件里拦截「挂了路由没登记」。
+- 本机门禁：`ruff check` / `ruff format --check` / `lint-imports`（13 契约，含新的「handoff 只可依赖 chat、webhooks、apps」）/ `prompts check`（8 个）全绿；`pytest -q` 862 passed（1 例 Windows 符号链接环境失败）、196 deselected；真实模型费用 0 元。
+
+### 文档（M3.4 ②，2026-10-17）
+- [待解决问题清单](docs/00-planning/07-待解决问题清单.md)：新增 ISSUE-53（交还备注只进日志、缺可查询审计，M4.1 接 `AuditSink`）与 ISSUE-52（偏差：`core/schedule.py` 从提交 ③ 提到提交 ②——状态查询响应里的 `in_service_hours` 不能返回恒 `true` 的假值）；更新 ISSUE-04（`HANDOFF_STATE_CONFLICT` 已落地，剩 `TOKEN_EXPIRED` / `ACCOUNT_LOCKED` 留给 M4.1）。
+
 ### 工程（M3.4 ① 依赖合同修订，2026-10-17）
 - import-linter 依赖合同按 [ADR-0017](docs/02-architecture/adr/0017-模块依赖合同修订与横切能力注入.md) 修订：`handoff 只可依赖 chat、webhooks` → `handoff 只可依赖 chat、webhooks、apps`（转人工要读应用的 `handoff_config`），`chat` / `handoff` / `eval` / `feedback` 四条「X 只可依赖…」合同加 `allow_indirect_imports = true`（只约束直接 import），消除「经允许的直接依赖叠加出的间接链路被误判违规」的老问题（待解决问题清单 ISSUE-28）；分层合同与 `rag` / `memory` / `ingest` / `core` 的 forbidden 合同不变，仍检查间接依赖。
 - 门禁：`lint-imports` 13 kept / 0 broken（191 files、945 dependencies）。
