@@ -4,8 +4,25 @@
 
 ## [Unreleased]
 
+### 新增（M3.3 OpenAI 兼容接口，2026-10-17）
+- OpenAI 兼容接口 `modules/chat/openai_router.py`：`GET /v1/models`（返回 Key 所属应用）与 `POST /v1/chat/completions`（阻塞 + `stream=true`），全部走 `ChatService.start_turn(channel="openai")`，不另拼流程；响应为 `chat.completion` + `aics` 扩展字段（`message_id` / `conversation_id` / `previous_conversation_id` / `reply_by` / `handoff_status` / `answer_type` / `handoff` / `intent` / `citations`），流式每 delta 一个 `chat.completion.chunk`、末 chunk 带扩展字段后 `data: [DONE]`，心跳沿用 SSE 注释行。
+- 无状态会话与请求级历史：不带 `X-AICS-Conversation-Id` 时历史只来自请求 `messages`（按应用 `history_token_budget` 裁剪，超预算走请求内临时摘要，15 秒超时、失败退回纯裁剪），新建的会话本轮结束即以 `close_reason=stateless` 关闭（迁移 `0011` 重建 CHECK，`CLOSE_REASONS` 增第 5 个值），不压缩、不产生空闲提醒；带了该头则与原生接口一致，跨应用 `404 conversation_not_found`、`model` 不匹配 `404 model_not_found`。
+- `TurnRequest` 增 `inline_history` 与 `rag_overrides`（`temperature` / `max_tokens` 只收窄到应用配置上限，落在 `chat.service._rag_input`，原生 `/chat` 与 `/v1` 共用一条通道）；`memory/context.py` 的无状态分支触发条件扩为「`conversation_id is None` 或 `inline_history is not None`」，`memory_port` 不再把空列表折叠成 `None`；`main.build_chat_runtime` 接上 `Compactor` 作为临时摘要器（此前未传 `compactor`，`openai_temp_summary=true` 会静默退化成纯裁剪）。
+- `core.security` 新增 `Authenticator.authenticate_key` 与依赖 `require_key_scope`：`/v1` 路径里没有 `app_id`，应用身份由 Key 本身（`Principal.app_id`）与 `model` 字段共同决定。
+- `/v1/*` 的 OpenAI 风格错误体 `{"error":{"message","type","code"}}`：`main.py` 的三个异常处理器按 `request.url.path` 是否以 `/v1/` 开头分流，原生接口行为不变。
+
+### 测试（M3.3，2026-10-17）
+- 新增 `tests/unit/test_openai_api.py`（消息列表解析、`system` 忽略、`n>1` / `tools` 忽略、参数收敛、chunk 序列化、错误体映射）与 `tests/integration/test_openai_sdk_pg.py`（官方 `openai` SDK 经 ASGI 直连，验证阻塞、流式、带 / 不带会话头与错误体解析）；无状态会话与内联历史的单测（裁剪、临时摘要、本轮即关、跳过记忆、`authenticate_key` 不比对 app_id）。
+- `tests/open_api.py` 支持第二条前缀 `/v1/`（应用作用域 11 条 + `/v1` 2 条），清单守卫同时覆盖两条前缀；`test_isolation_pg.py` 补 `/v1` 跨应用语义（别人的会话头、别人的 `model`）。
+- 本机门禁：`ruff check` / `ruff format --check` / `lint-imports`（13 契约）/ `prompts check`（8 个）全绿；`pytest -q` 794 passed（1 例 Windows 符号链接环境失败）、190 deselected，覆盖率 81.38%；真实模型费用 0 元。
+
+### 文档（M3.3，2026-10-17）
+- [M3 测试报告](docs/06-development/10-M3测试报告.md) 增 §10–§13（无状态会话与请求级历史、OpenAI 兼容路由、用例与隔离清单、预算与结论）；[参数默认值与依据](docs/06-development/09-参数默认值与依据.md) 增 M3.3 一节（`messages` / `user` 上限、`model` 身份、参数收敛、无状态历史口径、`stateless` 收尾、心跳、`aics` 字段、SDK dev 依赖）。
+- [实现现状与代码地图](docs/00-handoff/02-实现现状与代码地图.md)（`/v1` 两条路由、迁移 `0011`、core 与 chat 模块行、测试计数 55 / 502 与 29 / 149、已知差距）、[接口规范](docs/04-api/01-接口规范.md)、[开放接口参考](docs/04-api/02-开放接口参考.md) §3 标注已实现、[模块划分](docs/02-architecture/02-模块划分.md)、[数据库设计](docs/03-database/01-数据库设计.md)（`close_reason` 增 `stateless`）同步。
+- [待解决问题清单](docs/00-planning/07-待解决问题清单.md) 清扫：新增 ISSUE-37（无状态关闭失败只记 warning）、ISSUE-38（无状态请求每轮一行会话，M6.1 保留策略要覆盖）、ISSUE-39（Hindsight 记忆工具 401，开发工具链，非产品问题）、ISSUE-40 / 41 / 42（本步三处偏差）；更新 ISSUE-16（阻塞点是服务器凭据，端口实测可达）与 ISSUE-20（未推送提交）；[开发计划](docs/00-planning/03-开发计划.md) M3.3 打 ✅ + 状态块 + 4 项待复验。
+
 ### 文档（M3.3 子步骤计划，2026-10-17）
-- 新增 M3.3 子步骤计划（[开发计划](../docs/00-planning/03-开发计划.md)）：① 无状态会话与请求级历史（迁移 `0011` 放开 `close_reason=stateless`、`TurnRequest.inline_history` / `rag_overrides`、无状态裁剪与临时摘要接线、本轮即关会话、`authenticate_key` + `require_key_scope`）；② OpenAI 兼容路由（`/v1/models`、`/v1/chat/completions` 阻塞与流式、`/v1/*` 专属 OpenAI 风格错误体）；③ 用例与隔离清单（开放接口清单支持第二条前缀、官方 `openai` SDK 集成用例）；④ 文档收尾。预算 0 元（真实模型演示改为服务器复验项）。
+- 新增 M3.3 子步骤计划（[开发计划](docs/00-planning/03-开发计划.md)）：① 无状态会话与请求级历史（迁移 `0011` 放开 `close_reason=stateless`、`TurnRequest.inline_history` / `rag_overrides`、无状态裁剪与临时摘要接线、本轮即关会话、`authenticate_key` + `require_key_scope`）；② OpenAI 兼容路由（`/v1/models`、`/v1/chat/completions` 阻塞与流式、`/v1/*` 专属 OpenAI 风格错误体）；③ 用例与隔离清单（开放接口清单支持第二条前缀、官方 `openai` SDK 集成用例）；④ 文档收尾。预算 0 元（真实模型演示改为服务器复验项）。
 
 ### 新增（M3.2 知识库开放接口，2026-10-17）
 - 知识库开放接口 9 个端点（`modules/knowledge/router.py`，`prefix=/api/v1/apps/{app_id}`）：只读 `GET /documents`（`status` / `q` / `page` / `page_size`）、`GET /documents/{id}`、`GET /documents/{id}/chunks`（仅生效版本）用 `kb:read`；写 `POST /documents`、`POST /documents/url`、`PUT /documents/{id}/file`、`POST /documents/{id}/reindex`、`PATCH /documents/{id}`（标题 / 元数据立即生效）、`DELETE /documents/{id}`（204）用 `kb:write`。上传按 1 MB 分块流式累加、超 `AICS_UPLOAD_MAX_MB` 立即 `413 FILE_TOO_LARGE`（不整体读入内存），扩展名快速拒绝，魔数仍由 `ingest.parsers` 判定。
