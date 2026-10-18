@@ -1,8 +1,9 @@
 """M3.1 ③ 开放接口清单守卫（设计讨论 0009 D22）。
 
-任何一个新增的 `/api/v1/apps/{app_id}/...` 开放接口，如果没登记到 `tests/open_api.py`
-的 `OPEN_API`，这里就会失败；跨应用隔离用例在 `tests/integration/test_isolation_pg.py`，
-两者共用同一张表，所以不会出现“接口加了、隔离用例忘了”的情况。
+任何一个新增的开放接口（`/api/v1/apps/{app_id}/...` 的应用作用域接口，或 `/v1/...` 的
+Key 作用域接口），如果没登记到 `tests/open_api.py` 的 `OPEN_API` / `OPEN_API_V1`，这里就会
+失败；隔离用例在 `tests/integration/test_isolation_pg.py`，两者共用同一张表，所以不会出现
+“接口加了、隔离用例忘了”的情况。守待在默认（非 integration）套件里跑，CI 一定覆盖。
 """
 
 from __future__ import annotations

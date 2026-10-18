@@ -37,6 +37,7 @@ dependencies = [
 dev = [
     { name = "aiosqlite" },
     { name = "import-linter" },
+    { name = "openai" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -76,6 +77,7 @@ requires-dist = [
 dev = [
     { name = "aiosqlite", specifier = ">=0.20" },
     { name = "import-linter", specifier = ">=2.1" },
+    { name = "openai", specifier = ">=1.60" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
     { name = "pytest-cov", specifier = ">=6.0" },

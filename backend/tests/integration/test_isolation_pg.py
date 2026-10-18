@@ -1,18 +1,22 @@
 """M3.1 ③ 跨应用隔离回归集（设计讨论 0009 D22、ADR-0002）。
 
-两层隔离，全部以 404 收口（不泄露“这个应用/会话存在但你没权限”）：
+三层隔离，全部以 404 收口（不泄露“这个应用/会话存在但你没权限”）：
 
 1. **应用级**：A 应用的 Key 访问 B 应用的开放接口 → 认证阶段 404 `APP_NOT_FOUND`；
 2. **资源级**：A 应用自己的 Key，带着 B 应用的资源 id 访问 A 的接口 → 404 `CONVERSATION_NOT_FOUND`
-   / `DOCUMENT_NOT_FOUND`。
+   / `DOCUMENT_NOT_FOUND`；
+3. **Key 作用域**（`/v1/...`，OpenAI 兼容，路径里没有应用 id）：Key 只能以自己的应用身份说话——
+   请求里的 `model` 必须是 Key 所属应用，否则 404 `model_not_found`；`X-AICS-Conversation-Id`
+   指向别的应用的会话 → 404 `conversation_not_found`。
 
-用例由 `tests/open_api.py` 的 `OPEN_API` 驱动，新增开放接口时补一行即可；漏登记会被
+用例由 `tests/open_api.py` 的 `OPEN_API` / `OPEN_API_V1` 驱动，新增开放接口时补一行即可；漏登记会被
 `tests/unit/test_open_api_coverage.py`（默认单测里跑）挡住。最后一条用例是正向对照，
 保证上面的 404 来自隔离而不是接口本身坏了。
 """
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from collections.abc import AsyncIterator
 from typing import Any
@@ -258,3 +262,67 @@ async def test_own_document_can_be_patched_and_deleted(iso: dict[str, Any]) -> N
     r = await iso["client"].get(f"/api/v1/apps/{iso['app_a']}/documents", headers=headers)
     assert r.status_code == 200, r.text
     assert r.json()["total"] == 0
+
+
+# --- 第 3 层：Key 作用域（`/v1/...`，OpenAI 兼容）---------------------------------------------
+
+
+def _v1_body(iso: dict[str, Any], app_id: UUID | None = None) -> dict[str, Any]:
+    model = str(app_id or iso["app_a"])
+    return {"model": model, "messages": [{"role": "user", "content": "退款多久到账？"}]}
+
+
+async def test_v1_models_lists_only_the_key_app(iso: dict[str, Any]) -> None:
+    """`GET /v1/models` 只暴露 Key 所属应用：两个应用各看各的。"""
+    for key, app_id in ((iso["key_a"], iso["app_a"]), (iso["key_b"], iso["app_b"])):
+        r = await iso["client"].get("/v1/models", headers=auth(key))
+        assert r.status_code == 200, r.text
+        assert [m["id"] for m in r.json()["data"]] == [str(app_id)]
+        assert r.json()["data"][0]["owned_by"] == "aics"
+
+
+async def test_v1_key_cannot_speak_as_another_app(iso: dict[str, Any]) -> None:
+    """B 的 Key 指定 A 的 `model` → 404 `model_not_found`。"""
+    r = await iso["client"].post(
+        "/v1/chat/completions", json=_v1_body(iso), headers=auth(iso["key_b"])
+    )
+
+    assert r.status_code == 404, r.text
+    assert r.json()["error"]["code"] == "model_not_found"
+
+
+async def test_v1_key_cannot_continue_another_app_conversation(iso: dict[str, Any]) -> None:
+    """A 的 Key 拿着 B 的会话 id → 404 `conversation_not_found`（Key 只能以自己的身份说话）。"""
+    headers = {**auth(iso["key_a"]), "X-AICS-Conversation-Id": str(iso["conv_b"])}
+
+    r = await iso["client"].post("/v1/chat/completions", json=_v1_body(iso), headers=headers)
+
+    assert r.status_code == 404, r.text
+    assert r.json()["error"]["code"] == "conversation_not_found"
+
+
+async def test_v1_own_key_opens_a_stateless_conversation(iso: dict[str, Any]) -> None:
+    """正向对照：自己的 Key + 自己的 `model` 能说话，无状态请求另开会话（不复用 `conv_a`）。"""
+    r = await iso["client"].post(
+        "/v1/chat/completions", json=_v1_body(iso), headers=auth(iso["key_a"])
+    )
+
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload["object"] == "chat.completion"
+    assert payload["choices"][0]["message"]["role"] == "assistant"
+    conversation_id = UUID(payload["aics"]["conversation_id"])
+    assert conversation_id != iso["conv_a"]
+
+    url = f"/api/v1/apps/{iso['app_a']}/conversations/{conversation_id}/messages"
+    headers = auth(iso["key_a"])
+    # 无状态会话在响应发出之后才关闭（`close_reason=stateless`），这里轮询避免与收尾事务抢跑
+    for _ in range(40):
+        r = await iso["client"].get(url, headers=headers)
+        if r.json()["conversation"]["status"] == "closed":
+            break
+        await asyncio.sleep(0.05)
+
+    assert r.status_code == 200, r.text
+    assert [m["role"] for m in r.json()["items"]] == ["user", "assistant"]
+    assert r.json()["conversation"]["status"] == "closed"

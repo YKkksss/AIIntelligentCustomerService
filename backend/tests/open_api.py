@@ -1,9 +1,15 @@
-"""开放接口清单（M3.1 ③）：跨应用隔离用例与路由守卫共用的单一事实来源。
+"""开放接口清单（M3.1 ③、M3.3 ④）：跨应用隔离用例与路由守卫共用的单一事实来源。
 
-新增一个挂在 `/api/v1/apps/{app_id}/...` 下的开放接口时，必须：
+开放接口分两类，两类都受清单守卫（`tests/unit/test_open_api_coverage.py`）约束：
 
-1. 在本文件的 `OPEN_API` 里补一行（否则 `tests/unit/test_open_api_coverage.py` 会让 CI 失败）；
-2. 在 `tests/integration/test_isolation_pg.py` 里补资源级 404 用例（设计讨论 0009 D22）。
+1. **应用作用域**（`OPEN_API`）：挂在 `/api/v1/apps/{app_id}/...` 下，路径里带应用 id；
+   跨应用由认证阶段的 404 `APP_NOT_FOUND` 收口，资源级再加 404 `CONVERSATION_NOT_FOUND`
+   / `DOCUMENT_NOT_FOUND`；
+2. **Key 作用域**（`OPEN_API_V1`）：`/v1/...`（OpenAI 兼容）路径里没有应用 id，身份来自 API Key，
+   `model` 必须等于 Key 所属应用，否则 404 `model_not_found`。
+
+新增接口时：在这里补一行（否则 CI 失败），并在 `tests/integration/test_isolation_pg.py` 补
+对应的隔离用例（设计讨论 0009 D22）。
 
 `{app_id}`、`{conversation_id}` 与 `{document_id}` 由测试填充；`body` 是请求体模板（GET 为 None）。
 """
@@ -14,7 +20,10 @@ from typing import Any
 
 from fastapi import FastAPI
 
-OPEN_API_PREFIX = "/api/v1/apps/"
+#: 受清单守卫约束的前缀（应用作用域 + Key 作用域）
+OPEN_API_PREFIXES = ("/api/v1/apps/", "/v1/")
+#: 应用作用域前缀（历史引用）
+OPEN_API_PREFIX = OPEN_API_PREFIXES[0]
 _SKIP_METHODS = frozenset({"HEAD", "OPTIONS"})
 
 OPEN_API: list[tuple[str, str, dict[str, Any] | None]] = [
@@ -31,10 +40,16 @@ OPEN_API: list[tuple[str, str, dict[str, Any] | None]] = [
     ("POST", "/api/v1/apps/{app_id}/documents/{document_id}/reindex", None),
 ]
 
+#: Key 作用域接口（OpenAI 兼容）：路径里没有应用 id，隔离语义是「Key 只能以自己的应用身份说话」
+OPEN_API_V1: list[tuple[str, str]] = [
+    ("GET", "/v1/models"),
+    ("POST", "/v1/chat/completions"),
+]
+
 
 def declared_routes() -> set[tuple[str, str]]:
-    """`(method, path)` of every interface registered in OPEN_API."""
-    return {(method, path) for method, path, _ in OPEN_API}
+    """`(method, path)` of every interface registered in this manifest."""
+    return {(method, path) for method, path, _ in OPEN_API} | set(OPEN_API_V1)
 
 
 def open_routes(app: FastAPI) -> set[tuple[str, str]]:
@@ -45,7 +60,7 @@ def open_routes(app: FastAPI) -> set[tuple[str, str]]:
     """
     found: set[tuple[str, str]] = set()
     for path, operations in app.openapi().get("paths", {}).items():
-        if not path.startswith(OPEN_API_PREFIX):
+        if not path.startswith(OPEN_API_PREFIXES):
             continue
         for method in operations:
             if method.upper() not in _SKIP_METHODS:
