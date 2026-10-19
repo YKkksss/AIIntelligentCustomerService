@@ -30,6 +30,8 @@ dependencies = [
     "langchain-core>=0.3",
     "langgraph>=1.0",
     "python-multipart>=0.0.9",
+    # IANA 时区库：Windows 没有系统时区数据，服务时间判定（M3.4 §3.7）必须显式依赖它
+    "tzdata>=2024.1",
 ]
 
 [project.scripts]

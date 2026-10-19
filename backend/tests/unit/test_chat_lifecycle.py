@@ -50,5 +50,9 @@ def test_sweep_result_dict() -> None:
 
 def test_idle_closed_marker_may_be_empty_but_notice_may_not() -> None:
     assert NewMessage(role="system", kind="idle_closed", content="").content == ""
+    # §3.8：接入后无消息直接关会话也留一个空内容的时间线标记（M3.4 ③ 起允许）
+    assert NewMessage(role="system", kind="handoff_idle_closed", content="").content == ""
     with pytest.raises(ValidationError):
         NewMessage(role="system", kind="idle_notice", content=" ")
+    with pytest.raises(ValidationError):
+        NewMessage(role="system", kind="handoff_offline", content=" ")

@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -15,9 +16,10 @@ from aics.core.errors import AppError
 from aics.memory.service import MemoryService
 from aics.memory.store import InMemoryConversationStore
 from aics.memory.units import in_memory_units
-from aics.modules.apps.service import AppService
+from aics.modules.apps.service import AppConfig, AppService
 from aics.modules.chat import service as chat_service
 from aics.modules.chat.runtime import ChatRuntime
+from aics.modules.chat.schemas import NewMessage
 from aics.modules.chat.service import (
     ChatService,
     ErrorEvent,
@@ -48,9 +50,14 @@ def runtime(llm: FakeLLMProvider) -> ChatRuntime:
 
 
 def prepared(
-    question: str, dispatch: str = "rag", *, req: dict[str, Any] | None = None, **kw: Any
+    question: str,
+    dispatch: str = "rag",
+    *,
+    req: dict[str, Any] | None = None,
+    config: AppConfig | None = None,
+    **kw: Any,
 ) -> _Prepared:
-    cfg = AppService(None).build_config(  # type: ignore[arg-type]
+    cfg = config or AppService(None).build_config(  # type: ignore[arg-type]
         rag_config=None, handoff_config=None, session_config=None, chunk_config=None
     )
     return _Prepared(
@@ -75,9 +82,22 @@ def prepared(
 class Recorder:
     def __init__(self) -> None:
         self.messages: list[Any] = []
+        self.offline: list[bool] = []
 
-    async def __call__(self, p: Any, msg: Any, *, intent: Any, handoff_reason: Any) -> str:
+    async def __call__(
+        self,
+        p: Any,
+        msg: Any,
+        *,
+        intent: Any,
+        handoff_reason: Any,
+        answer_type: Any = None,
+        offline: bool = False,
+    ) -> str:
         self.messages.append(msg)
+        self.offline.append(offline)
+        if offline:  # §3.7 非服务时间：不进队列，直接 released
+            return "released"
         return "pending" if msg.handoff else p.handoff_status
 
 
@@ -258,3 +278,110 @@ def test_inline_history_reaches_the_rag_input() -> None:
     hist = [ChatTurn(role="user", content="上一句"), ChatTurn(role="assistant", content="上一答")]
     p = prepared("退货要几天？", req={"inline_history": hist})
     assert svc._rag_input(p).inline_history == hist
+
+
+# ---------------------------------------------------------------- §3.7 非服务时间（M3.4 ③）
+async def test_handoff_outside_service_hours_goes_offline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """服务时间外触发转人工：不进队列、状态直接 released，本轮回复换成留言话术（reply_by=system）。"""
+    cfg = AppService(None).build_config(  # type: ignore[arg-type]
+        rag_config=None,
+        handoff_config={
+            "service_hours": {"timezone": "Asia/Shanghai", "weekly": {"mon": [["08:00", "09:00"]]}}
+        },
+        session_config=None,
+        chunk_config=None,
+    )
+    seen: list[Any] = []
+
+    def outside(hours: Any, now: Any) -> bool:
+        seen.append(hours)
+        return False
+
+    monkeypatch.setattr(chat_service, "in_service_hours", outside)
+    svc, rec = service(FakeLLMProvider(responder), monkeypatch)
+    res = await TurnHandle(svc, prepared("我要人工", config=cfg)).result()
+    assert seen and seen[0] is cfg.handoff.service_hours  # 判定用的是应用配置里的服务时间
+    assert rec.offline == [True]
+    (msg,) = rec.messages
+    assert (msg.role, msg.kind) == ("system", "handoff_offline")
+    assert msg.content == cfg.handoff.offline_text
+    assert res.reply_by == "system" and res.answer_type is None
+    assert res.answer == cfg.handoff.offline_text
+    assert res.handoff and res.handoff_status == "released"
+    assert res.handoff_reason == "keyword"  # 触发原因不变，结束原因才是 offline
+
+
+@pytest.mark.parametrize(
+    "offline,expected_status,expected_end",
+    [(True, "released", "offline"), (False, "pending", None)],
+)
+async def test_write_assistant_marks_the_handoff_state(
+    offline: bool, expected_status: str, expected_end: str | None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§3.7 的落库值：非服务时间与正常转人工都一眼可辨，且清掉上一轮坐席信息。"""
+    svc = ChatService(runtime(FakeLLMProvider(responder)))
+    updates: list[dict[str, Any]] = []
+
+    class Conv:
+        refusal_streak = 0
+        handoff_status = "released"
+
+    class Sessions:
+        def __init__(self) -> None:
+            self.commits = 0
+
+        def __call__(self) -> Sessions:
+            return self
+
+        async def __aenter__(self) -> Any:
+            return self
+
+        async def __aexit__(self, *exc: Any) -> bool:
+            return False
+
+        async def commit(self) -> None:
+            self.commits += 1
+
+    class Msgs:
+        def __init__(self, session: Any) -> None:
+            pass
+
+        async def append(self, *a: Any, **k: Any) -> Any:
+            return SimpleNamespace(id=uuid.uuid4())
+
+    class Convs:
+        def __init__(self, session: Any) -> None:
+            pass
+
+        async def get_or_404(self, app_id: Any, cid: Any) -> Any:
+            return Conv()
+
+        async def update(self, app_id: Any, cid: Any, **values: Any) -> None:
+            updates.append(values)
+
+    monkeypatch.setattr(chat_service, "MessageRepository", Msgs)
+    monkeypatch.setattr(chat_service, "ConversationRepository", Convs)
+    sessions = Sessions()
+    monkeypatch.setattr(svc.runtime, "sessions", sessions)
+    p = prepared("我要人工")
+    msg = (
+        NewMessage(role="system", kind="handoff_offline", content="现在不是服务时间")
+        if offline
+        else NewMessage(
+            role="assistant", content="已为您转接人工客服", answer_type="handoff", handoff=True
+        )
+    )
+    status = await svc._write_assistant(
+        p, msg, intent="handoff", handoff_reason="keyword", answer_type="handoff", offline=offline
+    )
+    assert status == expected_status and sessions.commits == 1
+    (values,) = updates
+    assert values["handoff_status"] == expected_status
+    assert values["handoff_reason"] == "keyword"
+    assert values["handoff_end_reason"] == expected_end
+    assert values["handoff_agent_id"] is None and values["handoff_accepted_at"] is None
+    if offline:
+        assert values["needs_callback"] is True and values["callback_reason"] == "offline"
+        assert "callback_requested_at" in values and "handoff_released_at" in values
+    else:
+        assert "needs_callback" not in values and "handoff_released_at" in values

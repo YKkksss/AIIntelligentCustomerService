@@ -32,6 +32,7 @@ import asyncio
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
 
@@ -41,6 +42,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from aics.core import metrics
 from aics.core.errors import AppError, ConversationNotFoundError
+from aics.core.schedule import in_service_hours
 from aics.db.base import new_id
 from aics.db.models.conversation import Message
 from aics.memory.compactor import CompactParams
@@ -478,31 +480,73 @@ class ChatService:
         citations = [citation_dict(c) for c in res.citations]
         intent = res.intent.model_dump()
         handoff = res.answer_type == "handoff"
-        msg = NewMessage(
-            role="assistant",
-            content=res.answer,
-            answer_type=res.answer_type,
-            intent=res.intent.name,
-            intent_confidence=res.intent.confidence,
-            intent_source=res.intent.source,
-            slots=dict(res.slots) or None,
-            rewritten_query=res.rewritten_query,
-            citations=citations,
-            retrieval_trace={**res.trace, "timings": res.timings, "usage": res.usage.model_dump()},
-            decision_reason=res.decision_reason,
-            handoff=handoff,
-            prompt_tokens=res.usage.prompt_tokens,
-            completion_tokens=res.usage.completion_tokens,
-            latency_ms=latency,
-            first_token_ms=first_token_ms,
-            llm_model=res.llm_model or None,
-            prompt_version=res.prompt_version or None,
-            degraded=list(res.degraded),
-            config_version=p.config_version,
+        # §3.7 非服务时间：只在触发的那一刻判定，判定为不在服务时间就不进队列 —— 本轮回复换成
+        # `system/handoff_offline` 留言话术（`reply_by=system`、`answer_type=null`、`handoff=true`），
+        # 状态直接 `released`（`handoff_end_reason=offline`）并置待回访。
+        offline = handoff and not in_service_hours(
+            p.config.handoff.service_hours, datetime.now(UTC)
         )
+        if offline:
+            msg = NewMessage(
+                role="system",
+                kind="handoff_offline",
+                content=p.config.handoff.offline_text,
+                config_version=p.config_version,
+            )
+        else:
+            msg = NewMessage(
+                role="assistant",
+                content=res.answer,
+                answer_type=res.answer_type,
+                intent=res.intent.name,
+                intent_confidence=res.intent.confidence,
+                intent_source=res.intent.source,
+                slots=dict(res.slots) or None,
+                rewritten_query=res.rewritten_query,
+                citations=citations,
+                retrieval_trace={
+                    **res.trace,
+                    "timings": res.timings,
+                    "usage": res.usage.model_dump(),
+                },
+                decision_reason=res.decision_reason,
+                handoff=handoff,
+                prompt_tokens=res.usage.prompt_tokens,
+                completion_tokens=res.usage.completion_tokens,
+                latency_ms=latency,
+                first_token_ms=first_token_ms,
+                llm_model=res.llm_model or None,
+                prompt_version=res.prompt_version or None,
+                degraded=list(res.degraded),
+                config_version=p.config_version,
+            )
         status = await self._write_assistant(
-            p, msg, intent=res.intent.name, handoff_reason=res.handoff_reason
+            p,
+            msg,
+            intent=res.intent.name,
+            handoff_reason=res.handoff_reason,
+            answer_type=res.answer_type,
+            offline=offline,
         )
+        if offline:
+            return TurnResult(
+                conversation_id=p.conversation_id,
+                previous_conversation_id=p.previous_conversation_id,
+                message_id=p.reply_id,
+                user_message_id=p.user_message_id,
+                reply_by="system",
+                handoff_status=status,
+                answer=msg.content,
+                answer_type=None,
+                handoff=True,
+                handoff_reason=res.handoff_reason,
+                intent=intent,
+                prompt_tokens=res.usage.prompt_tokens,
+                completion_tokens=res.usage.completion_tokens,
+                latency_ms=latency,
+                first_token_ms=first_token_ms,
+                degraded=list(res.degraded),
+            )
         return TurnResult(
             conversation_id=p.conversation_id,
             previous_conversation_id=p.previous_conversation_id,
@@ -556,9 +600,23 @@ class ChatService:
         log.warning("chat.turn_failed", conversation_id=str(p.conversation_id), code=err.code)
 
     async def _write_assistant(
-        self, p: _Prepared, msg: NewMessage, *, intent: str | None, handoff_reason: str | None
+        self,
+        p: _Prepared,
+        msg: NewMessage,
+        *,
+        intent: str | None,
+        handoff_reason: str | None,
+        answer_type: str | None = None,
+        offline: bool = False,
     ) -> str:
-        """Assistant message + conversation state in one transaction; returns handoff_status."""
+        """Reply message + conversation state in one transaction; returns handoff_status.
+
+        `answer_type` / `intent` feed `next_refusal_streak` even when the reply itself carries no
+        answer_type (the `system/handoff_offline` message of §3.7).
+
+        `offline=True` is the §3.7 path: the turn triggered a handoff outside service hours, so
+        the conversation does **not** enter `pending` — it goes straight to `released` with
+        `handoff_end_reason='offline'` and the 待回访 marker."""
         app_id, cid = p.req.app_id, p.conversation_id
         async with self.runtime.sessions() as s:
             msgs = MessageRepository(s)
@@ -578,14 +636,31 @@ class ChatService:
             streak = next_refusal_streak(
                 conv.refusal_streak,
                 intent=intent or "",
-                answer_type=msg.answer_type or "",
+                answer_type=answer_type or msg.answer_type or "",
                 interrupted=msg.interrupted,
             )
             if streak != conv.refusal_streak:
                 values["refusal_streak"] = streak
             status = conv.handoff_status
-            if msg.handoff and not msg.interrupted and status in ("none", "released"):
-                # §3.1: none / released → pending (service hours / webhooks: M3.4 / M3.5).
+            if offline and not msg.interrupted and status in ("none", "released"):
+                # §3.7：不排队。`handoff_requested_at` 照常记录（后台按它看待回访时间）。
+                status = "released"
+                values.update(
+                    handoff_status=status,
+                    handoff_reason=handoff_reason,
+                    handoff_requested_at=func.now(),
+                    handoff_released_at=func.now(),
+                    handoff_end_reason="offline",
+                    needs_callback=True,
+                    callback_reason="offline",
+                    callback_requested_at=func.now(),
+                    # 没进过队列，上一轮的坐席信息一律清掉（§3.1）。
+                    handoff_agent_id=None,
+                    handoff_agent_name=None,
+                    handoff_accepted_at=None,
+                )
+            elif msg.handoff and not msg.interrupted and status in ("none", "released"):
+                # §3.1: none / released → pending (webhooks: M3.5).
                 status = "pending"
                 values.update(
                     handoff_status=status,

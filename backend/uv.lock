@@ -29,6 +29,7 @@ dependencies = [
     { name = "structlog" },
     { name = "tiktoken" },
     { name = "trafilatura" },
+    { name = "tzdata" },
     { name = "uuid6" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -69,6 +70,7 @@ requires-dist = [
     { name = "structlog", specifier = ">=24.4" },
     { name = "tiktoken", specifier = ">=0.8" },
     { name = "trafilatura", specifier = ">=1.12" },
+    { name = "tzdata", specifier = ">=2024.1" },
     { name = "uuid6", specifier = ">=2024.7.10" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
 ]

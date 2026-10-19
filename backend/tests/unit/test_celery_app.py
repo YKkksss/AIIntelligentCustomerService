@@ -60,24 +60,33 @@ def test_idle_sweep_task_routed_and_scheduled_every_30s() -> None:
     assert 0 < entry["options"]["expires"] < entry["schedule"]
 
 
-def test_idle_sweep_task_and_cli_call_the_job(monkeypatch: object, capsys: object) -> None:
+def test_idle_sweep_task_and_cli_call_the_jobs(monkeypatch: object, capsys: object) -> None:
     import pytest
 
     from aics.cli import main
     from aics.modules.chat import lifecycle
+    from aics.modules.handoff import sweep
     from aics.tasks import maintenance
 
-    out = {"apps": 1, "noticed": 2, "closed": 3, "skipped_apps": 0}
+    lifecycle_out = {"apps": 1, "noticed": 2, "closed": 3, "skipped_apps": 0}
+    handoff_out = {"apps": 1, "queue_timeouts": 4, "accepted_idle_closed": 0, "skipped_apps": 0}
 
-    async def fake_job(settings: object = None) -> dict:
-        return out
+    async def fake_lifecycle(settings: object = None) -> dict:
+        return lifecycle_out
+
+    async def fake_handoff(settings: object = None) -> dict:
+        return handoff_out
 
     mp: pytest.MonkeyPatch = monkeypatch  # type: ignore[assignment]
-    mp.setattr(maintenance, "run_idle_sweep_job", fake_job)
-    mp.setattr(lifecycle, "run_idle_sweep_job", fake_job)
-    assert maintenance.idle_sweep() == out
+    mp.setattr(maintenance, "run_idle_sweep_job", fake_lifecycle)
+    mp.setattr(maintenance, "run_handoff_sweep_job", fake_handoff)
+    mp.setattr(lifecycle, "run_idle_sweep_job", fake_lifecycle)
+    mp.setattr(sweep, "run_handoff_sweep_job", fake_handoff)
+    # §3.10 顺序：转人工超时先跑，再跑空闲提醒与关闭
+    assert maintenance.idle_sweep() == {"handoff": handoff_out, "lifecycle": lifecycle_out}
     assert main(["sweep-idle"]) == 0
-    assert '"closed": 3' in capsys.readouterr().out  # type: ignore[attr-defined]
+    out = capsys.readouterr().out  # type: ignore[attr-defined]
+    assert '"closed": 3' in out and '"queue_timeouts": 4' in out
 
 
 def test_key_usage_flush_task_routed_and_scheduled_every_60s() -> None:

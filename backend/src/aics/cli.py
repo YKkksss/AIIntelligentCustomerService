@@ -214,8 +214,17 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_apikey(args))
     if args.cmd == "sweep-idle":
         from aics.modules.chat.lifecycle import run_idle_sweep_job
+        from aics.modules.handoff.sweep import run_handoff_sweep_job
 
-        print(json.dumps(asyncio.run(run_idle_sweep_job())))
+        # 与 beat 的 idle_sweep 同序（会话生命周期与转人工 §3.10）：转人工超时在前
+        print(
+            json.dumps(
+                {
+                    "handoff": asyncio.run(run_handoff_sweep_job()),
+                    "lifecycle": asyncio.run(run_idle_sweep_job()),
+                }
+            )
+        )
         return 0
     print(f"{args.cmd}: 尚未实现（{PLANNED[args.cmd]}）", file=sys.stderr)
     return 2

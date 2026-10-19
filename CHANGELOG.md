@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+### 新增（M3.4 ③ 服务时间与两种超时，2026-10-17）
+- 转人工超时扫描 `modules/handoff/sweep.py`：`sweep(sessions, *, now=None, batch=…)` 逐应用先读 `handoff_config`（脏配置回落默认值并计入 `skipped_apps`），再按[会话生命周期与转人工](docs/02-architecture/09-会话生命周期与转人工.md) §3.6 / §3.8 做两种超时——**排队超时**（`pending` 且 `handoff_requested_at ≤ now - handoff_queue_timeout_minutes` → `released`、`handoff_end_reason=queue_timeout`、置待回访、写 `system/handoff_queue_timeout`）与**接入后无消息**（`accepted` 且 `last_activity_at ≤ now - handoff_accepted_idle_minutes` → `released`、`accepted_idle`，会话 `closed` + `close_reason=handoff_idle`，写空内容 `system/handoff_idle_closed`）。两者都是条件单行 UPDATE 并比对读到的 `handoff_requested_at` / `last_activity_at`：影响 0 行说明坐席或用户刚动过，本轮跳过——幂等、可并发、重复跑不会误杀；时钟优先用入参 `now`，缺省取数据库时钟。
+- `tasks/maintenance.py::idle_sweep`（beat 每 30 s）改为**先 handoff 后 lifecycle**（§3.10），返回 `{"handoff": …, "lifecycle": …}`（两个 job 各自 `asyncio.run` + NullPool 引擎，沿用既有写法）；CLI 增 `aics-cli sweep-handoff`。
+- 非服务时间（§3.7）在 `chat.service` 落库时判定：触发转人工的那一刻用 `core.schedule.in_service_hours` 判当前是否在服务时间内，不在就**不进队列**——会话直接 `released`、`handoff_end_reason=offline`、置 `needs_callback`（`callback_reason=offline`）、清掉上一轮坐席信息，本轮回复换成 `system/handoff_offline` 的留言话术（`reply_by=system`、`answer_type=null`）；服务时间取应用的 `handoff_config.service_hours`，未配置即 7×24。
+- `modules/chat/schemas.py`：空内容白名单加入 `handoff_idle_closed`（§3.8 的时间线标记本就是空内容，不是漏写）。
+- 依赖：显式声明 `tzdata`（Windows 没有系统时区库，`ZoneInfo("Asia/Shanghai")` 靠它；服务器 Linux 上无副作用）。
+
+### 测试（M3.4 ③，2026-10-17）
+- 新增 `tests/unit/test_handoff_sweep.py`（10 例：超时窗口取的是应用配置、条件更新比对的正是刚读到的值、被抢先或读后被动过就什么都不写、接入空闲同时关会话并留空标记、排队超时先于接入空闲、缺应用行进 `skipped_apps`、单个应用出错不影响其它应用、缺省走数据库时钟）。
+- `tests/unit/test_chat_turn_flow.py`：补服务时间外触发转人工的整轮路径（判定入参、`system/handoff_offline`、`reply_by=system`）与 `_write_assistant` 的落库值（`released` / `offline` / `needs_callback` 对比 `pending` 分支）；`tests/unit/test_chat_lifecycle.py` 补空标记白名单两例。
+- 本机门禁：`ruff check` / `ruff format --check`（277 文件）/ `lint-imports`（13 契约）/ `prompts check`（8 个）全绿；`pytest -q` 875 passed（1 例 Windows 符号链接环境失败）、196 deselected，覆盖率 81.94%；本机 Docker 集成套件 `docker\dev-stack.cmd test` **195 项全部通过**（6 分 16 秒，提交 ② 时是 190 项）；真实模型费用 0 元。
+
+### 文档（M3.4 ③，2026-10-17）
+- [待解决问题清单](docs/00-planning/07-待解决问题清单.md)：新增 ISSUE-54（待回访的六个 `callback_*` 列从本步起被写入，但列表接口与「标记已回访」在 M4.5 才有——标记进去暂时查不出来）与 ISSUE-55（偏差：扫描落在新模块 `modules/handoff/sweep.py`，而不是计划里的 `handoff.service.sweep()`）。
+
 ### 新增（M3.4 ② 转人工状态机与坐席接口，2026-10-17）
 - 坐席接口 5 个端点（`modules/handoff/router.py`，`prefix=/api/v1/apps/{app_id}`）：`GET …/conversations/{id}/handoff`（状态查询，接受 `chat` 或 `handoff:write`）、`POST …/handoff/accept`（抢单接入，`pending → accepted`）、`POST …/handoff/messages`（坐席发言，201）、`POST …/handoff/release`（交还 AI）、`GET …/handoffs`（`pending` / `accepted` 队列，`id` 升序游标分页）用 `handoff:write`。
 - 状态迁移全部是**条件单行 UPDATE**（`WHERE app_id=… AND id=… AND handoff_status=…`，交还还限定会话仍 `active`）：受影响 0 行时重读数据库里的当前状态并抛 `409 HANDOFF_STATE_CONFLICT`（`details.handoff_status`），并发抢单因此只有一个成功；会话已关闭 → `409 CONVERSATION_CLOSED`（坐席接口不会自动开新会话）；不是接入的那个坐席发言或交还 → `403 FORBIDDEN`。抢单成功同时清掉上一轮遗留的坐席信息与释放时间戳。

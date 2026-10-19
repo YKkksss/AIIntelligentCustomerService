@@ -106,3 +106,114 @@ class HandoffRepository(AppScopedRepository[Conversation]):
             stmt = stmt.where(Conversation.id > after)
         rows = list((await self.session.execute(stmt)).scalars())
         return rows[:limit], len(rows) > limit
+
+    # ------------------------------------------------- 超时扫描（§3.6 / §3.8 / §3.10）
+    async def handoff_app_ids_all_apps(self) -> list[UUID]:
+        """有进行中转人工会话的应用（`idle_sweep` 的入口；走 `ix_conversations_app_handoff`）。"""
+        stmt = (
+            sa.select(Conversation.app_id)
+            .where(
+                Conversation.status == "active",
+                Conversation.handoff_status.in_(OPEN_STATUSES),
+            )
+            .distinct()
+        )
+        return list((await self.session.execute(stmt)).scalars())
+
+    async def pending_due(
+        self, app_id: UUID, *, before: datetime, limit: int
+    ) -> list[tuple[UUID, datetime]]:
+        """排队超时的候选：`pending` 且 `handoff_requested_at ≤ before`。
+
+        返回 `(id, handoff_requested_at)`——条件更新要拿这个值做比对，防止「读完之后被接入」
+        （§3.6 第 1 步）。"""
+        stmt = (
+            sa.select(Conversation.id, Conversation.handoff_requested_at)
+            .where(
+                Conversation.app_id == app_id,
+                Conversation.status == "active",
+                Conversation.handoff_status == "pending",
+                Conversation.handoff_requested_at.is_not(None),
+                Conversation.handoff_requested_at <= before,
+            )
+            .order_by(Conversation.handoff_requested_at)
+            .limit(limit)
+        )
+        return [(row[0], row[1]) for row in (await self.session.execute(stmt)).all()]
+
+    async def accepted_due(
+        self, app_id: UUID, *, before: datetime, limit: int
+    ) -> list[tuple[UUID, datetime]]:
+        """接入后无消息超时的候选：`accepted` 且 `last_activity_at ≤ before`（§3.8）。
+
+        坐席消息经 `chat.service.append_agent_message` 写入，与 user 消息一样会推高
+        `last_activity_at`，所以这里看的是「最后一次有人说话」。"""
+        stmt = (
+            sa.select(Conversation.id, Conversation.last_activity_at)
+            .where(
+                Conversation.app_id == app_id,
+                Conversation.status == "active",
+                Conversation.handoff_status == "accepted",
+                Conversation.last_activity_at <= before,
+            )
+            .order_by(Conversation.last_activity_at)
+            .limit(limit)
+        )
+        return [(row[0], row[1]) for row in (await self.session.execute(stmt)).all()]
+
+    async def queue_timeout(
+        self,
+        app_id: UUID,
+        conversation_id: UUID,
+        *,
+        seen_requested_at: datetime,
+        at: datetime,
+    ) -> int:
+        """`pending → released`（`queue_timeout`）+ 待回访 + 恢复空闲计时（§3.6）。"""
+        stmt = (
+            sa.update(Conversation)
+            .where(*self._where_id(app_id, conversation_id))
+            .where(
+                Conversation.status == "active",
+                Conversation.handoff_status == "pending",
+                Conversation.handoff_requested_at == seen_requested_at,
+            )
+            .values(
+                handoff_status="released",
+                handoff_end_reason="queue_timeout",
+                handoff_released_at=at,
+                last_activity_at=at,
+                needs_callback=True,
+                callback_reason="queue_timeout",
+                callback_requested_at=at,
+            )
+        )
+        return int((await self.session.execute(stmt)).rowcount)
+
+    async def close_accepted_idle(
+        self,
+        app_id: UUID,
+        conversation_id: UUID,
+        *,
+        seen_activity: datetime,
+        at: datetime,
+    ) -> int:
+        """`accepted → released`（`accepted_idle`）并直接关会话（§3.8）。"""
+        stmt = (
+            sa.update(Conversation)
+            .where(*self._where_id(app_id, conversation_id))
+            .where(
+                Conversation.status == "active",
+                Conversation.handoff_status == "accepted",
+                Conversation.last_activity_at == seen_activity,
+            )
+            .values(
+                handoff_status="released",
+                handoff_end_reason="accepted_idle",
+                handoff_released_at=at,
+                status="closed",
+                close_reason="handoff_idle",
+                closed_at=at,
+            )
+        )
+        return int((await self.session.execute(stmt)).rowcount)
