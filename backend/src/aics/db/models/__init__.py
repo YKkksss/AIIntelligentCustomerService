@@ -2,6 +2,7 @@
 
 from aics.db.models.apikey import ApiKey
 from aics.db.models.app import App, UserAppRole
+from aics.db.models.audit import AuditLog
 from aics.db.models.conversation import Conversation, Message, SystemSetting
 from aics.db.models.event import ConversationEvent, WebhookDelivery
 from aics.db.models.fact import ConversationFact, ConversationFactHistory
@@ -13,6 +14,7 @@ from aics.db.models.user import Role, User
 __all__ = [
     "ApiKey",
     "App",
+    "AuditLog",
     "Chunk",
     "ChunkParent",
     "ChunkQuestion",

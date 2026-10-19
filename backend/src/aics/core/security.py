@@ -14,7 +14,7 @@ from uuid import UUID
 
 from fastapi import Request
 
-from aics.core.errors import AppError
+from aics.core.errors import AppError, ForbiddenError
 from aics.core.netguard import IPAddress
 
 
@@ -105,5 +105,73 @@ def require_key_scope(*any_scope: str) -> Callable[[Request], Awaitable[Principa
         )
         request.state.principal = principal
         return principal
+
+    return dependency
+
+
+# --------------------------------------------------------------------------- 管理后台（M4.1）
+
+
+@dataclass(frozen=True)
+class AuthedUser:
+    """A logged-in back-office user (JWT), independent of the open-API `Principal`."""
+
+    id: UUID
+    email: str
+    display_name: str
+    is_super_admin: bool = False
+    must_change_password: bool = False
+
+
+class Authorizer(Protocol):
+    """Back-office authentication + RBAC; implemented by `modules.auth` (ADR-0017)."""
+
+    async def authenticate(self, authorization: str | None) -> AuthedUser:
+        """Decode the bearer access token and load the user.
+
+        Raises AppError: 401 UNAUTHENTICATED (missing/malformed token, unknown user),
+        401 TOKEN_EXPIRED (the front end refreshes once), 423 ACCOUNT_LOCKED."""
+        ...
+
+    async def authorize(self, user: AuthedUser, *, app_id: UUID | None, permission: str) -> None:
+        """Check one dotted permission; raises 403 FORBIDDEN with `details.permission`."""
+        ...
+
+
+def _authorizer(request: Request) -> Authorizer:
+    authorizer: Authorizer | None = getattr(request.app.state, "authorizer", None)
+    if authorizer is None:  # pragma: no cover - wiring error; never serve unauthenticated
+        raise AppError(message="鉴权未配置")
+    return authorizer
+
+
+def require_user() -> Callable[[Request], Awaitable[AuthedUser]]:
+    """Dependency for `/auth/me` 与 `/auth/password`（不改密也能读自己、改密是出口）。"""
+
+    async def dependency(request: Request) -> AuthedUser:
+        user = await _authorizer(request).authenticate(request.headers.get("authorization"))
+        request.state.user = user
+        return user
+
+    return dependency
+
+
+def require_perm(permission: str) -> Callable[[Request], Awaitable[AuthedUser]]:
+    """Dependency for every other `/api/v1/admin/*` route.
+
+    The target app is the route's `app_id` path parameter when present; platform-level routes
+    (`/users`, `/system`, `/audit`) pass `app_id=None` and rely on the permission table.
+    """
+
+    async def dependency(request: Request) -> AuthedUser:
+        authorizer = _authorizer(request)
+        user = await authorizer.authenticate(request.headers.get("authorization"))
+        if user.must_change_password:
+            raise ForbiddenError(details={"reason": "must_change_password"})
+        raw_app_id = request.path_params.get("app_id")
+        app_id = UUID(str(raw_app_id)) if raw_app_id else None
+        await authorizer.authorize(user, app_id=app_id, permission=permission)
+        request.state.user = user
+        return user
 
     return dependency

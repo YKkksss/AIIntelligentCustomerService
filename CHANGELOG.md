@@ -4,6 +4,23 @@
 
 ## [Unreleased]
 
+### 新增（M4.1 ② 鉴权底座，2026-10-19）
+- **`modules/auth`** 从空壳变成可用的鉴权模块：`passwords.py`（argon2id，`time_cost=3 / memory_cost=64 MiB`）、`tokens.py`（PyJWT HS256，access 30 分钟 / refresh 7 天，claims 为 `sub/tv/typ/jti/iat/exp`）、`repository.py`、`permissions.py`（25 个点分权限与 `super_admin/app_admin/viewer` 三角色）、`schemas.py`、`service.py`、`authorizer.py`、`runtime.py`、`admin_router.py`（`/api/v1/admin/auth/login|refresh|logout|me|password`）。
+- **登录安全**：同一邮箱连续失败 5 次锁 15 分钟（423 `ACCOUNT_LOCKED` 带 `Retry-After`）、按 IP 每分钟 10 次（429）；未知邮箱、密码错误、账号禁用一律同一句「邮箱或密码不正确」，不暴露账号是否存在；成功登录按需 rehash、清除失败计数。
+- **刷新轮换与复用检测**：refresh 一次性使用，Redis 里存 `{prefix}auth:refresh:{jti}`；已用过的 refresh 再次出现即视为泄露，`token_version + 1` 踢掉全部设备并记 `auth.refresh_reused`。改密同样递增 `token_version` 并返回新的一对令牌；两处都会顺手删掉 authorizer 的 `auth:who:{user_id}` 缓存（否则被撤销的 access 还能在缓存窗口内继续用 60 秒——集成用例抓到的真实缺陷）。
+- **权限**：`core/security.py` 新增 `AuthedUser` 与 `Authorizer` 端口、`require_user()` 与 `require_perm(permission)` 依赖（从路径取 `app_id`，super_admin 全放行，其余查 `user_app_roles → roles.permissions`，缓存 60 秒）；`must_change_password` 的账号只放行改密。
+- **审计端口**：`core/audit.py` 提供 `AuditEntry` / `AuditSink` / `redact()` / `diff()`（密码、密钥、令牌一律 `***`），登录/失败/复用/改密先写进会话、随业务事务一起提交；PG 落库留给 ③ 的 `PgAuditSink`。
+- **限流下沉**：`core/ratelimit.py` 抽出 `RateLimitedError` / `Limits` / `FixedWindowLimiter`（INCR + EXPIRE 的定长窗口，Redis 故障 fail-open），`modules/apikeys` 改为复用同一异常类型。
+- **迁移 `0014`**：`users` 增 `must_change_password` / `token_version` 两列，新建 `audit_logs`（`id bigint IDENTITY`、`actor_type` 三值 CHECK、`ip inet`、`diff jsonb`、两条按时间倒序的索引；不建外键，应用删除后审计仍可解释）。
+- **`aics-cli bootstrap-admin`**：读 `--email/--password/--name`（缺省回落到 `AICS_BOOTSTRAP_ADMIN_*`），幂等——已存在则只提升为超级管理员，`--reset-password` 时才改密并递增 `token_version`。
+- 新增依赖 `PyJWT>=2.9`（2.15.1）、`argon2-cffi>=23.1`（25.1.0）；错误码 `TOKEN_EXPIRED`（401）与 `ACCOUNT_LOCKED`（423）落地，接口规范表里不再有「未实现」的码。
+
+### 测试（M4.1 ②，2026-10-19）
+- 新增 `tests/unit/test_auth_tokens.py`（6 例：签发与解析、过期 → `TOKEN_EXPIRED`、类型混用、签名篡改、字段缺失）、`test_auth_permissions.py`（5 例：权限矩阵与迁移 0001 的种子一致）、`test_auth_service.py`（12 例：登录成功 / 未知邮箱同文案 / 禁用 / 第 5 次锁定 / 锁定期先于验密 / 刷新轮换 / 复用踢全端 / 版本过期 / 改密两种 422 / 改密成功 / me / 登出容错）、`test_auth_api.py`（7 例：登录 200、短密码与多余字段 422、423 透传 `Retry-After`、`/me` 的 401 与 200、refresh + logout、改密返回新对）。
+- 新增 `tests/integration/test_auth_pg.py`（5 例，真 PG + 真 Redis）：超级管理员与 viewer 的权限差异、刷新轮换与复用检测（`token_version` 变 1、旧 access 失效）、失败落库 `failed_logins/locked_until`、改密后旧 access 401 且新哈希可验、未知用户的 token。
+- 门禁：`pytest` **1026 passed / 1 failed / 245 deselected**，覆盖率 **82.15%**（10835 语句 / 1934 未覆盖；唯一失败仍是 Windows 符号链接环境用例 `tests/unit/test_storage.py::test_symlink_escape_rejected`）；`ruff check` / `ruff format` / `lint-imports`（13 kept）/ `prompts check`（8 个）全绿；真实模型费用 0 元。
+- 本机 Docker 集成套件（`docker\dev-stack.cmd test`）**244 项全部通过**（408 秒），其中 `tests/integration/test_auth_pg.py` 5 例、其余为既有 239 项回归。
+
 ### 新增（M3.6 ⑤ M3 收尾，2026-10-19）
 - **未知路由与 405 也走统一错误体**（ISSUE-01）：`backend/src/aics/main.py` 注册 `StarletteHTTPException` 处理器——404 → `NOT_FOUND`、405 → `METHOD_NOT_ALLOWED`（保留 `Allow` 头），其余状态码保持 Starlette 原样返回；`/v1` 前缀仍走 OpenAI 错误体。接口规范 §4 补 405 行。
 - **文件超限两个入口同码**（ISSUE-32）：`backend/src/aics/modules/knowledge/service.py::_check_size` 改抛 `FileTooLargeError`（413 `FILE_TOO_LARGE` + `details.max_bytes`），与路由的分块检查一致；空文件仍是 422。
@@ -24,7 +41,7 @@
 ### 测试（M3.6 ④，2026-10-19）
 - 新增 `tests/unit/test_openapi_docs.py`（6 例）：每条路由都有 `summary`、非 `/v1` 的 4xx 都指向 `ErrorEnvelope`、`/v1` 只要求声明 4xx（错误体不同）、所有路由的 4xx 合集覆盖 `401/403/404/422`、生产环境三个文档地址都是 `None`、非生产分别是 `/docs` 与 `/openapi.json`。
 - 新增 `tests/e2e/test_integration_guide.py`（5 例，**真 uvicorn + 真 PG/Redis + 假模型**）：把[第三方接入指南](docs/04-api/04-第三方接入指南.md)的示例逐段跑一遍——§2 `curl`（阻塞 / `-N` 流式 / `-F` 上传 + `Idempotency-Key`）、§3 `httpx` 问答与 `X-Conversation-Id` 追问、§4 OpenAI SDK（`models.list` 与应用 id、阻塞与流式）、§5 SSE 解析规则（`delta` 拼接等于 `end.answer`）、§7.4 验签示例（四头齐全且通过、篡改正文失败）。运行时预装 authenticator / chat_runtime / knowledge_runtime，不碰真模型、Qdrant 与 broker，成本 0 元。
-- 本机 Docker 集成套件（docker\dev-stack.cmd test）**239 项全部通过**（551 秒），其中 	ests/e2e 6 例、	ests/integration 233 项；单测 **993 passed**（唯一失败仍是 Windows 符号链接环境用例）、覆盖率 **82.54%**（10162 语句 / 1774 未覆盖）。
+- 本机 Docker 集成套件（docker\dev-stack.cmd test）**239 项全部通过**（551 秒），其中 tests/e2e 6 例、tests/integration 233 项；单测 **993 passed**（唯一失败仍是 Windows 符号链接环境用例）、覆盖率 **82.54%**（10162 语句 / 1774 未覆盖）。
 
 ### 测试（M3.6 ③ 错误码一致性，2026-10-19）
 - 新增 `tests/unit/test_error_codes.py`（7 例）：解析[接口规范 §4](docs/04-api/01-接口规范.md) 的错误码表，与代码双向比对——① 文档里有、代码里没有的码只允许在 `PENDING` 里（`TOKEN_EXPIRED` / `ACCOUNT_LOCKED`，M4.1），实现后忘记删也会失败；② 代码里有、文档里没有的码不允许；③ 同一个码两侧的 HTTP 状态码必须一致（`PARSE_FAILED` 例外：它不是响应，只在 `documents.error` 与 job 里）；④ 遍历 `aics` 包收集 `AppError` 子类，并额外扫全仓 `code="…"` 字面量，防止新码绕过类层次悄悄出现；⑤ 每个码都要有非空的中文 `message`。

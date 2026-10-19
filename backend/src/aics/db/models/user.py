@@ -41,6 +41,11 @@ class User(TimestampMixin, SoftDeleteMixin, Base):
     failed_logins: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # M4.1：首次登录 / 管理员重置后强制改密；改密或禁用时 +1，让旧 token 立即失效。
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    token_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
 
 
 class Role(CreatedAtMixin, Base):

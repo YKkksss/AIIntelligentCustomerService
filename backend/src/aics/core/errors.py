@@ -90,6 +90,18 @@ class MethodNotAllowedError(AppError):
     code, status, message = "METHOD_NOT_ALLOWED", 405, "方法不允许"
 
 
+class TokenExpiredError(UnauthenticatedError):
+    """Access token 已过期：前端据此静默刷新一次（接口规范 §4，M4.1）。"""
+
+    code, message = "TOKEN_EXPIRED", "登录已过期，请刷新"
+
+
+class AccountLockedError(AppError):
+    """登录失败次数过多被锁定；`headers` 里带 `Retry-After`（秒）。"""
+
+    code, status, message = "ACCOUNT_LOCKED", 423, "账号已锁定，请稍后再试"
+
+
 def error_body(
     code: str, message: str, request_id: str | None, details: dict[str, Any] | None = None
 ) -> dict[str, Any]:

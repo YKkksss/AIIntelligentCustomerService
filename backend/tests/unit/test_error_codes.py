@@ -24,11 +24,8 @@ from aics.core.errors import AppError
 DOC = Path(__file__).resolve().parents[3] / "docs" / "04-api" / "01-接口规范.md"
 
 # 文档里写了、代码里还没有的码：值写明「谁在哪一步实现」，实现后必须从这里删掉
-# （删掉的那一刻，另一侧比对会自然变绿）。
-PENDING = {
-    "TOKEN_EXPIRED": "JWT 登录（M4.1）",
-    "ACCOUNT_LOCKED": "登录锁定（M4.1）",
-}
+# （删掉的那一刻，另一侧比对会自然变绿）。M4.1 ② 把两个登录码都落地了，这里暂时为空。
+PENDING: dict[str, str] = {}
 
 # 不作为 HTTP 响应返回的码：文档 HTTP 列写「—」，仍要求代码里有。
 NOT_A_RESPONSE = {"PARSE_FAILED"}

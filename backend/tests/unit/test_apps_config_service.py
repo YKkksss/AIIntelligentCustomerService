@@ -90,7 +90,12 @@ def test_every_app_scoped_table_has_scoped_repository() -> None:
 
     repos = [r for r in registered_repositories() if r.__module__.startswith("aics.")]
     covered = {r.model.__tablename__ for r in repos}  # type: ignore[attr-defined]
-    tenant_tables = {t.name for t in Base.metadata.sorted_tables if "app_id" in t.c} | {"apps"}
+    # `audit_logs.app_id` 可空、且平台级动作（登录、用户管理）没有应用：审计不是租户数据，
+    # 由 `modules.audit` 自己的查询按需带 app_id 过滤（M4.1 ③），不走 AppScopedRepository。
+    global_tables = {"audit_logs"}
+    tenant_tables = {
+        t.name for t in Base.metadata.sorted_tables if "app_id" in t.c
+    } - global_tables | {"apps"}
     assert tenant_tables == {
         "apps",
         "user_app_roles",

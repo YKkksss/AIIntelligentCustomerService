@@ -19,7 +19,6 @@ from typing import Any
 from uuid import UUID
 
 PLANNED = {
-    "bootstrap-admin": "M4：读取 AICS_BOOTSTRAP_ADMIN_* 创建初始管理员",
     "eval": "M5：运行评测",
 }
 
@@ -161,6 +160,66 @@ async def _apikey(args: argparse.Namespace) -> int:
         await dispose_engine()
 
 
+async def _bootstrap_admin(args: argparse.Namespace) -> int:
+    from aics.core.config import get_settings
+    from aics.db.engine import dispose_engine, get_sessionmaker
+    from aics.modules.auth import passwords
+    from aics.modules.auth.repository import AuthRepository
+
+    s = get_settings()
+    email = (args.email or s.bootstrap_admin_email or "").strip().lower()
+    secret = args.password or (
+        s.bootstrap_admin_password.get_secret_value() if s.bootstrap_admin_password else None
+    )
+    if not email or not secret:
+        print(
+            "缺少管理员凭据：设置 AICS_BOOTSTRAP_ADMIN_EMAIL / AICS_BOOTSTRAP_ADMIN_PASSWORD，"
+            "或用 --email / --password 传入。",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        async with get_sessionmaker()() as session:
+            repo = AuthRepository(session)
+            user = await repo.user_by_email(email)
+            if user is None:
+                user = await repo.create_user(
+                    email=email,
+                    display_name=args.name or "管理员",
+                    password_hash=passwords.hash_password(secret),
+                )
+                user.must_change_password = False
+                user.is_super_admin = True
+                await session.commit()
+                print(json.dumps({"email": user.email, "created": True, "id": str(user.id)}))
+                return 0
+            changed = False
+            if not user.is_super_admin:
+                user.is_super_admin = True
+                changed = True
+            if args.reset_password:
+                user.password_hash = passwords.hash_password(secret)
+                user.must_change_password = False
+                user.token_version = (user.token_version or 0) + 1
+                changed = True
+            if changed:
+                await session.commit()
+            print(
+                json.dumps(
+                    {
+                        "email": user.email,
+                        "created": False,
+                        "id": str(user.id),
+                        "promoted": bool(user.is_super_admin),
+                        "password_reset": bool(args.reset_password),
+                    }
+                )
+            )
+            return 0
+    finally:
+        await dispose_engine()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aics-cli")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -198,6 +257,13 @@ def main(argv: list[str] | None = None) -> int:
         "--ip", action="append", default=None, metavar="CIDR", help="不传 = 清空（不限制）"
     )
     sub.add_parser("sweep-idle", help="立即执行一次空闲提醒 / 关闭扫描（本进程）")
+    p = sub.add_parser("bootstrap-admin", help="创建 / 提升初始超级管理员（幂等）")
+    p.add_argument("--email", help="覆盖 AICS_BOOTSTRAP_ADMIN_EMAIL")
+    p.add_argument("--password", help="覆盖 AICS_BOOTSTRAP_ADMIN_PASSWORD")
+    p.add_argument("--name", help="显示名（仅首次创建时生效）")
+    p.add_argument(
+        "--reset-password", action="store_true", help="已存在的账号也重置密码并踢掉旧会话"
+    )
     for name, help_ in PLANNED.items():
         sub.add_parser(name, help=help_)
     args = parser.parse_args(argv)
@@ -212,6 +278,8 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_reconcile(args.app, args.inline))
     if args.cmd == "apikey":
         return asyncio.run(_apikey(args))
+    if args.cmd == "bootstrap-admin":
+        return asyncio.run(_bootstrap_admin(args))
     if args.cmd == "sweep-idle":
         from aics.modules.chat.lifecycle import run_idle_sweep_job
         from aics.modules.handoff.sweep import run_handoff_sweep_job

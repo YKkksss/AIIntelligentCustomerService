@@ -30,6 +30,8 @@ from aics.memory.locks import RedisLock
 from aics.memory.service import COMPACT_TASK, MemoryService
 from aics.memory.units import pg_units
 from aics.modules.apikeys.service import ApiKeyAuthenticator
+from aics.modules.auth.admin_router import router as auth_router
+from aics.modules.auth.runtime import AuthRuntime
 from aics.modules.chat import openai
 from aics.modules.chat.openai_router import router as openai_router
 from aics.modules.chat.router import router as chat_router
@@ -151,6 +153,15 @@ def build_feedback_runtime(s: Settings) -> FeedbackRuntime:
     return FeedbackRuntime(sessions=get_sessionmaker())
 
 
+def build_auth_runtime(s: Settings, *, redis: Any | None = None) -> AuthRuntime:
+    """Composition root of `modules.auth`（M4.1 ②）：JWT 认证 + RBAC。
+
+    `redis` 同时用于刷新令牌轮换（`{prefix}auth:refresh:*`）与鉴权缓存（60 秒）；不传时
+    退化成「不轮换、每次都回表」，本地单测照样跑得动，生产必须配。
+    """
+    return AuthRuntime(sessions=get_sessionmaker(), settings=s, redis=redis)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     s = get_settings()
@@ -175,6 +186,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.handoff_runtime = build_handoff_runtime(s, redis=redis)
     if getattr(app.state, "feedback_runtime", None) is None:  # tests may install their own
         app.state.feedback_runtime = build_feedback_runtime(s)
+    if getattr(app.state, "auth_runtime", None) is None:  # tests may install their own
+        app.state.auth_runtime = build_auth_runtime(s, redis=redis)
+    if getattr(app.state, "authorizer", None) is None:  # core.security.Authorizer (RBAC)
+        app.state.authorizer = app.state.auth_runtime.authorizer()
     log.info("app.started", env=s.env, version=__version__)
     yield
     await app.state.chat_runtime.drain()
@@ -271,6 +286,7 @@ def create_app() -> FastAPI:
     app.include_router(knowledge_router)
     app.include_router(handoff_router)
     app.include_router(feedback_router)
+    app.include_router(auth_router)
     app.include_router(openai_router)
     return app
 

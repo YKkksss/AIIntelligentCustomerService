@@ -23,16 +23,13 @@ from redis.exceptions import RedisError
 
 from aics.core import metrics
 from aics.core.errors import AppError
+from aics.core.ratelimit import RateLimitedError
 
 log = structlog.get_logger()
 
 QUOTA_TZ = ZoneInfo("Asia/Shanghai")
 MINUTE_TTL_S = 120
 DAY_TTL_S = 2 * 86400
-
-
-class RateLimitedError(AppError):
-    code, status, message = "RATE_LIMITED", 429, "请求过于频繁，请稍后再试"
 
 
 class QuotaExceededError(AppError):
