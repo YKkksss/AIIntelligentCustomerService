@@ -31,6 +31,8 @@ class EventRecorder:
     """`events.emit` / `events.emit_all` 的记录器，行为与真实现一致（返回 None 表示不落库）。"""
 
     events: list[RecordedEvent] = field(default_factory=list)
+    #: `publish_pending` 被调用的次数（真实现要 `session.info`，单测的假 session 没有）
+    publish_calls: int = 0
 
     def types(self) -> list[str]:
         return [e.type for e in self.events]
@@ -74,10 +76,16 @@ class EventRecorder:
                 )
             )
 
+    async def publish_pending(self, session: Any, publisher: Any) -> int:
+        """广播替身：真实现读 `session.info`，这里只记一次调用（广播本身另有单测）。"""
+        self.publish_calls += 1
+        return 0
+
 
 def install(monkeypatch: pytest.MonkeyPatch) -> EventRecorder:
-    """把 `chat.events` 的两个写入口换成记录器（所有调用方共用同一模块对象）。"""
+    """把 `chat.events` 的写入口与提交后广播换成记录器（所有调用方共用同一模块对象）。"""
     recorder = EventRecorder()
     monkeypatch.setattr(events, "emit", recorder.emit)
     monkeypatch.setattr(events, "emit_all", recorder.emit_all)
+    monkeypatch.setattr(events, "publish_pending", recorder.publish_pending)
     return recorder

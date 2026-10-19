@@ -393,6 +393,7 @@ class ChatService:
                     webhook=webhook,
                 )
             await s.commit()
+            await events.publish_pending(s, self.runtime.publisher())
             return _Prepared(
                 req=req,
                 t0=t0,
@@ -763,6 +764,7 @@ class ChatService:
                 # 只剩崩溃路径的兜底）。
                 await convs.close(app_id, cid, reason="stateless")
             await s.commit()
+            await events.publish_pending(s, self.runtime.publisher())
             return status
 
     async def _after_turn(self, p: _Prepared, res: RagResult | None) -> None:

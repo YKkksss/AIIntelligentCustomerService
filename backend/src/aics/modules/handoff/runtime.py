@@ -13,15 +13,20 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from aics.modules.chat import events
 from aics.modules.handoff.service import HandoffService
 
 
 @dataclass(frozen=True)
 class HandoffRuntime:
     sessions: async_sessionmaker[AsyncSession]
+    # 坐席动作也要推进会话事件流（M3.5 ②）；没有 Redis 时事件只落库不广播。
+    redis: Any = None
+    redis_prefix: str = "aics:"
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator[AsyncSession]:
@@ -29,5 +34,10 @@ class HandoffRuntime:
         async with self.sessions() as session:
             yield session
 
+    def publisher(self) -> events.Publisher | None:
+        if self.redis is None:
+            return None
+        return events.RedisPublisher(self.redis, prefix=self.redis_prefix)
+
     def service(self, session: AsyncSession) -> HandoffService:
-        return HandoffService(session)
+        return HandoffService(session, publisher=self.publisher())

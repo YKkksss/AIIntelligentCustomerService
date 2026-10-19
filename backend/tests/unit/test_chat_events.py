@@ -35,6 +35,7 @@ class FakeSession:
         self.seq = seq
         self.added: list[Any] = []
         self.statements: list[Any] = []
+        self.info: dict[str, Any] = {}  # emit() 在这里记待广播的 seq（提交后 publish_pending 取走）
 
     async def execute(self, stmt: Any) -> _Result:
         self.statements.append(stmt)

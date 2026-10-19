@@ -15,6 +15,7 @@ import pytest
 from sqlalchemy import select, update
 from tests.chat_support import make_runtime
 
+from aics.core.config import get_settings
 from aics.db.models import Conversation, Message
 from aics.modules.apps.service import AppService
 from aics.modules.chat import lifecycle
@@ -232,21 +233,23 @@ async def test_deleting_app_is_skipped(pg: dict[str, Any]) -> None:
     assert (await conv_of(pg, a, cid)).status == "active" and str(a) in res.skipped_apps
 
 
-async def test_batch_limit_and_notify_hook(pg: dict[str, Any]) -> None:
+async def test_batch_limit_and_publisher_hook(pg: dict[str, Any]) -> None:
     a = pg["app_a"]
     ids = [await new_conv(pg, a) for _ in range(3)]
-    events: list[tuple[str, UUID]] = []
+    published: list[tuple[UUID, int]] = []
 
-    async def notify(event: str, app_id: UUID, cid: UUID) -> None:
-        if app_id == a:
-            events.append((event, cid))
+    class Recorder:
+        async def publish(self, conversation_id: UUID, seq: int) -> None:
+            if conversation_id in ids:
+                published.append((conversation_id, seq))
 
     t = await at(pg, a, ids[-1], 20 * M)
-    await lifecycle.sweep(pg["sessions"], now=t, batch=2, notify=notify)
-    assert sum(1 for e, c in events if c in ids) == 2
-    await lifecycle.sweep(pg["sessions"], now=t, batch=2, notify=notify)
-    assert sorted(c for e, c in events if c in ids) == sorted(ids)
-    assert {e for e, _ in events} == {"conversation.closed"}
+    await lifecycle.sweep(pg["sessions"], now=t, batch=2, publisher=Recorder())
+    assert sum(1 for c, _ in published if c in ids) == 2
+    await lifecycle.sweep(pg["sessions"], now=t, batch=2, publisher=Recorder())
+    assert sorted(c for c, _ in published if c in ids) == sorted(ids)
+    # 广播发生在提交之后：每条通知都带该会话本轮的最后一个 seq
+    assert all(seq > 0 for _, seq in published)
 
 
 async def test_closed_by_sweep_then_chat_starts_new_conversation(pg: dict[str, Any]) -> None:
@@ -289,8 +292,6 @@ async def test_sweep_waits_for_turn_holding_row_lock(pg: dict[str, Any]) -> None
 
 async def test_run_idle_sweep_job_uses_its_own_engine(pg: dict[str, Any], pg_migrated: str) -> None:
     """Task body: real DB clock; a conversation idle for 11 minutes gets closed."""
-    from types import SimpleNamespace
-
     a = pg["app_a"]
     cid = await new_conv(pg, a)
     async with pg["sessions"]() as s:
@@ -300,5 +301,7 @@ async def test_run_idle_sweep_job_uses_its_own_engine(pg: dict[str, Any], pg_mig
             .values(last_activity_at=Conversation.last_activity_at - 11 * M)
         )
         await s.commit()
-    out = await lifecycle.run_idle_sweep_job(SimpleNamespace(db_url=pg_migrated))
+    # 任务体自己建 NullPool 引擎与 Redis 客户端（提交后广播事件，M3.5 ②）
+    settings = get_settings().model_copy(update={"db_url": pg_migrated})
+    out = await lifecycle.run_idle_sweep_job(settings)
     assert out["closed"] >= 1 and (await conv_of(pg, a, cid)).status == "closed"

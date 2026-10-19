@@ -88,6 +88,8 @@ def build_chat_runtime(s: Settings, *, redis: Any | None = None) -> ChatRuntime:
         reranker=get_reranker(),
         llm=get_llm(),
         memory=MemoryService(pg_units(sessions), compactor=compactor, enqueue_compaction=enqueue),
+        redis=redis,
+        redis_prefix=s.redis_prefix,
     )
 
 
@@ -128,12 +130,13 @@ def build_knowledge_runtime(s: Settings) -> KnowledgeRuntime:
     )
 
 
-def build_handoff_runtime(s: Settings) -> HandoffRuntime:
+def build_handoff_runtime(s: Settings, *, redis: Any | None = None) -> HandoffRuntime:
     """Composition root of `modules.handoff`: 坐席接口只需要会话工厂（M3.4 ②）。
 
-    转人工状态迁移只写 `conversations` / `messages`，模型与向量库都不参与，所以没有别的依赖。
+    转人工状态迁移只写 `conversations` / `messages`，模型与向量库都不参与；`redis` 供坐席动作
+    提交后广播会话事件（M3.5 ②），不传时事件只落库。
     """
-    return HandoffRuntime(sessions=get_sessionmaker())
+    return HandoffRuntime(sessions=get_sessionmaker(), redis=redis, redis_prefix=s.redis_prefix)
 
 
 @asynccontextmanager
@@ -157,7 +160,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if getattr(app.state, "knowledge_runtime", None) is None:  # tests may install their own
         app.state.knowledge_runtime = build_knowledge_runtime(s)
     if getattr(app.state, "handoff_runtime", None) is None:  # tests may install their own
-        app.state.handoff_runtime = build_handoff_runtime(s)
+        app.state.handoff_runtime = build_handoff_runtime(s, redis=redis)
     log.info("app.started", env=s.env, version=__version__)
     yield
     await app.state.chat_runtime.drain()

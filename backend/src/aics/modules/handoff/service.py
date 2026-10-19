@@ -81,9 +81,17 @@ class HandoffItem:
 class HandoffService:
     """坐席接口的业务规则；一个请求一个实例，session 由 runtime 注入。"""
 
-    def __init__(self, session: AsyncSession, *, repo: HandoffRepository | None = None) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        repo: HandoffRepository | None = None,
+        publisher: events.Publisher | None = None,
+    ) -> None:
         self.session = session
         self.repo = HandoffRepository(session) if repo is None else repo
+        # 提交后的会话事件广播（M3.5 ②）：坐席动作同样要推进事件流
+        self.publisher = publisher
 
     # ------------------------------------------------------------ 读
     async def state(self, app_id: UUID, conversation_id: UUID) -> HandoffState:
@@ -155,6 +163,7 @@ class HandoffService:
                 webhook=webhook,
             )
         await self.session.commit()
+        await events.publish_pending(self.session, self.publisher)
         await self.session.refresh(conv)
         log.info(
             "handoff.accepted",
@@ -192,6 +201,7 @@ class HandoffService:
             webhook=await self._webhook_of(cfg),
         )
         await self.session.commit()
+        await events.publish_pending(self.session, self.publisher)
         log.info(
             "handoff.agent_message",
             app_id=str(app_id),
@@ -261,6 +271,7 @@ class HandoffService:
                 webhook=webhook,
             )
         await self.session.commit()
+        await events.publish_pending(self.session, self.publisher)
         await self.session.refresh(conv)
         # 交还备注只进日志：conversations 没有对应列，结构化审计留给 M4.1（ISSUE-53）。
         log.info(

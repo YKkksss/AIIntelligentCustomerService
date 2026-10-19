@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+### 新增（M3.5 ② 会话事件流 SSE，2026-10-19）
+- `GET /api/v1/apps/{app_id}/conversations/{conversation_id}/events`（scope `chat` 或 `handoff:write`）：`text/event-stream`，`id:` 行是 `seq`、`data:` 行是与出站 Webhook **逐字段相同**的 payload，15 秒一帧 `: ping`，推完 `conversation.closed` 结束连接；`Last-Event-ID` 补发（非法值 422 `VALIDATION_ERROR`）。帧不带 `event:` 行——事件名在 payload 的 `event` 字段里，浏览器默认的 `onmessage` 也能收到。
+- 新模块 `modules/chat/event_stream.py`：**先 `SUBSCRIBE` 再按 `seq > Last-Event-ID` 回表补发**，同一 `seq` 只发一次；连接期间不持事务（每批一次短事务），关闭时 `unsubscribe` / `aclose` 各自吞异常记日志（ADR-0016）。
+- `modules/chat/events.py` 增加广播层：`channel()`（`{prefix}conv:{conversation_id}`）、`Publisher` 协议、`RedisPublisher`（发不出只记 `chat.event_publish_failed`，事件已落库，重连补发兜底）、`publish_pending()`（提交后把本事务累积的 `(conversation_id, seq)` 按会话去重后播一次）、`emit()` 现在把待广播的 `seq` 记到 `session.info`。
+- 提交后广播接上全部写入方：`chat.service`（请求内两处提交）、`handoff.service`（accept / 坐席发言 / release）、`handoff/sweep.py`、`chat/lifecycle.py`；两个任务体（`run_handoff_sweep_job` / `run_idle_sweep_job`）自己建 Redis 客户端并在 `finally` 里关闭。`ChatRuntime` / `HandoffRuntime` 新增 `redis` / `redis_prefix` 字段与 `publisher()`。
+- `chat/lifecycle.py` 原来的 `Notify` 钩子删除，统一换成 `events.Publisher`（旧钩子带事件名与 `app_id`、缺 `seq`，且 `run_idle_sweep_job` 从未传过）。
+
+### 测试（M3.5 ②，2026-10-19）
+- 新增 `tests/unit/test_chat_event_stream.py`（18 例）：`parse_last_event_id`（缺省 / 空格 / 负数 / 非整数）、`frame` 的 `id:` 与 payload 全字段、`channel` 前缀、`RedisPublisher` 的频道与吞 `RedisError`、`publish_pending` 的按会话去重与清空、`stream()` 的补发→关闭结束、先订阅后补发、空闲心跳后继续推实时事件、已关闭会话立即结束。
+- 新增 `tests/integration/test_chat_events_pg.py`（6 例）：真 `/chat` 触发转人工只写 `handoff.requested`（`recent_messages` 含本轮 AI 答复）、配 Webhook 的应用逐事件排 `pending` 投递、已关闭会话走 ASGI 补发两帧且以 `conversation.closed` 结束、`Last-Event-ID: 2` 只回更新的帧、非法 `Last-Event-ID` 422、真 Redis pub/sub 实时推送（坐席 `accept` → 客户端秒收 `handoff.accepted`）。
+- 三条既有用例跟着改：`test_chat_lifecycle_pg.py`（`notify=` 钩子改 `publisher=` 并改名 `test_batch_limit_and_publisher_hook`；`run_idle_sweep_job` 用 `get_settings().model_copy(update={"db_url": …})` 以便带上 Redis 配置）、`test_chat_events.py`（假 session 补 `info` 字典）、`tests/events_support.py`（记录器增加 `publish_pending` 桩，替换 `emit` / `emit_all` / `publish_pending`）；`test_isolation_pg.py` 补 `/events` 的跨应用 404。
+- 本机 Docker 集成套件全量复跑 **213 项全部通过**；单测 **920 passed**（1 例 Windows 符号链接环境失败），覆盖率 **82.04%**（9773 语句 / 1755 未覆盖，门槛 80）。
+
 ### 新增（M3.5 ① 事件 outbox 与迁移 0012，2026-10-19）
 - 迁移 `0012`：`conversation_events`（`type` 八值 CHECK、`UNIQUE (conversation_id, seq)`、索引 `(app_id, created_at)`）与 `webhook_deliveries`（`id` 即事件 ID、`event_id` 唯一外键、`status` ∈ pending/delivered/failed、索引 `(app_id, created_at DESC)` 与 `(status, next_attempt_at)`）；两表的 ORM 模型 `ConversationEvent` / `WebhookDelivery` 在 `db/models/event.py`。
 - `modules/chat/events.py`：`emit(session, target, type, data, *, webhook=None)` 在**业务事务内**用 `UPDATE conversations SET event_seq = event_seq + 1 … RETURNING` 取 `seq`、插事件行，应用配了 Webhook 且渠道是 `api` / `openai` 时再排一条 `pending` 投递；`channel=eval` 不写事件、`debug` 写事件但不投递（ADR-0016）。`Target` / `WebhookTarget` 是两个纯数据视图，`emit_all` 按序发一组事件（先消息、后它造成的状态变化）。提交之后的 Redis 发布与任务投递留给 ② / ③。

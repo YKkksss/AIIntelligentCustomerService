@@ -13,6 +13,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from aics.memory.service import MemoryService
+from aics.modules.chat import events
 from aics.modules.chat.memory_port import MemoryPortAdapter
 from aics.rag.ports import ChunkSearch, RagPorts
 from aics.rag.retrieval import VectorSearch
@@ -28,8 +29,17 @@ class ChatRuntime:
     memory: MemoryService
     vector: VectorSearch | None = None
     reranker: Any = None  # providers.RerankProvider
+    # 会话事件流（M3.5 ②）：pub/sub 广播与订阅都走它；没有 Redis 时事件只落库不广播。
+    redis: Any = None
+    redis_prefix: str = "aics:"
     # Turn tasks still running (they persist the assistant message even if the client left).
     inflight: set[asyncio.Task[Any]] = field(default_factory=set)
+
+    def publisher(self) -> events.Publisher | None:
+        """提交后广播事件用的通道（`events.publish_pending`）；未接 Redis 时返回 None。"""
+        if self.redis is None:
+            return None
+        return events.RedisPublisher(self.redis, prefix=self.redis_prefix)
 
     def ports(self) -> RagPorts:
         return RagPorts(

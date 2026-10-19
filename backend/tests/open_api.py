@@ -29,6 +29,7 @@ _SKIP_METHODS = frozenset({"HEAD", "OPTIONS"})
 OPEN_API: list[tuple[str, str, dict[str, Any] | None]] = [
     ("POST", "/api/v1/apps/{app_id}/chat", {"question": "退货怎么退？"}),
     ("GET", "/api/v1/apps/{app_id}/conversations/{conversation_id}/messages", None),
+    ("GET", "/api/v1/apps/{app_id}/conversations/{conversation_id}/events", None),
     ("GET", "/api/v1/apps/{app_id}/conversations/{conversation_id}/handoff", None),
     (
         "POST",

@@ -86,8 +86,12 @@ async def sweep(
     *,
     now: datetime | None = None,
     batch: int = SWEEP_BATCH,
+    publisher: events.Publisher | None = None,
 ) -> HandoffSweepResult:
-    """One handoff sweep over all apps. `now` is injectable for tests (default: DB clock)."""
+    """One handoff sweep over all apps. `now` is injectable for tests (default: DB clock).
+
+    `publisher` 是提交后的会话事件广播（M3.5 ②）；不传时事件只落库（本机脚本、单测）。
+    """
     res = HandoffSweepResult()
     async with sessions() as s:
         now = now or await _db_now(s)
@@ -110,7 +114,9 @@ async def sweep(
     for app_id, (cfg, webhook) in configs.items():
         res.apps += 1
         try:
-            timeouts, closed = await _sweep_app(sessions, app_id, cfg, webhook, now, batch)
+            timeouts, closed = await _sweep_app(
+                sessions, app_id, cfg, webhook, now, batch, publisher
+            )
         except Exception:  # one app failing must not stop the others; next run retries
             log.exception("handoff.sweep_app_failed", app_id=str(app_id))
             continue
@@ -128,10 +134,11 @@ async def _sweep_app(
     webhook: events.WebhookTarget,
     now: datetime,
     batch: int,
+    publisher: events.Publisher | None = None,
 ) -> tuple[int, int]:
     """§3.10 的先后顺序：排队超时先于接入后无消息（两者互不影响，但顺序固定便于复现）。"""
-    timeouts = await _sweep_queue_timeouts(sessions, app_id, cfg, webhook, now, batch)
-    closed = await _sweep_accepted_idle(sessions, app_id, cfg, webhook, now, batch)
+    timeouts = await _sweep_queue_timeouts(sessions, app_id, cfg, webhook, now, batch, publisher)
+    closed = await _sweep_accepted_idle(sessions, app_id, cfg, webhook, now, batch, publisher)
     return timeouts, closed
 
 
@@ -142,6 +149,7 @@ async def _sweep_queue_timeouts(
     webhook: events.WebhookTarget,
     now: datetime,
     batch: int,
+    publisher: events.Publisher | None = None,
 ) -> int:
     cutoff = now - timedelta(minutes=cfg.handoff_queue_timeout_minutes)
     async with sessions() as s:
@@ -179,6 +187,7 @@ async def _sweep_queue_timeouts(
                 ],
             )
             await s.commit()
+            await events.publish_pending(s, publisher)
         done += 1
         metrics.inc("aics_handoff_queue_timeout_total", app_id=str(app_id))
     return done
@@ -191,6 +200,7 @@ async def _sweep_accepted_idle(
     webhook: events.WebhookTarget,
     now: datetime,
     batch: int,
+    publisher: events.Publisher | None = None,
 ) -> int:
     cutoff = now - timedelta(minutes=cfg.handoff_accepted_idle_minutes)
     async with sessions() as s:
@@ -232,6 +242,7 @@ async def _sweep_accepted_idle(
                 ],
             )
             await s.commit()
+            await events.publish_pending(s, publisher)
         done += 1
         metrics.inc("aics_handoff_accepted_idle_total", app_id=str(app_id))
     return done
@@ -249,8 +260,9 @@ async def _emit(
 
 
 async def run_handoff_sweep_job(settings: Any = None) -> dict[str, Any]:
-    """Body of `idle_sweep` / `aics-cli sweep-idle`: a NullPool engine per run, because each
+    """Body of `idle_sweep` / `aics-cli sweep-handoff`: a NullPool engine per run, because each
     task runs in its own event loop (asyncio.run)."""
+    import redis.asyncio as aioredis
     from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy.pool import NullPool
 
@@ -258,8 +270,11 @@ async def run_handoff_sweep_job(settings: Any = None) -> dict[str, Any]:
 
     s = settings or get_settings()
     engine = create_async_engine(s.db_url, poolclass=NullPool)
+    redis = aioredis.from_url(s.redis_url)
     try:
-        res = await sweep(async_sessionmaker(engine, expire_on_commit=False))
+        publisher = events.RedisPublisher(redis, prefix=s.redis_prefix)
+        res = await sweep(async_sessionmaker(engine, expire_on_commit=False), publisher=publisher)
     finally:
+        await redis.aclose()
         await engine.dispose()
     return res.as_dict()

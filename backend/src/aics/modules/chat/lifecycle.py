@@ -22,13 +22,12 @@ Rules:
   defaults (logged), so one broken app never stops the sweep for the others;
 - each step handles at most `batch` conversations per app per run; the rest wait 30 s.
 Events (`conversation.idle_notice` / `conversation.closed` + their `message.created`) are written
-in the same transaction as the state change (M3.5); `notify` is the post-commit hook used to wake
-event-stream subscribers.
+in the same transaction as the state change; `publisher` is the post-commit broadcast that wakes
+event-stream subscribers (M3.5 ②, ADR-0016).
 """
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
@@ -53,8 +52,6 @@ log = structlog.get_logger()
 SWEEP_BATCH = 500  # per app per step per run (参数默认值与依据)
 # Smallest possible notice / close delay (idle_close_minutes ≥ 1): pre-filter for apps.
 MIN_IDLE = timedelta(minutes=1)
-
-Notify = Callable[[str, UUID, UUID], Awaitable[None]]  # (event, app_id, conversation_id)
 
 
 @dataclass(frozen=True)
@@ -112,9 +109,12 @@ async def sweep(
     *,
     now: datetime | None = None,
     batch: int = SWEEP_BATCH,
-    notify: Notify | None = None,
+    publisher: events.Publisher | None = None,
 ) -> SweepResult:
-    """One idle sweep over all apps. `now` is injectable for tests (default: DB clock)."""
+    """One idle sweep over all apps. `now` is injectable for tests (default: DB clock).
+
+    `publisher` 是提交后的会话事件广播（M3.5 ②）；不传时事件只落库（本机脚本、单测）。
+    """
     res = SweepResult()
     async with sessions() as s:
         now = now or await _db_now(s)
@@ -141,7 +141,7 @@ async def sweep(
         res.apps += 1
         try:
             n, c = await _sweep_app(
-                sessions, app_id, policy, custom_dict, webhook, now, batch, notify
+                sessions, app_id, policy, custom_dict, webhook, now, batch, publisher
             )
         except Exception:  # one app failing must not stop the others; next run retries
             log.exception("chat.lifecycle_app_failed", app_id=str(app_id))
@@ -161,7 +161,7 @@ async def _sweep_app(
     webhook: events.WebhookTarget,
     now: datetime,
     batch: int,
-    notify: Notify | None,
+    publisher: events.Publisher | None = None,
 ) -> tuple[int, int]:
     cfg = policy.session
     close_at = now - timedelta(minutes=cfg.idle_close_minutes)
@@ -207,10 +207,9 @@ async def _sweep_app(
                     ],
                 )
                 await s.commit()
+                await events.publish_pending(s, publisher)
             noticed += 1
             metrics.inc("aics_idle_notice_total", app_id=str(app_id))
-            if notify is not None:
-                await notify("conversation.idle_notice", app_id, cid)
     async with sessions() as s:
         rows = await ConversationRepository(s).idle_candidates(
             app_id, before=close_at, pause_pending=policy.pause_pending, limit=batch
@@ -239,10 +238,9 @@ async def _sweep_app(
                 ],
             )
             await s.commit()
+            await events.publish_pending(s, publisher)
         closed += 1
         metrics.inc("aics_idle_closed_total", app_id=str(app_id))
-        if notify is not None:
-            await notify("conversation.closed", app_id, cid)
     return noticed, closed
 
 
@@ -264,6 +262,7 @@ IDLE_SWEEP_INTERVAL_S = 30.0  # beat period (§2.2: notice / close accurate to �
 async def run_idle_sweep_job(settings: Any = None) -> dict[str, Any]:
     """Body of the Celery task / `aics-cli sweep-idle`: a NullPool engine per run, because
     each task runs in its own event loop (asyncio.run)."""
+    import redis.asyncio as aioredis
     from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy.pool import NullPool
 
@@ -271,8 +270,11 @@ async def run_idle_sweep_job(settings: Any = None) -> dict[str, Any]:
 
     s = settings or get_settings()
     engine = create_async_engine(s.db_url, poolclass=NullPool)
+    redis = aioredis.from_url(s.redis_url)
     try:
-        res = await sweep(async_sessionmaker(engine, expire_on_commit=False))
+        publisher = events.RedisPublisher(redis, prefix=s.redis_prefix)
+        res = await sweep(async_sessionmaker(engine, expire_on_commit=False), publisher=publisher)
     finally:
+        await redis.aclose()
         await engine.dispose()
     return res.as_dict()

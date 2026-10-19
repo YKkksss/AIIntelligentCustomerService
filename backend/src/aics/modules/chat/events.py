@@ -2,7 +2,10 @@
 
 事件流（SSE）与出站 Webhook 是同一份数据：`conversation_events` 是事实来源，
 `webhook_deliveries` 只是「这个事件要不要发出去、发到哪一步了」的记录。
-提交之后的 Redis 发布与任务投递由调用方（M3.5 ②/③）接管——本模块只保证落库。
+
+`emit` 只负责落库；提交之后调 `publish_pending` 把本事务记下的 `seq` 逐条广播到
+`aics:conv:{id}`（订阅方回表读全文）。发布失败只记日志：事件已落库，SSE 重连按
+`Last-Event-ID` 补发，Webhook 由重试扫描兜底。
 """
 
 from __future__ import annotations
@@ -11,8 +14,10 @@ import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Protocol
 
+import structlog
+from redis.exceptions import RedisError
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,12 +28,58 @@ from aics.db.models.event import EVENT_TYPES, ConversationEvent, WebhookDelivery
 from aics.modules.chat.repository import ConversationRepository
 from aics.modules.webhooks.payloads import build_payload
 
+log = structlog.get_logger()
+
 #: 只有这两个渠道的事件会出站：`debug` 写事件（后台排查）但不投递，`eval` 一律不写。
 DELIVERED_CHANNELS = ("api", "openai")
 #: `eval` 渠道不产生会话事件（审核流水线用自己的表，§3.15）。
 SKIPPED_CHANNELS = ("eval",)
 #: `message.created` 覆盖的范围（§7.3）：转人工排队/接入期间的每条消息，以及任何 system 消息。
 MESSAGE_EVENT_STATUSES = ("pending", "accepted")
+#: `session.info` 里累积「已落库、待广播」的 `(conversation_id, seq)`，提交后清空。
+PENDING_KEY = "aics.events.pending"
+
+
+def channel(conversation_id: uuid.UUID, *, prefix: str = "aics:") -> str:
+    """会话事件流的 pub/sub 频道（部署 §5：`aics:conv:{id}`，ACL 频道模式 `&aics:*`）。"""
+    return f"{prefix}conv:{conversation_id}"
+
+
+class Publisher(Protocol):
+    """提交之后的唤醒通知：只带 `seq`，订阅方回表读全文（ADR-0016）。"""
+
+    async def publish(self, conversation_id: uuid.UUID, seq: int) -> None: ...
+
+
+class RedisPublisher:
+    """Redis pub/sub 实现；发布失败只记日志（事件已落库，由重连补发与重试扫描兜底）。"""
+
+    def __init__(self, redis: Any, *, prefix: str = "aics:") -> None:
+        self.redis = redis
+        self.prefix = prefix
+
+    async def publish(self, conversation_id: uuid.UUID, seq: int) -> None:
+        try:
+            await self.redis.publish(channel(conversation_id, prefix=self.prefix), str(seq))
+        except RedisError as e:  # 事件已落库：SSE 重连补发 + Webhook 重试扫描兜底
+            log.warning("chat.event_publish_failed", error_type=type(e).__name__)
+
+
+async def publish_pending(session: AsyncSession, publisher: Publisher | None) -> int:
+    """提交**之后**调用：广播本事务 `emit()` 记下的 `seq`，返回广播的会话数。
+
+    同一会话只广播一次（带本事务的最大 `seq`）：订阅方本来就按自己的游标回表读，
+    多播几次只是噪音。调用方不传 `publisher`（本机脚本、单测、没配 Redis 的部署）时只清空待发队列。
+    """
+    pending: list[tuple[uuid.UUID, int]] = session.info.pop(PENDING_KEY, None) or []
+    if publisher is None:
+        return 0
+    latest: dict[uuid.UUID, int] = {}
+    for conversation_id, seq in pending:
+        latest[conversation_id] = max(seq, latest.get(conversation_id, 0))
+    for conversation_id, seq in latest.items():
+        await publisher.publish(conversation_id, seq)
+    return len(latest)
 
 
 def needs_message_event(role: str, handoff_status: str) -> bool:
@@ -128,6 +179,7 @@ async def emit(
         created_at=at,
     )
     session.add(event)
+    session.info.setdefault(PENDING_KEY, []).append((target.conversation_id, seq))
     if webhook is not None and webhook.ready and target.channel in DELIVERED_CHANNELS:
         session.add(
             WebhookDelivery(

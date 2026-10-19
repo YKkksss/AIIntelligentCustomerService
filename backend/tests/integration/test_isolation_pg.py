@@ -186,6 +186,16 @@ async def test_cross_app_conversation_is_404_on_handoff(iso: dict[str, Any]) -> 
         assert r.json()["error"]["code"] == "CONVERSATION_NOT_FOUND"
 
 
+async def test_cross_app_conversation_is_404_on_events(iso: dict[str, Any]) -> None:
+    """事件流也要先认会话：跨应用在**开流之前**就是普通 JSON 404（M3.5 ②）。"""
+    url = f"/api/v1/apps/{iso['app_a']}/conversations/{iso['conv_b']}/events"
+
+    r = await iso["client"].get(url, headers=auth(iso["key_a"]))
+
+    assert r.status_code == 404, r.text
+    assert r.json()["error"]["code"] == "CONVERSATION_NOT_FOUND"
+
+
 async def test_cross_app_conversation_does_not_leak_messages(iso: dict[str, Any]) -> None:
     """反过来也不行：B 的 Key 读不到 A 的会话。"""
     url = f"/api/v1/apps/{iso['app_b']}/conversations/{iso['conv_a']}/messages"
