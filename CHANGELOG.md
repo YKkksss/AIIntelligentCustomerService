@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+### 新增（M3.5 ⑤ 演示接收端与文档收尾，2026-10-19）
+- `scripts/e2e_m3/webhook_receiver.py`：可直接运行的**示例接收端**（FastAPI，`python -m scripts.e2e_m3.webhook_receiver`）。按第三方接入指南 §7.4 的示例验签（5 分钟窗口），`POST /hook` 记录每条投递（`GET /received` 可查），`POST /reset` 可换密钥、也可令它**先答 N 次 500** 用来演示退避重试。它同时是接入方的参考实现。
+- `scripts/e2e_m3/e2e_m35_webhooks.py`：里程碑验收脚本（真 HTTP + 真 PG + 真 Redis，默认假模型 0 元，`--real-llm` 走真模型）。六步 26 项判定：`handoff.requested` 投递到接收端且验签通过、`accept` → `handoff.accepted`、坐席发言 → `message.created` + 用户可见 `human_agent`、`release` → `handoff.released`、接收端先答 500 时按 10 秒退避重试且重试扫描能领到该条、事件流「补发 1 帧 → 带 `Last-Event-ID` 重连只收下一帧 → 同会话触发事件时收到实时帧」。结果写 `results/e2e_m35_webhooks.json`。
+- **修复（事件流与数据库连接池）**：客户端断开时 uvicorn 会取消流任务，取消若落在「读事务 / 退订」的收尾上，asyncpg 的连接会在 `close()` 中途被打断、坏连接被放回池子，**下一个请求报 `connection is closed`**（验收脚本第⑥步稳定复现）。`chat/event_stream.py` 新增 `_detached()`：把每批读、开头的会话读取与 `finally` 里的退订放进独立 task 并 `shield`，外层取消不再波及收尾；验收脚本的引擎同时补 `pool_pre_ping=True`（生产引擎本来就有）。
+- 文档：M3 测试报告新增 §17 M3.5（提交表、事件与 outbox、SSE 契约、投递与退避、用例矩阵、六步验收、门禁与两条教训）；参数默认值与依据新增 M3.5 一节（22 项：保留期、`seq` 分配、渠道规则、心跳、批量、退避、扫描周期、密钥与校验点）；代码地图、数据库设计 §1.1、模块划分、开放接口参考（`/events` 标已实现）与第三方接入指南（§7 标已上线、管理接口留 M4.5）同步更新；开发计划补 M3.5 状态块与六条服务器待复验项、`README.md` 的「当前状态」更新到 M3.5；待解决问题清单按 `git log` 校正 5 份文档 55 处日期（ISSUE-58 归档）并登记 ISSUE-66。
+
+### 测试（M3.5 ⑤，2026-10-19）
+- 里程碑验收脚本 `scripts/e2e_m3/e2e_m35_webhooks.py` 本机 **26/26 通过**（`stub-llm`，3.6 秒），证据 `results/e2e_m35_webhooks.json`；`--real-llm` 与服务器节拍列入待复验清单。
+- 本机 Docker 集成套件全量复跑 **225 项全部通过**（含事件流 `/events`、投递重试、跨应用 404）；单测 **962 passed**（同上 1 例环境失败）/ 226 deselected，覆盖率 **82.43%**（10030 语句 / 1762 未覆盖）。
+- `ruff check` / `ruff format --check` / `lint-imports`（13 契约）/ `prompts check`（8 个提示词）全绿；真实模型费用 **0 元**。
+
 ### 测试（M3.5 ④ 用例与隔离收口，2026-10-19）
 - 新增 `tests/unit/test_webhook_contract.py`（18 例）与 `tests/webhook_support.py`：把第三方接入指南 §7.4 的**验签示例代码原样搬进测试并真的跑一遍**——示例能验过我们的签名，密钥不对 / 正文被改 / 时间戳超 5 分钟 / 签名不匹配四种情况都拒绝；八种事件的 `data` 与公共字段改为**快照断言**（字段名、字段顺序、UTC 时间、中文不转义），形状一变就必须显式改这里；退避表、5 秒超时、单批 100 与文档写死的数字对齐。
 - `tests/integration/test_chat_events_pg.py` 补 2 例：事件与状态变更**同事务**（同一事务里改状态 + 发事件，回滚后既没有事件行、`event_seq` 也没动）、**并发 10 条消息**的 `seq` 连续且不重复（`UPDATE … RETURNING` 把同一行串行化）。
@@ -101,7 +112,7 @@
 - import-linter 依赖合同按 [ADR-0017](docs/02-architecture/adr/0017-模块依赖合同修订与横切能力注入.md) 修订：`handoff 只可依赖 chat、webhooks` → `handoff 只可依赖 chat、webhooks、apps`（转人工要读应用的 `handoff_config`），`chat` / `handoff` / `eval` / `feedback` 四条「X 只可依赖…」合同加 `allow_indirect_imports = true`（只约束直接 import），消除「经允许的直接依赖叠加出的间接链路被误判违规」的老问题（待解决问题清单 ISSUE-28）；分层合同与 `rag` / `memory` / `ingest` / `core` 的 forbidden 合同不变，仍检查间接依赖。
 - 门禁：`lint-imports` 13 kept / 0 broken（191 files、945 dependencies）。
 
-### 开发环境（本机 Docker 依赖服务与集成复验，2026-10-17）
+### 开发环境（本机 Docker 依赖服务与集成复验，2026-10-18）
 - 本机 Docker 起一套与服务器同版本的依赖服务：`docker/compose.yaml`（PostgreSQL 16.15 / Redis 8.2 含与服务器一致的 ACL / RabbitMQ 4.3 / Qdrant v1.18.2，端口只绑 `127.0.0.1`，数据在 `docker/volumes/`），`docker/dev-stack.ps1`（`dev-stack.cmd` 封装）提供 init / up / down / status / check / logs / reset / test；`docker\dev-stack.cmd test` 注入 `AICS_TEST_*` 后在本机跑 `pytest -m integration`，**集成套件 190 项全部通过**（此前开发机只能整批反选）。`deploy/dev/` 下只起 Qdrant 的独立 compose 归并进 `docker/`（ADR-0002 与部署文档同步）。
 - 首次真实跑通立刻查出并修复 5 个缺陷：`alembic.ini` 的中文注释让 Alembic 按 locale 解码失败（中文 Windows 下每条集成用例的 `alembic upgrade head` 都报 `UnicodeDecodeError`）；`keyusage.merge_buckets` 只认 `str` 而真实 Redis 返回 `bytes`，`last_used_at` 在生产环境永远不会更新；路由在会话关闭后序列化 ORM 对象触发 `DetachedInstanceError`（新增 `KnowledgeService._fresh()` 统一在会话内刷新）；**M3.3 的无状态判定回归**——「`conversation_id is None` 即无状态」把原生 `/chat` 首轮也当成无状态（关会话 + 跳过记忆写入），导致原生接口多轮记忆整体失效，改为显式 `TurnRequest.stateless`、仅 `/v1` 缺 `X-AICS-Conversation-Id` 时置位；集成套件自身五处问题（Redis ACL 前缀、teardown 顺序、`source_type`、两条无校验力的断言、`reindex` 的作业名）。
 - 门禁：集成 190 passed（本机 Docker 栈）；单元 795 passed / 1 failed（Windows 符号链接特权，环境问题）/ 191 deselected，覆盖率 81%；`ruff check` / `ruff format --check` / `lint-imports`（13 契约）/ `prompts check`（8 个）全绿；真实模型费用 0 元。
@@ -110,27 +121,27 @@
 ### 文档（M3.4 子步骤计划，2026-10-18）
 - 新增 M3.4 子步骤计划（[开发计划](docs/00-planning/03-开发计划.md)）：① import-linter 合同改造（ADR-0017，`allow_indirect_imports`，对应待解决问题清单 ISSUE-28）；② `modules/handoff` 状态机与坐席接口（条件单行更新 + `409 HANDOFF_STATE_CONFLICT`、人工消息走 `chat.service`）；③ 服务时间与三种超时（`core/schedule.py` 纯函数、`handoff.sweep`、`idle_sweep` 先 handoff 后 lifecycle、留 `events.emit` TODO 给 M3.5）；④ 用例（状态迁移表、并发 accept、sweep 幂等、DST 时区、开放接口清单 5 条）；⑤ 文档收尾。预算 < 0.1 元。
 
-### 新增（M3.3 OpenAI 兼容接口，2026-10-17）
+### 新增（M3.3 OpenAI 兼容接口，2026-10-18）
 - OpenAI 兼容接口 `modules/chat/openai_router.py`：`GET /v1/models`（返回 Key 所属应用）与 `POST /v1/chat/completions`（阻塞 + `stream=true`），全部走 `ChatService.start_turn(channel="openai")`，不另拼流程；响应为 `chat.completion` + `aics` 扩展字段（`message_id` / `conversation_id` / `previous_conversation_id` / `reply_by` / `handoff_status` / `answer_type` / `handoff` / `intent` / `citations`），流式每 delta 一个 `chat.completion.chunk`、末 chunk 带扩展字段后 `data: [DONE]`，心跳沿用 SSE 注释行。
 - 无状态会话与请求级历史：不带 `X-AICS-Conversation-Id` 时历史只来自请求 `messages`（按应用 `history_token_budget` 裁剪，超预算走请求内临时摘要，15 秒超时、失败退回纯裁剪），新建的会话本轮结束即以 `close_reason=stateless` 关闭（迁移 `0011` 重建 CHECK，`CLOSE_REASONS` 增第 5 个值），不压缩、不产生空闲提醒；带了该头则与原生接口一致，跨应用 `404 conversation_not_found`、`model` 不匹配 `404 model_not_found`。
 - `TurnRequest` 增 `inline_history` 与 `rag_overrides`（`temperature` / `max_tokens` 只收窄到应用配置上限，落在 `chat.service._rag_input`，原生 `/chat` 与 `/v1` 共用一条通道）；`memory/context.py` 的无状态分支触发条件扩为「`conversation_id is None` 或 `inline_history is not None`」，`memory_port` 不再把空列表折叠成 `None`；`main.build_chat_runtime` 接上 `Compactor` 作为临时摘要器（此前未传 `compactor`，`openai_temp_summary=true` 会静默退化成纯裁剪）。
 - `core.security` 新增 `Authenticator.authenticate_key` 与依赖 `require_key_scope`：`/v1` 路径里没有 `app_id`，应用身份由 Key 本身（`Principal.app_id`）与 `model` 字段共同决定。
 - `/v1/*` 的 OpenAI 风格错误体 `{"error":{"message","type","code"}}`：`main.py` 的三个异常处理器按 `request.url.path` 是否以 `/v1/` 开头分流，原生接口行为不变。
 
-### 测试（M3.3，2026-10-17）
+### 测试（M3.3，2026-10-18）
 - 新增 `tests/unit/test_openai_api.py`（消息列表解析、`system` 忽略、`n>1` / `tools` 忽略、参数收敛、chunk 序列化、错误体映射）与 `tests/integration/test_openai_sdk_pg.py`（官方 `openai` SDK 经 ASGI 直连，验证阻塞、流式、带 / 不带会话头与错误体解析）；无状态会话与内联历史的单测（裁剪、临时摘要、本轮即关、跳过记忆、`authenticate_key` 不比对 app_id）。
 - `tests/open_api.py` 支持第二条前缀 `/v1/`（应用作用域 11 条 + `/v1` 2 条），清单守卫同时覆盖两条前缀；`test_isolation_pg.py` 补 `/v1` 跨应用语义（别人的会话头、别人的 `model`）。
 - 本机门禁：`ruff check` / `ruff format --check` / `lint-imports`（13 契约）/ `prompts check`（8 个）全绿；`pytest -q` 794 passed（1 例 Windows 符号链接环境失败）、190 deselected，覆盖率 81.38%；真实模型费用 0 元。
 
-### 文档（M3.3，2026-10-17）
+### 文档（M3.3，2026-10-18）
 - [M3 测试报告](docs/06-development/10-M3测试报告.md) 增 §10–§13（无状态会话与请求级历史、OpenAI 兼容路由、用例与隔离清单、预算与结论）；[参数默认值与依据](docs/06-development/09-参数默认值与依据.md) 增 M3.3 一节（`messages` / `user` 上限、`model` 身份、参数收敛、无状态历史口径、`stateless` 收尾、心跳、`aics` 字段、SDK dev 依赖）。
 - [实现现状与代码地图](docs/00-handoff/02-实现现状与代码地图.md)（`/v1` 两条路由、迁移 `0011`、core 与 chat 模块行、测试计数 55 / 502 与 29 / 149、已知差距）、[接口规范](docs/04-api/01-接口规范.md)、[开放接口参考](docs/04-api/02-开放接口参考.md) §3 标注已实现、[模块划分](docs/02-architecture/02-模块划分.md)、[数据库设计](docs/03-database/01-数据库设计.md)（`close_reason` 增 `stateless`）同步。
 - [待解决问题清单](docs/00-planning/07-待解决问题清单.md) 清扫：新增 ISSUE-37（无状态关闭失败只记 warning）、ISSUE-38（无状态请求每轮一行会话，M6.1 保留策略要覆盖）、ISSUE-39（Hindsight 记忆工具 401，开发工具链，非产品问题）、ISSUE-40 / 41 / 42（本步三处偏差）；更新 ISSUE-16（阻塞点是服务器凭据，端口实测可达）与 ISSUE-20（未推送提交）；[开发计划](docs/00-planning/03-开发计划.md) M3.3 打 ✅ + 状态块 + 4 项待复验。
 
-### 文档（M3.3 子步骤计划，2026-10-17）
+### 文档（M3.3 子步骤计划，2026-10-18）
 - 新增 M3.3 子步骤计划（[开发计划](docs/00-planning/03-开发计划.md)）：① 无状态会话与请求级历史（迁移 `0011` 放开 `close_reason=stateless`、`TurnRequest.inline_history` / `rag_overrides`、无状态裁剪与临时摘要接线、本轮即关会话、`authenticate_key` + `require_key_scope`）；② OpenAI 兼容路由（`/v1/models`、`/v1/chat/completions` 阻塞与流式、`/v1/*` 专属 OpenAI 风格错误体）；③ 用例与隔离清单（开放接口清单支持第二条前缀、官方 `openai` SDK 集成用例）；④ 文档收尾。预算 0 元（真实模型演示改为服务器复验项）。
 
-### 新增（M3.2 知识库开放接口，2026-10-17）
+### 新增（M3.2 知识库开放接口，2026-10-18）
 - 知识库开放接口 9 个端点（`modules/knowledge/router.py`，`prefix=/api/v1/apps/{app_id}`）：只读 `GET /documents`（`status` / `q` / `page` / `page_size`）、`GET /documents/{id}`、`GET /documents/{id}/chunks`（仅生效版本）用 `kb:read`；写 `POST /documents`、`POST /documents/url`、`PUT /documents/{id}/file`、`POST /documents/{id}/reindex`、`PATCH /documents/{id}`（标题 / 元数据立即生效）、`DELETE /documents/{id}`（204）用 `kb:write`。上传按 1 MB 分块流式累加、超 `AICS_UPLOAD_MAX_MB` 立即 `413 FILE_TOO_LARGE`（不整体读入内存），扩展名快速拒绝，魔数仍由 `ingest.parsers` 判定。
 - 幂等键 `core/idempotency.py`：`Idempotency-Key` 依赖，`SET {prefix}idem:{key_id}:{key} NX EX 86400` 写占位，成功后覆写为 `{state:done,status,body}` 供回放；同键异体 `409 IDEMPOTENCY_CONFLICT`、处理中 `409 CONFLICT`；非 2xx 与异常删占位；Redis 故障放行并告警；键长 ≤128（超长 422）、回放体 ≤64 KB。上传与替换接入。
 - `KnowledgeRuntime`（`modules/knowledge/runtime.py`）与 `main.build_knowledge_runtime`：知识库路由按 chat 同样的方式从 `app.state` 取运行时，测试可注入假实现；`TASK_QUEUES` 迁到 `modules/knowledge/service.py` 作为任务→队列的唯一来源，`cli._task_queues()` 复用。
@@ -138,16 +149,16 @@
 - 修 `KnowledgeRuntime` 的接线缺陷：`service()` 曾把文件存储当向量库传、漏传必填 `storage`，`build_knowledge_runtime` 又传了 `KnowledgeService` 不接受的 `reranker`——真实 lifespan 下任何知识库路由都会 `TypeError`（假运行时单测与本机跑不了的集成测试都照不到），已修复并补形参映射回归用例。
 - 统一 `DocumentNotFoundError`：原先 `ingest/service.py`（`NOT_FOUND`）与 `modules/knowledge/service.py`（`DOCUMENT_NOT_FOUND`）各一份，现合并到 `core/errors.py` 一份（码值 `DOCUMENT_NOT_FOUND`），因为 import-linter 层次契约禁止 `ingest → modules`。
 
-### 测试（M3.2，2026-10-17）
+### 测试（M3.2，2026-10-18）
 - 新增 `tests/unit/test_idempotency.py`（占位 / 回放 / 冲突 / 放行 / 异常清理）、`tests/integration/test_knowledge_api_pg.py`（真 PG + 假嵌入器与假抓取器：上传、去重、幂等回放与冲突、替换未变、PATCH、删除、URL 导入、413/400）；`tests/unit/test_knowledge_api.py` 扩到读写 9 个端点与运行时接线回归；`tests/integration/test_isolation_pg.py` 补文档级与写接口的跨应用 404；`tests/open_api.py` 清单扩到 11 条（清单守卫要求“挂载了才能登记”）；`tests/fake_redis.py` 的 `set` 支持 `nx`。
 - 本机门禁：`ruff check` / `ruff format --check` 全绿、`lint-imports` 13 kept、提示词锁 8 个 ok、`pytest -q` 727 passed（1 例 Windows 符号链接环境失败）、覆盖率 81%。
 
-### 文档（M3.2，2026-10-17）
+### 文档（M3.2，2026-10-18）
 - [M3 测试报告](docs/06-development/10-M3测试报告.md) 增 §6–§9（只读接口、幂等键与写接口、隔离用例扩展、预算与结论）；[参数默认值与依据](docs/06-development/09-参数默认值与依据.md) 增 M3.2 一节（分页 / `q` 上限 / 幂等 TTL 与长度上限 / 1 MB 分块 / metadata 8 KB / URL 2048 / `python-multipart`）。
 - [实现现状与代码地图](docs/00-handoff/02-实现现状与代码地图.md) 更新里程碑（M3.2 ✅）、knowledge 与 core 行、HTTP 表 9 条、测试计数（53 个单测文件 / 462 个用例、81%）、已知差距（去掉重复异常类、加超限错误码跨入口不一致）；[接口规范](docs/04-api/01-接口规范.md) 错误码表把 `FILE_TOO_LARGE`、`IDEMPOTENCY_CONFLICT` 移入已实现并补幂等实现细节；[开放接口参考](docs/04-api/02-开放接口参考.md) §4 标注已实现；[模块划分](docs/02-architecture/02-模块划分.md)、[技术选型](docs/02-architecture/06-技术选型.md)（`python-multipart` 版本）同步。
 - [待解决问题清单](docs/00-planning/07-待解决问题清单.md) 清扫：`kb:*` scope 已落地（归档）、`FILE_TOO_LARGE` / `IDEMPOTENCY_CONFLICT` 已实现、新增 ISSUE-32（超限错误码跨入口不一致）、ISSUE-33（幂等占位被强杀后残留 24 小时）、ISSUE-34（`%TEMP%` 下的 `struct.py` 遮蔽标准库）、ISSUE-35 / ISSUE-36（本步偏差）、归档 ISSUE-31（运行时接线缺陷）；[开发计划](docs/00-planning/03-开发计划.md) M3.2 打 ✅ + 状态块 + 2 项待复验。
 
-### 文档（M3.2 子步骤计划，2026-10-17）
+### 文档（M3.2 子步骤计划，2026-10-18）
 - 开发计划新增 M3.2 子步骤计划（[开放接口参考 §4](docs/04-api/02-开放接口参考.md) 的 9 个端点）：① 只读接口（列表 / 详情 / 切块列表 + `KnowledgeService` 三个方法 + 开放接口清单与隔离用例同步）；② `core/idempotency`（先于写接口落地）；③ 写接口（上传流式限额、URL 导入、替换、重建、`PATCH`、删除、`FILE_TOO_LARGE`、统一 `DOCUMENT_NOT_FOUND`、`python-multipart`）；④ 文档。含验收（接入指南 curl 原样可跑）、预算（< 0.1 元）与不在本步的范围。
 
 ### 新增（M3.1 API Key 收尾，2026-10-17）

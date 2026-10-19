@@ -11,8 +11,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Coroutine
 from typing import Any
 from uuid import UUID
 
@@ -28,6 +29,9 @@ from aics.modules.chat.sse import HEARTBEAT_S
 from aics.modules.webhooks.payloads import build_payload
 
 log = structlog.get_logger()
+
+#: 被 shield 出去的读事务（客户端断开时它们要继续跑完，否则 asyncpg 连接会在 close 中途被取消）。
+_DETACHED: set[asyncio.Task[Any]] = set()
 
 #: 推完这条事件就结束连接（§4：会话已经结束，不会再有事件）。
 CLOSED_EVENT = "conversation.closed"
@@ -68,14 +72,32 @@ def frame(event: ConversationEvent, *, user_id: str | None) -> str:
     return f"id: {event.seq}\ndata: {body}\n\n"
 
 
+async def _detached[T](work: Coroutine[Any, Any, T]) -> T:
+    """把一次短事务放进独立 task，外层只 `shield` 等结果。
+
+    客户端断开时 uvicorn 会取消流任务；如果取消正好落在 `async with sessions()` 的收尾上，
+    asyncpg 会在 `close()` 中途被打断、连接可能留在坏状态里（实测下一个请求报
+    `InterfaceError: connection is closed`）。把事务放出去之后，取消只影响外层等待，
+    事务自己照常提交/收尾。
+    """
+    task: asyncio.Task[T] = asyncio.create_task(work)
+    _DETACHED.add(task)
+    task.add_done_callback(_DETACHED.discard)
+    return await asyncio.shield(task)
+
+
 async def _read(
     sessions: async_sessionmaker[AsyncSession], app_id: UUID, conversation_id: UUID, after_seq: int
 ) -> list[ConversationEvent]:
     """一次短事务读一批事件（连接期间不持有事务）。"""
-    async with sessions() as s:
-        return await ConversationEventRepository(s).list_after(
-            app_id, conversation_id, after_seq=after_seq, limit=READ_BATCH
-        )
+
+    async def read() -> list[ConversationEvent]:
+        async with sessions() as s:
+            return await ConversationEventRepository(s).list_after(
+                app_id, conversation_id, after_seq=after_seq, limit=READ_BATCH
+            )
+
+    return await _detached(read())
 
 
 async def _close(pubsub: Any) -> None:
@@ -100,10 +122,13 @@ async def stream(
     heartbeat_s: float = HEARTBEAT_S,
 ) -> AsyncIterator[str]:
     """事件流主体；`redis` 为 None 时退化为「补发一次就结束」（本机脚本、未接 Redis）。"""
-    async with sessions() as s:
-        conv = await ConversationRepository(s).get_or_404(app_id, conversation_id)
-        user_id = conv.external_user_id
-        closed_at_start = conv.status != "active"
+
+    async def load() -> tuple[str | None, bool]:
+        async with sessions() as s:
+            conv = await ConversationRepository(s).get_or_404(app_id, conversation_id)
+            return conv.external_user_id, conv.status != "active"
+
+    user_id, closed_at_start = await _detached(load())
     pubsub = None
     if redis is not None:
         pubsub = redis.pubsub()
@@ -126,4 +151,5 @@ async def stream(
                 yield ": ping\n\n"
     finally:
         if pubsub is not None:
-            await _close(pubsub)
+            # 断开时这里也常处在「已取消」状态：取消外层等待，但让退订与 aclose 自己跑完
+            await _detached(_close(pubsub))

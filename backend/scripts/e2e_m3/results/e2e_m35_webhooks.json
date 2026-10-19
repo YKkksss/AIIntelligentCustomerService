@@ -1,0 +1,205 @@
+{
+  "mode": "stub-llm",
+  "app": "e2e-m35-webhooks",
+  "app_id": "01a1542e-371d-71ef-9254-77060a80ab95",
+  "key_prefix": "aics_e83Tkpq",
+  "started_at": "2026-10-19T12:41:17.412097+00:00",
+  "seconds": 3.6,
+  "passed": 26,
+  "checks": {
+    "接收端已就绪": true,
+    "事件流有 handoff.requested": true,
+    "投递成功 delivered": true,
+    "接收端验签通过": true,
+    "事件名与 payload 一致": true,
+    "payload 公共字段齐全": true,
+    "坐席平台能拿到接单前上下文": true,
+    "HTTP 200 且状态 accepted": true,
+    "事件 handoff.accepted 已投递": true,
+    "接收端看到坐席信息": true,
+    "HTTP 201 且事件是 message.created": true,
+    "用户能看到 human_agent 的消息": true,
+    "message.created 的 data 带 agent_id": true,
+    "HTTP 200 且状态 released": true,
+    "released 的 data 是 agent/agent": true,
+    "全流程四个事件都投递成功": true,
+    "首次按失败处理（pending）": true,
+    "attempts=1 且错误码记下来": true,
+    "退避约 10 秒": true,
+    "扫描按到期时间领取（第二次为空）": true,
+    "重投成功 delivered": true,
+    "接收端这次收下了": true,
+    "重连只补发更新的帧": true,
+    "连接期间的实时事件按 seq 送达": true,
+    "实时帧就是坐席刚发的那条消息事件": true,
+    "真实模型花费 0 元（stub）": true
+  },
+  "steps": [
+    {
+      "step": "⓪ 准备：应用、Key、接收端",
+      "body": {
+        "app_id": "01a1542e-371d-71ef-9254-77060a80ab95",
+        "webhook_url": "http://127.0.0.1:4529/hook",
+        "secret_prefix": "whsec_t42Xf1dm",
+        "key_prefix": "aics_e83Tkpq"
+      }
+    },
+    {
+      "step": "① 用户「我要人工」→ handoff.requested 投递到接收端",
+      "body": {
+        "turn": {
+          "handoff_status": "pending",
+          "reply_by": "ai"
+        },
+        "events": [
+          {
+            "seq": 1,
+            "type": "handoff.requested"
+          }
+        ],
+        "delivery": [
+          {
+            "status": "delivered",
+            "attempts": 1,
+            "status_code": 200,
+            "error": null,
+            "next_attempt_at": null
+          }
+        ],
+        "receiver": [
+          {
+            "delivery_id": "01a1542e-3c74-795a-85f3-3510ca3e373c",
+            "event": "handoff.requested",
+            "seq": 1,
+            "signature_ok": true,
+            "status": 200,
+            "payload": {
+              "id": "01a1542e-3c74-795a-85f3-3510ca3e373c",
+              "seq": 1,
+              "data": {
+                "facts": {},
+                "intent": "human",
+                "reason": "keyword",
+                "summary": null,
+                "handoff_ai_mode": "continue",
+                "recent_messages": [
+                  {
+                    "id": "01a1542e-3c42-74d8-96a1-e25a50ea043e",
+                    "kind": "chat",
+                    "role": "user",
+                    "content": "我要人工",
+                    "created_at": "2026-10-19T12:41:18.661004+00:00"
+                  },
+                  {
+                    "id": "01a1542e-3c4b-7994-88aa-5e130d38f6b5",
+                    "kind": "chat",
+                    "role": "assistant",
+                    "content": "已为您转接人工客服",
+                    "created_at": "2026-10-19T12:41:18.685921+00:00"
+                  }
+                ]
+              },
+              "event": "handoff.requested",
+              "app_id": "01a1542e-371d-71ef-9254-77060a80ab95",
+              "user_id": null,
+              "occurred_at": "2026-10-19T12:41:18.705477+00:00",
+              "conversation_id": "01a1542e-391a-7ea9-a59a-fdfe774e788b"
+            },
+            "received_at": "2026-10-19T12:41:18.863157+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "step": "② 坐席 accept → handoff.accepted",
+      "body": {
+        "http": 200,
+        "handoff_status": "accepted",
+        "events": [
+          {
+            "seq": 1,
+            "type": "handoff.requested"
+          },
+          {
+            "seq": 2,
+            "type": "handoff.accepted"
+          }
+        ]
+      }
+    },
+    {
+      "step": "③ 坐席发言 → message.created",
+      "body": {
+        "http": 201,
+        "receiver_event": "message.created",
+        "last_message": {
+          "role": "human_agent",
+          "kind": "chat",
+          "content": "在的，请讲",
+          "agent_id": "ag_demo_1"
+        }
+      }
+    },
+    {
+      "step": "④ 坐席 release → handoff.released",
+      "body": {
+        "http": 200,
+        "handoff_status": "released",
+        "receiver_event": "handoff.released",
+        "data": {
+          "note": "已解决",
+          "reason": "agent",
+          "agent_id": "ag_demo_1",
+          "released_by": "agent"
+        }
+      }
+    },
+    {
+      "step": "⑤ 接收端返回 500 → 按退避重试",
+      "body": {
+        "first": {
+          "status": "retry",
+          "attempts": 1,
+          "status_code": 500,
+          "error": "HTTP 500",
+          "next_attempt_at": "2026-10-19T12:41:30.038480+00:00"
+        },
+        "status": "pending",
+        "attempts": 1,
+        "backoff_seconds": 9.926708
+      }
+    },
+    {
+      "step": "⑤b 到期扫描领取 → 重投成功",
+      "body": {
+        "due": [
+          "01a1542e-4151-7fbe-92ff-8aeaba05fdc1"
+        ],
+        "second_sweep": [],
+        "retry": {
+          "status": "delivered",
+          "attempts": 2,
+          "status_code": 200,
+          "error": null,
+          "next_attempt_at": null
+        },
+        "status": "delivered",
+        "attempts": 2
+      }
+    },
+    {
+      "step": "⑥ 事件流：断线补发与实时推送",
+      "body": {
+        "accept_http": 200,
+        "first_id": 1,
+        "replay": [
+          2
+        ],
+        "live": [
+          3
+        ],
+        "live_event": "message.created"
+      }
+    }
+  ]
+}
