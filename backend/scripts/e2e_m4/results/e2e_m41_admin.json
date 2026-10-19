@@ -1,0 +1,118 @@
+{
+  "started_at": "2026-10-19T18:52:39.498034+00:00",
+  "checks": {
+    "bootstrap-admin 退出码 0": true,
+    "bootstrap-admin 幂等（重复执行仍 0）": true,
+    "前四次都是 401": true,
+    "第五次 423 ACCOUNT_LOCKED": true,
+    "锁定期内正确密码也是 423": true,
+    "423 带 Retry-After": true,
+    "错误信息不暴露邮箱是否存在": true,
+    "解锁后登录 200": true,
+    "me 200": true,
+    "me 是超管": true,
+    "建用户 201": true,
+    "新用户要求首登改密": true,
+    "新用户登录 200": true,
+    "无成员关系访问应用审计 403": true,
+    "授予 viewer 200": true,
+    "viewer 没有 audit.read，仍 403": true,
+    "升级 app_admin 200": true,
+    "超管可读应用审计": true,
+    "me 里立刻看到 app_admin 权限": true,
+    "refresh 200": true,
+    "access 换了": true,
+    "旧 refresh 复用 401": true,
+    "旧 access 立即失效 401": true,
+    "复用检测踢掉全部会话（轮换出的 access 也 401）": true,
+    "重新登录可继续": true,
+    "审计 200": true,
+    "有 member.set": true,
+    "动作清单含 auth.login": true,
+    "审计里没有明文密码": true,
+    "重置 200 且一次性密码 ≥16 位": true,
+    "临时密码可登录": true,
+    "未改密时写/读接口 403 must_change_password": true,
+    "改密 200": true,
+    "审计落库有 user.create": true
+  },
+  "steps": [
+    {
+      "step": "login_failures",
+      "body": {
+        "statuses": [
+          401,
+          401,
+          401,
+          401,
+          423
+        ]
+      }
+    },
+    {
+      "step": "login",
+      "body": {
+        "status": 200,
+        "body": {
+          "access_token": "…",
+          "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMWExNTU4Mi0yYWNlLTc2ZDUtYWQyZi1lOTBkNDc2YWY3OGIiLCJ0diI6MCwidHlwIjoicmVmcmVzaCIsImp0aSI6ImNlZDc0ZTI2ZjMzNzRjYTJiODQ3ZDNhMDc5YjI4NDQzIiwiaWF0IjoxNzkyNDM1OTU4LCJleHAiOjE3OTMwNDA3NTh9.Di7oWLieZ4FBIrakjENLkk8K3jj8iGZA7wQgNbFYS_I",
+          "token_type": "bearer",
+          "expires_in": 1800,
+          "user": {
+            "id": "01a15582-2ace-76d5-ad2f-e90d476af78b",
+            "email": "admin-1019185235@example.com",
+            "display_name": "验收管理员",
+            "is_super_admin": true,
+            "must_change_password": false,
+            "status": "active"
+          },
+          "apps": []
+        }
+      }
+    },
+    {
+      "step": "create_user",
+      "body": {
+        "status": 201,
+        "body": {
+          "email": "viewer-1019185235@example.com"
+        }
+      }
+    },
+    {
+      "step": "refresh_reuse",
+      "body": {
+        "status": 401,
+        "body": {
+          "error": {
+            "code": "UNAUTHENTICATED",
+            "message": "缺少或无效的凭证",
+            "details": {
+              "reason": "refresh_reused"
+            },
+            "request_id": "a5a093b5728f475182f2a2c708656caa"
+          }
+        }
+      }
+    },
+    {
+      "step": "audit",
+      "body": {
+        "status": 200,
+        "actions": [
+          "member.set",
+          "member.set"
+        ]
+      }
+    },
+    {
+      "step": "reset_password",
+      "body": {
+        "status": 200,
+        "length": 16
+      }
+    }
+  ],
+  "passed": 34,
+  "total": 34
+}

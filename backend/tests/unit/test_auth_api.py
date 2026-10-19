@@ -189,3 +189,39 @@ def test_change_password_returns_a_fresh_pair(client: tuple[TestClient, FakeServ
     assert resp.status_code == 200
     assert resp.json()["refresh_token"].startswith("r3")
     assert service.calls[-1] == ("change_password", "correct horse battery", "brand-new-password")
+
+
+class _MustChangeAuthorizer:
+    """首登/重置后的临时密码用户：除 /auth/me 与 /auth/password 外一律 403。"""
+
+    async def authenticate(self, authorization: str | None) -> AuthedUser:
+        if authorization != "Bearer temp-token":
+            raise UnauthenticatedError(details={"reason": "missing_token"})
+        return AuthedUser(
+            id=uuid4(),
+            email="temp@example.com",
+            display_name="临时用户",
+            must_change_password=True,
+        )
+
+    async def authorize(self, user: Any, *, app_id: Any, permission: str) -> None:
+        return None
+
+
+def test_must_change_password_blocks_everything_but_the_password_endpoints(
+    client: tuple[TestClient, FakeService],
+) -> None:
+    http, _service = client
+    http.app.state.authorizer = _MustChangeAuthorizer()
+    headers = {"authorization": "Bearer temp-token"}
+
+    assert http.get("/api/v1/admin/auth/me", headers=headers).status_code == 200
+    blocked = http.get("/api/v1/admin/users", headers=headers)
+    assert blocked.status_code == 403
+    assert blocked.json()["error"]["details"]["reason"] == "must_change_password"
+    changed = http.post(
+        "/api/v1/admin/auth/password",
+        headers=headers,
+        json={"current_password": "temporary-pass", "new_password": "brand-new-password"},
+    )
+    assert changed.status_code == 200

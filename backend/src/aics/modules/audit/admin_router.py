@@ -15,7 +15,12 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
 from aics.core.openapi import APP_SCOPE_ERRORS, errors
-from aics.core.security import AuthedUser, Authorizer, require_user
+from aics.core.security import (
+    AuthedUser,
+    Authorizer,
+    ensure_password_changed,
+    require_user,
+)
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin-audit"])
 
@@ -44,6 +49,7 @@ async def list_audit(
     cursor: Annotated[str | None, Query(max_length=200)] = None,
     page_size: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> JSONResponse:
+    ensure_password_changed(user)
     await _authorizer(request).authorize(user, app_id=app_id, permission="audit.read")
     async with _runtime(request).session() as session:
         payload = (
@@ -66,6 +72,7 @@ async def list_audit(
     responses=errors(*APP_SCOPE_ERRORS),
 )
 async def list_actions(request: Request, user: CurrentUser) -> JSONResponse:
+    ensure_password_changed(user)
     await _authorizer(request).authorize(user, app_id=None, permission="audit.read")
     async with _runtime(request).session() as session:
         return JSONResponse({"items": await _runtime(request).service(session).actions()})

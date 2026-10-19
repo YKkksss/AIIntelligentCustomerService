@@ -156,6 +156,12 @@ def require_user() -> Callable[[Request], Awaitable[AuthedUser]]:
     return dependency
 
 
+def ensure_password_changed(user: AuthedUser) -> None:
+    """首登/重置后的临时密码用户只能访问 `/auth/me` 与 `/auth/password`。"""
+    if user.must_change_password:
+        raise ForbiddenError(details={"reason": "must_change_password"})
+
+
 def require_perm(permission: str) -> Callable[[Request], Awaitable[AuthedUser]]:
     """Dependency for every other `/api/v1/admin/*` route.
 
@@ -166,8 +172,7 @@ def require_perm(permission: str) -> Callable[[Request], Awaitable[AuthedUser]]:
     async def dependency(request: Request) -> AuthedUser:
         authorizer = _authorizer(request)
         user = await authorizer.authenticate(request.headers.get("authorization"))
-        if user.must_change_password:
-            raise ForbiddenError(details={"reason": "must_change_password"})
+        ensure_password_changed(user)
         raw_app_id = request.path_params.get("app_id")
         app_id = UUID(str(raw_app_id)) if raw_app_id else None
         await authorizer.authorize(user, app_id=app_id, permission=permission)

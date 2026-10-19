@@ -4,13 +4,23 @@
 
 ## [Unreleased]
 
+### 新增（M4.1 ⑤ 里程碑验收与收尾，2026-10-19）
+- **验收脚本** `backend/scripts/e2e_m4/e2e_m41_admin.py`：真 PG / Redis + 真 uvicorn（不调模型），九步 **34 项**判定——`bootstrap-admin` 幂等、连续失败 5 次锁定 `423` 与 `Retry-After`、未知邮箱与错密码同文案、成员授权后权限立即生效、refresh 轮换与复用踢全端、审计动作与脱敏、一次性密码首登改密、第 11 次登录 `429`；结果写 `results/e2e_m41_admin.json`，非零退出码即失败。
+- **首登改密门槛统一**：新增 `core.security.ensure_password_changed`，`require_perm` 与 `GET /admin/audit`、`/audit/actions` 共用同一口径——临时密码用户除 `GET /auth/me`、`POST /auth/password`、`POST /auth/logout` 外一律 `403`（此前 `/audit` 走 `require_user()` + 显式 `authorize` 绕过了这道门槛）。
+- 管理接口参考补「`must_change_password` 的可见范围」一行。
+
+### 测试（M4.1 ⑤，2026-10-19）
+- 后端单测 **1058 passed**（新增 `test_auth_api.py::test_must_change_password_blocks_everything_but_the_password_endpoints`）、1 failed（`tests/unit/test_storage.py::test_symlink_escape_rejected`，Windows 符号链接权限环境问题）、253 deselected；覆盖率 **82.48%**（11149 语句 / 1953 未覆盖）。
+- 本机 Docker 集成套件 **252 passed, 1060 deselected in 369.17s**；`ruff check` / `ruff format`（344 文件）/ `lint-imports`（13 kept, 0 broken）/ `prompts check`（8 个）全绿；真实模型费用 0 元。
+- 里程碑验收脚本九步 **34/34** 通过（`backend/scripts/e2e_m4/results/e2e_m41_admin.json`）。
+
 ### 新增（M4.1 ④ 前端骨架，2026-10-19）
 - **`frontend/` 骨架落地**（Vue 3 + Element Plus + Pinia + Vue Router，自建、不 fork 模板，见 ADR-0018）：`src/layouts/AdminLayout.vue` 左侧菜单从路由 `meta.menu` 派生并按 `auth.can(meta.permission)` 过滤，应用切换器（切换后当前页权限不足自动回概览）、右上用户菜单（改密 / 退出）。
 - **登录与令牌**：`stores/auth.ts` 把 access/refresh 放内存 + `sessionStorage`；`api/http.ts` 的 axios 实例统一带 `Bearer`，`401 + TOKEN_EXPIRED` 用**单飞 Promise** 刷新一次后重放原请求（`_retried` 防循环），刷新失败清态回登录页；错误体统一读 `error.message` 并附 `request_id`，`suppressErrorToast` 可静默。
 - **页面**：登录（`ACCOUNT_LOCKED` 文案）、概览、用户管理（搜索 / 新建 / 禁用 / 重置密码一次性弹窗 / 删除，权限 `user.admin`）、审计日志（动作筛选 + 游标「加载更多」+ 详情抽屉，权限 `audit.read`）、修改密码。
 - **权限**：`utils/perm.ts` 的 `permissionsOf` / `hasPermission` 与 `v-perm` 指令（无权限直接移除节点）共用一套判断，路由守卫 `authGuard` 先补 `GET /auth/me` 再判。
 - **类型从契约生成**：`scripts/gen-api.mjs`（`npm run gen:api`）让后端 dump `create_app().openapi()` 成 `openapi.json`，再用 `openapi-typescript` 生成 `src/api/schema.d.ts`（3000 行，入库；`openapi.json` 是中间文件，已 gitignore）。后端多数路由用 `JSONResponse` 没有 `response_model`，响应体仍以手写类型为准（`src/api/admin.ts`）。
-- **测试基座**：`vitest.config.ts`（jsdom、`src/**/*.spec.ts`、v8 覆盖率、`lines`/`statements` 门槛 80，`.vue` 与 `main.ts` 不计入——视图渲染交给 M4.1 ⑤ 的 Playwright 冒烟）。
+- **测试基座**：`vitest.config.ts`（jsdom、`src/**/*.spec.ts`、v8 覆盖率、`lines`/`statements` 门槛 80，`.vue` 与 `main.ts` 不计入——视图渲染交给 M4.6 的里程碑级 Playwright 冒烟，见 ISSUE-74）。
 
 ### 测试（M4.1 ④，2026-10-19）
 - `npm run test:run` → **33 例全绿**（`utils/perm.spec.ts` 7、`stores/auth.spec.ts` 8、`directives/perm.spec.ts` 3、`api/http.spec.ts` 5、`api/admin.spec.ts` 4、`router/index.spec.ts` 6），覆盖率 **84.88% 语句 / 86.09% 行**。
