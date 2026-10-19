@@ -42,6 +42,46 @@ class UserBody(BaseModel):
     display_name: str
     is_super_admin: bool
     must_change_password: bool = False
+    status: Literal["active", "disabled"] = "active"
+
+
+class UserListBody(BaseModel):
+    items: list[UserBody] = Field(default_factory=list)
+
+
+class UserCreateBody(_Body):
+    email: Email
+    display_name: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
+    ]
+    password: Password
+    is_super_admin: bool = False
+
+
+class UserPatchBody(_Body):
+    display_name: (
+        Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+        | None
+    ) = None
+    status: Literal["active", "disabled"] | None = None
+    is_super_admin: bool | None = None
+    password: Password | None = None
+
+
+class MemberBody(_Body):
+    role_id: Literal["app_admin", "viewer"]
+
+
+class MemberRow(BaseModel):
+    user_id: UUID
+    email: str
+    display_name: str
+    role_id: Literal["app_admin", "viewer"]
+    status: Literal["active", "disabled"] = "active"
+
+
+class MemberListBody(BaseModel):
+    items: list[MemberRow] = Field(default_factory=list)
 
 
 class AppMembership(BaseModel):

@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aics.db.models.app import App, UserAppRole
@@ -89,14 +89,23 @@ class AuthRepository:
         self.session.add(user)
         return user
 
-    async def users(self, *, limit: int = 100) -> list[User]:
-        result = await self.session.execute(
-            select(User)
-            .where(User.deleted_at.is_(None))
-            .order_by(User.created_at.desc())
-            .limit(limit)
-        )
+    async def users(self, *, q: str | None = None, limit: int = 100) -> list[User]:
+        stmt = select(User).where(User.deleted_at.is_(None))
+        if q:
+            like = f"%{q.strip().lower()}%"
+            stmt = stmt.where(or_(User.email.ilike(like), User.display_name.ilike(like)))
+        result = await self.session.execute(stmt.order_by(User.created_at.desc()).limit(limit))
         return list(result.scalars().all())
+
+    async def members(self, app_id: UUID) -> list[tuple[UserAppRole, User, Role]]:
+        result = await self.session.execute(
+            select(UserAppRole, User, Role)
+            .join(User, User.id == UserAppRole.user_id)
+            .join(Role, Role.id == UserAppRole.role_id)
+            .where(UserAppRole.app_id == app_id, User.deleted_at.is_(None))
+            .order_by(User.email)
+        )
+        return [tuple(row) for row in result.all()]  # type: ignore[misc]
 
     async def set_user_values(self, user: User, values: dict[str, Any]) -> None:
         for key, value in values.items():

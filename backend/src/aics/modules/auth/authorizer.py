@@ -149,3 +149,7 @@ class AuthAuthorizer:
     async def forget(self, user_id: UUID) -> None:
         """Drop the cached user row (called after password change / disable)."""
         await self._cache_drop(_who_key(self.settings.redis_prefix, user_id))
+
+    async def forget_permissions(self, user_id: UUID, app_id: UUID) -> None:
+        """Drop the cached permission set of one user in one app (M4.1 ③)."""
+        await self._cache_drop(_perm_key(self.settings.redis_prefix, user_id, app_id))

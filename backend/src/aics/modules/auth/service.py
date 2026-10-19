@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import secrets
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -23,10 +24,12 @@ import structlog
 from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from aics.core.audit import AuditEntry, AuditSink
+from aics.core.audit import REDACTED, AuditEntry, AuditSink, diff
 from aics.core.config import Settings, get_settings
 from aics.core.errors import (
     AccountLockedError,
+    ConflictError,
+    NotFoundError,
     UnauthenticatedError,
     ValidationAppError,
 )
@@ -40,6 +43,7 @@ from aics.modules.auth.repository import AuthRepository
 from aics.modules.auth.schemas import (
     AppMembership,
     MeBody,
+    MemberRow,
     SessionBody,
     TokenBody,
     UserBody,
@@ -50,6 +54,7 @@ log = structlog.get_logger()
 MAX_FAILED_LOGINS = 5
 LOCK_MINUTES = 15
 LOGIN_RPM = 10
+MEMBER_ROLES = ("app_admin", "viewer")
 
 
 @dataclass(frozen=True)
@@ -59,6 +64,9 @@ class RequestMeta:
     request_id: str | None = None
 
 
+_NO_META = RequestMeta()
+
+
 def _user_body(user: User) -> UserBody:
     return UserBody(
         id=user.id,
@@ -66,6 +74,7 @@ def _user_body(user: User) -> UserBody:
         display_name=user.display_name,
         is_super_admin=user.is_super_admin,
         must_change_password=user.must_change_password,
+        status="disabled" if user.status != "active" else "active",
     )
 
 
@@ -330,3 +339,256 @@ class AuthService:
         )
         await self.session.commit()
         return self._token_body(access, refresh)
+
+    # ------------------------------------------------- 用户与应用成员（③）
+    async def _forget_permissions(self, user_id: UUID, app_id: UUID) -> None:
+        """Drop the cached permission set so a revocation takes effect immediately (ISSUE-72)."""
+        if self.redis is None:
+            return
+        try:
+            await self.redis.delete(f"{self.settings.redis_prefix}auth:perm:{user_id}:{app_id}")
+        except RedisError as exc:  # pragma: no cover - Redis outage, cache expires anyway
+            log.warning("auth.cache_drop_failed", error_type=type(exc).__name__)
+
+    async def users(self, *, q: str | None = None, limit: int = 100) -> list[UserBody]:
+        return [_user_body(user) for user in await self.repo.users(q=q, limit=limit)]
+
+    async def create_user(
+        self,
+        *,
+        email: str,
+        display_name: str,
+        password: str,
+        is_super_admin: bool = False,
+        actor_id: UUID | None = None,
+        meta: RequestMeta = _NO_META,
+    ) -> UserBody:
+        normalized = email.strip().lower()
+        if await self.repo.user_by_email(normalized) is not None:
+            raise ConflictError(details={"email": normalized})
+        user = await self.repo.create_user(
+            email=normalized,
+            display_name=display_name,
+            password_hash=passwords.hash_password(password),
+        )
+        user.is_super_admin = is_super_admin
+        await self.session.flush()
+        await self._write_audit(
+            AuditEntry(
+                action="user.create",
+                actor_id=actor_id,
+                target_type="user",
+                target_id=user.id,
+                diff={
+                    "email": user.email,
+                    "display_name": display_name,
+                    "is_super_admin": is_super_admin,
+                },
+                ip=meta.ip,
+                user_agent=meta.user_agent,
+                request_id=meta.request_id,
+            )
+        )
+        await self.session.commit()
+        return _user_body(user)
+
+    async def update_user(
+        self,
+        user_id: UUID,
+        *,
+        display_name: str | None = None,
+        status: str | None = None,
+        is_super_admin: bool | None = None,
+        password: str | None = None,
+        actor_id: UUID | None = None,
+        meta: RequestMeta = _NO_META,
+    ) -> UserBody:
+        user = await self.repo.user(user_id)
+        if user is None:
+            raise NotFoundError(details={"user_id": str(user_id)})
+        before = {
+            "display_name": user.display_name,
+            "status": user.status,
+            "is_super_admin": user.is_super_admin,
+        }
+        revoke = False
+        if display_name is not None:
+            user.display_name = display_name
+        if status is not None:
+            user.status = status
+            revoke = revoke or status != "active"
+        if is_super_admin is not None and is_super_admin != user.is_super_admin:
+            user.is_super_admin = is_super_admin
+            revoke = True
+        if password:
+            user.password_hash = passwords.hash_password(password)
+            user.must_change_password = True
+            revoke = True
+        after = {
+            "display_name": user.display_name,
+            "status": user.status,
+            "is_super_admin": user.is_super_admin,
+        }
+        if password:
+            after["password"] = REDACTED
+        if revoke:
+            await self.repo.bump_token_version(user)
+            after["token_version"] = user.token_version
+        await self._write_audit(
+            AuditEntry(
+                action="user.update",
+                actor_id=actor_id,
+                target_type="user",
+                target_id=user.id,
+                diff=diff(before, after),
+                ip=meta.ip,
+                user_agent=meta.user_agent,
+                request_id=meta.request_id,
+            )
+        )
+        await self.session.commit()
+        if revoke:
+            await self._forget_identity(user.id)
+        return _user_body(user)
+
+    async def delete_user(
+        self,
+        user_id: UUID,
+        *,
+        actor_id: UUID | None = None,
+        meta: RequestMeta = _NO_META,
+    ) -> None:
+        user = await self.repo.user(user_id)
+        if user is None:
+            raise NotFoundError(details={"user_id": str(user_id)})
+        user.deleted_at = self.now()
+        user.status = "disabled"
+        await self.repo.bump_token_version(user)
+        await self._write_audit(
+            AuditEntry(
+                action="user.delete",
+                actor_id=actor_id,
+                target_type="user",
+                target_id=user.id,
+                diff={"email": user.email, "deleted": True},
+                ip=meta.ip,
+                user_agent=meta.user_agent,
+                request_id=meta.request_id,
+            )
+        )
+        await self.session.commit()
+        await self._forget_identity(user.id)
+
+    async def reset_password(
+        self,
+        user_id: UUID,
+        *,
+        actor_id: UUID | None = None,
+        meta: RequestMeta = _NO_META,
+    ) -> str:
+        """Generate a one-time password; the plaintext is returned once and never stored."""
+        user = await self.repo.user(user_id)
+        if user is None:
+            raise NotFoundError(details={"user_id": str(user_id)})
+        temporary = secrets.token_urlsafe(12)
+        user.password_hash = passwords.hash_password(temporary)
+        user.must_change_password = True
+        await self.repo.bump_token_version(user)
+        await self._write_audit(
+            AuditEntry(
+                action="user.reset_password",
+                actor_id=actor_id,
+                target_type="user",
+                target_id=user.id,
+                diff={"must_change_password": True},
+                ip=meta.ip,
+                user_agent=meta.user_agent,
+                request_id=meta.request_id,
+            )
+        )
+        await self.session.commit()
+        await self._forget_identity(user.id)
+        return temporary
+
+    async def members(self, app_id: UUID) -> list[MemberRow]:
+        rows = await self.repo.members(app_id)
+        return [
+            MemberRow(
+                user_id=user.id,
+                email=user.email,
+                display_name=user.display_name,
+                role_id=link.role_id,
+                status="disabled" if user.status != "active" else "active",
+            )
+            for link, user, _role in rows
+        ]
+
+    async def set_member(
+        self,
+        app_id: UUID,
+        user_id: UUID,
+        *,
+        role_id: str,
+        actor_id: UUID | None = None,
+        meta: RequestMeta = _NO_META,
+    ) -> MemberRow:
+        if role_id not in MEMBER_ROLES or await self.repo.role(role_id) is None:
+            raise ValidationAppError(
+                details={"errors": [{"loc": ["body", "role_id"], "msg": "未知的角色"}]}
+            )
+        user = await self.repo.user(user_id)
+        if user is None:
+            raise NotFoundError(details={"user_id": str(user_id)})
+        if await self.repo.app(app_id) is None:
+            raise NotFoundError(details={"app_id": str(app_id)})
+        await self.repo.set_membership(user_id=user_id, app_id=app_id, role_id=role_id)
+        await self._write_audit(
+            AuditEntry(
+                action="member.set",
+                actor_id=actor_id,
+                app_id=app_id,
+                target_type="user",
+                target_id=user_id,
+                diff={"role_id": role_id},
+                ip=meta.ip,
+                user_agent=meta.user_agent,
+                request_id=meta.request_id,
+            )
+        )
+        await self.session.commit()
+        await self._forget_identity(user_id)
+        await self._forget_permissions(user_id, app_id)
+        return MemberRow(
+            user_id=user.id,
+            email=user.email,
+            display_name=user.display_name,
+            role_id=role_id,
+            status="disabled" if user.status != "active" else "active",
+        )
+
+    async def remove_member(
+        self,
+        app_id: UUID,
+        user_id: UUID,
+        *,
+        actor_id: UUID | None = None,
+        meta: RequestMeta = _NO_META,
+    ) -> None:
+        removed = await self.repo.delete_membership(user_id=user_id, app_id=app_id)
+        if not removed:
+            raise NotFoundError(details={"user_id": str(user_id), "app_id": str(app_id)})
+        await self._write_audit(
+            AuditEntry(
+                action="member.remove",
+                actor_id=actor_id,
+                app_id=app_id,
+                target_type="user",
+                target_id=user_id,
+                ip=meta.ip,
+                user_agent=meta.user_agent,
+                request_id=meta.request_id,
+            )
+        )
+        await self.session.commit()
+        await self._forget_identity(user_id)
+        await self._forget_permissions(user_id, app_id)

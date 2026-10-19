@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from aics import __version__
+from aics.core.audit import AuditSink
 from aics.core.config import Settings, get_settings
 from aics.core.errors import AppError, error_body
 from aics.core.idempotency import Idempotency
@@ -30,6 +31,8 @@ from aics.memory.locks import RedisLock
 from aics.memory.service import COMPACT_TASK, MemoryService
 from aics.memory.units import pg_units
 from aics.modules.apikeys.service import ApiKeyAuthenticator
+from aics.modules.audit.admin_router import router as audit_router
+from aics.modules.audit.runtime import AuditRuntime
 from aics.modules.auth.admin_router import router as auth_router
 from aics.modules.auth.runtime import AuthRuntime
 from aics.modules.chat import openai
@@ -153,13 +156,24 @@ def build_feedback_runtime(s: Settings) -> FeedbackRuntime:
     return FeedbackRuntime(sessions=get_sessionmaker())
 
 
-def build_auth_runtime(s: Settings, *, redis: Any | None = None) -> AuthRuntime:
+def build_audit_runtime(s: Settings) -> AuditRuntime:
+    """Composition root of `modules.audit`（M4.1 ③）：审计写入端与查询。
+
+    `PgAuditSink` 由 `build_auth_runtime(audit=...)` 注入认证服务，认证类动作因此在业务事务里落库；
+    `GET /api/v1/admin/audit` 用同一份 sessionmaker 读。
+    """
+    return AuditRuntime(sessions=get_sessionmaker())
+
+
+def build_auth_runtime(
+    s: Settings, *, redis: Any | None = None, audit: AuditSink | None = None
+) -> AuthRuntime:
     """Composition root of `modules.auth`（M4.1 ②）：JWT 认证 + RBAC。
 
     `redis` 同时用于刷新令牌轮换（`{prefix}auth:refresh:*`）与鉴权缓存（60 秒）；不传时
     退化成「不轮换、每次都回表」，本地单测照样跑得动，生产必须配。
     """
-    return AuthRuntime(sessions=get_sessionmaker(), settings=s, redis=redis)
+    return AuthRuntime(sessions=get_sessionmaker(), settings=s, redis=redis, audit=audit)
 
 
 @asynccontextmanager
@@ -186,8 +200,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.handoff_runtime = build_handoff_runtime(s, redis=redis)
     if getattr(app.state, "feedback_runtime", None) is None:  # tests may install their own
         app.state.feedback_runtime = build_feedback_runtime(s)
+    if getattr(app.state, "audit_runtime", None) is None:  # tests may install their own
+        app.state.audit_runtime = build_audit_runtime(s)
     if getattr(app.state, "auth_runtime", None) is None:  # tests may install their own
-        app.state.auth_runtime = build_auth_runtime(s, redis=redis)
+        app.state.auth_runtime = build_auth_runtime(
+            s, redis=redis, audit=app.state.audit_runtime.sink()
+        )
     if getattr(app.state, "authorizer", None) is None:  # core.security.Authorizer (RBAC)
         app.state.authorizer = app.state.auth_runtime.authorizer()
     log.info("app.started", env=s.env, version=__version__)
@@ -287,6 +305,7 @@ def create_app() -> FastAPI:
     app.include_router(handoff_router)
     app.include_router(feedback_router)
     app.include_router(auth_router)
+    app.include_router(audit_router)
     app.include_router(openai_router)
     return app
 

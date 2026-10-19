@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+### 新增（M4.1 ③ 审计与用户授权，2026-10-19）
+- **`modules/audit`** 落地：`sink.py` 的 `PgAuditSink` 把 `core.audit.AuditEntry` 写进 `audit_logs`（**只 `session.add`、不 commit**，与业务写同一条事务）；`repository.py` / `service.py` 提供 `id` 降序游标分页（游标是 `a:<id>` 的 base64url，非法游标 → 422）；`runtime.py` 与 `admin_router.py` 暴露 `GET /api/v1/admin/audit`（`app_id` / `action` / `actor_id` / `cursor` / `page_size`）与 `GET /api/v1/admin/audit/actions`。
+- **审计读权限**：平台级查询（不带 `app_id`）只有 super_admin；带 `app_id` 时按该应用的 `audit.read` 判定。路由路径没有 `app_id`，所以用 `require_user()` + 显式 `authorizer.authorize(...)`，不走 `require_perm`。
+- **用户管理**：`GET/POST /api/v1/admin/users`、`PATCH/DELETE /api/v1/admin/users/{user_id}`（权限 `user.admin`）。新建用户强制首登改密；改密、禁用、改超管都会 `token_version + 1` 并删 `auth:who:` 缓存，删除是软删除 + 立即失效 token；重复邮箱 409，未知用户 404。
+- **应用成员**：`GET /api/v1/admin/apps/{app_id}/members`（`app.read`）、`PUT/DELETE …/members/{user_id}`（`member.write`，角色只收 `app_admin` / `viewer`）。增删改角色后同时删 `auth:who:{user}` 与 `auth:perm:{user}:{app}` 两个缓存——ISSUE-72 的「撤销最长延迟 60 秒」因此关闭，权限变更立即生效。
+- **审计动作**：`user.create` / `user.update` / `user.delete` / `member.set` / `member.remove`，`diff` 用 `core.audit.diff()` 只留变化键并脱敏（密码、密钥、令牌一律 `***`）；`app_id` 在成员动作上必填，平台级用户动作留空。
+- **依赖合同**：`audit` 只依赖 `core` 与 `db.models`（不 import `auth`），写入端由 `main` 注入 `AuthRuntime(audit=...)`。
+
+### 测试（M4.1 ③，2026-10-19）
+- 新增 `backend/tests/unit/test_audit_module.py`（11 例：游标往返与四类非法游标、分页取 `page_size + 1` 判有无下一页、`page` / `actions` 协议层、403 透传）与 `backend/tests/unit/test_auth_users.py`（19 例：建用户哈希与审计、重复邮箱 409、改名不踢 token、禁用/改密/删除踢 token 与删缓存、成员增删的 404/422 与双缓存失效、`reset-password` 一次性临时密码、六个路由的状态码与 401）。
+- 新增 `backend/tests/integration/test_audit_pg.py`（8 例）：审计与业务写同事务（回滚后无行）、密码在 `diff` 里被脱敏成 `***`、游标翻页两页、授权变更后 `permissions_of` 立即变化、删除用户后旧 access 401、平台级审计非超管 403、`actions` 去重、`app_id` 无外键（应用不存在也能写）。
+- 门禁：单测 **1057 passed / 1 failed / 253 deselected，覆盖率 82.47%（11145 语句 / 1954 未覆盖）**（唯一失败是 Windows 符号链接特权的 `tests/unit/test_storage.py::test_symlink_escape_rejected`，`OSError: [WinError 1314]`）；本机 Docker 全量集成 **252 passed in 499.72s**；`lint-imports` 13 个合同 0 违规；真实模型费用 0 元。
+
 ### 新增（M4.1 ② 鉴权底座，2026-10-19）
 - **`modules/auth`** 从空壳变成可用的鉴权模块：`passwords.py`（argon2id，`time_cost=3 / memory_cost=64 MiB`）、`tokens.py`（PyJWT HS256，access 30 分钟 / refresh 7 天，claims 为 `sub/tv/typ/jti/iat/exp`）、`repository.py`、`permissions.py`（25 个点分权限与 `super_admin/app_admin/viewer` 三角色）、`schemas.py`、`service.py`、`authorizer.py`、`runtime.py`、`admin_router.py`（`/api/v1/admin/auth/login|refresh|logout|me|password`）。
 - **登录安全**：同一邮箱连续失败 5 次锁 15 分钟（423 `ACCOUNT_LOCKED` 带 `Retry-After`）、按 IP 每分钟 10 次（429）；未知邮箱、密码错误、账号禁用一律同一句「邮箱或密码不正确」，不暴露账号是否存在；成功登录按需 rehash、清除失败计数。
