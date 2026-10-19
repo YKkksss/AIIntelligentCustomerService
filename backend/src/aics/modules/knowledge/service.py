@@ -26,6 +26,7 @@ from aics.core.config import get_settings
 from aics.core.errors import (
     AppError,
     DocumentNotFoundError,
+    FileTooLargeError,
     NotFoundError,
     ValidationAppError,
 )
@@ -248,7 +249,8 @@ class KnowledgeService:
         if not data:
             raise ValidationAppError(message="文件为空")
         if len(data) > max_bytes:
-            raise ValidationAppError(message=f"文件超过 {max_bytes // (1024 * 1024)} MB")
+            # 与 HTTP 入口同一码值（ISSUE-32）：服务层也不再用 422。
+            raise FileTooLargeError(details={"max_bytes": max_bytes})
 
     @staticmethod
     def _resolve_chunk_config(

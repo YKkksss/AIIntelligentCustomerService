@@ -50,3 +50,29 @@ def test_custom_and_crash() -> None:
 def test_validation_422() -> None:
     r = _client().get("/v?n=abc")
     assert r.status_code == 422 and r.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_unknown_route_uses_the_error_envelope() -> None:
+    r = _client().get("/nope", headers={"X-Request-ID": "rid-2"})
+    assert r.status_code == 404
+    assert r.json() == {
+        "error": {
+            "code": "NOT_FOUND",
+            "message": "资源不存在",
+            "details": {},
+            "request_id": "rid-2",
+        }
+    }
+
+
+def test_wrong_method_uses_the_error_envelope() -> None:
+    r = _client().post("/v")
+    assert r.status_code == 405
+    assert r.json()["error"]["code"] == "METHOD_NOT_ALLOWED"
+    assert r.headers["allow"] == "GET"
+
+
+def test_unknown_v1_route_uses_the_openai_envelope() -> None:
+    r = _client().get("/v1/nope")
+    assert r.status_code == 404
+    assert r.json()["error"]["type"] == "invalid_request_error"

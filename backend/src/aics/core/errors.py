@@ -84,6 +84,12 @@ class ValidationAppError(AppError):
     code, status, message = "VALIDATION_ERROR", 422, "参数校验失败"
 
 
+class MethodNotAllowedError(AppError):
+    """路由存在但方法不允许：Starlette 的 405 也走统一错误体（ISSUE-01）。"""
+
+    code, status, message = "METHOD_NOT_ALLOWED", 405, "方法不允许"
+
+
 def error_body(
     code: str, message: str, request_id: str | None, details: dict[str, Any] | None = None
 ) -> dict[str, Any]:

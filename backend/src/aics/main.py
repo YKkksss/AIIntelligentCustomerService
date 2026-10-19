@@ -16,6 +16,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from aics import __version__
 from aics.core.config import Settings, get_settings
@@ -237,6 +238,23 @@ def create_app() -> FastAPI:
             error_body("VALIDATION_ERROR", "参数校验失败", _rid(request), details),
             status_code=422,
         )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        """Starlette 自己的 404 / 405 也走统一错误体（ISSUE-01，M3.6 ⑤）。"""
+        if exc.status_code == 404:
+            code, message = "NOT_FOUND", "资源不存在"
+        elif exc.status_code == 405:
+            code, message = "METHOD_NOT_ALLOWED", "方法不允许"
+        else:
+            # 其余状态交给 Starlette 原样返回（错误码表里没有对应项，不硬造）。
+            return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+        body = (
+            openai.error_body(code, message, exc.status_code)
+            if _openai_path(request)
+            else error_body(code, message, _rid(request))
+        )
+        return JSONResponse(body, status_code=exc.status_code, headers=exc.headers or None)
 
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception) -> JSONResponse:

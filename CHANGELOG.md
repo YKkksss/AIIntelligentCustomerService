@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### 新增（M3.6 ⑤ M3 收尾，2026-10-19）
+- **未知路由与 405 也走统一错误体**（ISSUE-01）：`backend/src/aics/main.py` 注册 `StarletteHTTPException` 处理器——404 → `NOT_FOUND`、405 → `METHOD_NOT_ALLOWED`（保留 `Allow` 头），其余状态码保持 Starlette 原样返回；`/v1` 前缀仍走 OpenAI 错误体。接口规范 §4 补 405 行。
+- **文件超限两个入口同码**（ISSUE-32）：`backend/src/aics/modules/knowledge/service.py::_check_size` 改抛 `FileTooLargeError`（413 `FILE_TOO_LARGE` + `details.max_bytes`），与路由的分块检查一致；空文件仍是 422。
+- `tests/unit/test_app_errors.py` 三条新用例（未知路径 404 信封与 `request_id`、405 信封与 `Allow` 头、`/v1` 未知路径的 OpenAI 错误体）。
+
+### 文档（M3.6 ⑤，2026-10-19）
+- [M3 测试报告](docs/06-development/10-M3测试报告.md) 新增 **§18 M3.6**（反馈接口、错误码一致性、OpenAPI 与 e2e、六条链路的真实 HTTP 端到端汇总、门禁）与 **M3 里程碑结论**；§1 的本机执行记录按「本机已有 Docker 栈」改写。
+- [开发计划](docs/00-planning/03-开发计划.md)：M3 行打 ✅ 并写 **M3 里程碑总结**、M3.6 状态块；待复验清单补 4 条 M3.6 服务器项（反馈与隔离用例、接入指南 e2e、`/docs` 生产口径、里程碑真实模型 ≈0.4 元）。
+- [README](README.md) 当前状态改「M3.6 完成、M3 里程碑收尾」；[代码地图](docs/00-handoff/02-实现现状与代码地图.md) 标题与里程碑行、§8 测试数字（unit 67 文件 / 648 函数 / 82.55%、集成 33 文件 / 186 函数 / 239 项）与 §9 差距行同步（404/405 与跨入口 413 标已解决）。
+- [待解决问题清单](docs/00-planning/07-待解决问题清单.md)：ISSUE-01、ISSUE-08、ISSUE-32 归档，§1 保留 P1/P2 未解决项。
+
+
 ### 新增（M3.6 ④ OpenAPI 整理与接入指南示例，2026-10-19）
 - **`core/openapi.py`**：共享的 `ErrorItem` / `ErrorEnvelope` 模型（`error.code / message / details / request_id`）与 `errors(*statuses)` 助手（12 个状态码的中文描述）；**22 条路由全部补 `summary` 与错误响应声明**——应用作用域路由统一 `401/403/404/422`（上传再加 `409/413/429`、对话加 `429`、坐席接入加 `409`），`/v1` 的两种路由用各自错误体（`{"error": {message, type, code}}`），因此只声明描述、不复用 `ErrorEnvelope`。
 - `/docs`、`/redoc`、`/openapi.json` 在 `AICS_ENV=prod` 下整体关闭（`docs_url` / `redoc_url` / `openapi_url` 均为 `None`），非生产环境开放；[接口规范 §1](docs/04-api/01-接口规范.md) 的「生产环境仅管理员网段可访问」改成「生产整体关闭」（ISSUE-68 归档）。
