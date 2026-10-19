@@ -57,3 +57,6 @@ backups/
 *.dump
 *.sql.gz
 *.snapshot
+
+# 前端脚本生成物（npm run gen:api 的中间文件；schema.d.ts 要入库）
+frontend/openapi.json

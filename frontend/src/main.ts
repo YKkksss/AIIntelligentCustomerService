@@ -6,5 +6,9 @@ import 'element-plus/dist/index.css'
 
 import App from './App.vue'
 import router from './router'
+import { perm } from './directives/perm'
 
-createApp(App).use(createPinia()).use(router).use(ElementPlus, { locale: zhCn }).mount('#app')
+const app = createApp(App)
+app.use(createPinia()).use(router).use(ElementPlus, { locale: zhCn })
+app.directive('perm', perm)
+app.mount('#app')

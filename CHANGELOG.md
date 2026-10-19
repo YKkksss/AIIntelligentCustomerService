@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+### 新增（M4.1 ④ 前端骨架，2026-10-19）
+- **`frontend/` 骨架落地**（Vue 3 + Element Plus + Pinia + Vue Router，自建、不 fork 模板，见 ADR-0018）：`src/layouts/AdminLayout.vue` 左侧菜单从路由 `meta.menu` 派生并按 `auth.can(meta.permission)` 过滤，应用切换器（切换后当前页权限不足自动回概览）、右上用户菜单（改密 / 退出）。
+- **登录与令牌**：`stores/auth.ts` 把 access/refresh 放内存 + `sessionStorage`；`api/http.ts` 的 axios 实例统一带 `Bearer`，`401 + TOKEN_EXPIRED` 用**单飞 Promise** 刷新一次后重放原请求（`_retried` 防循环），刷新失败清态回登录页；错误体统一读 `error.message` 并附 `request_id`，`suppressErrorToast` 可静默。
+- **页面**：登录（`ACCOUNT_LOCKED` 文案）、概览、用户管理（搜索 / 新建 / 禁用 / 重置密码一次性弹窗 / 删除，权限 `user.admin`）、审计日志（动作筛选 + 游标「加载更多」+ 详情抽屉，权限 `audit.read`）、修改密码。
+- **权限**：`utils/perm.ts` 的 `permissionsOf` / `hasPermission` 与 `v-perm` 指令（无权限直接移除节点）共用一套判断，路由守卫 `authGuard` 先补 `GET /auth/me` 再判。
+- **类型从契约生成**：`scripts/gen-api.mjs`（`npm run gen:api`）让后端 dump `create_app().openapi()` 成 `openapi.json`，再用 `openapi-typescript` 生成 `src/api/schema.d.ts`（3000 行，入库；`openapi.json` 是中间文件，已 gitignore）。后端多数路由用 `JSONResponse` 没有 `response_model`，响应体仍以手写类型为准（`src/api/admin.ts`）。
+- **测试基座**：`vitest.config.ts`（jsdom、`src/**/*.spec.ts`、v8 覆盖率、`lines`/`statements` 门槛 80，`.vue` 与 `main.ts` 不计入——视图渲染交给 M4.1 ⑤ 的 Playwright 冒烟）。
+
+### 测试（M4.1 ④，2026-10-19）
+- `npm run test:run` → **33 例全绿**（`utils/perm.spec.ts` 7、`stores/auth.spec.ts` 8、`directives/perm.spec.ts` 3、`api/http.spec.ts` 5、`api/admin.spec.ts` 4、`router/index.spec.ts` 6），覆盖率 **84.88% 语句 / 86.09% 行**。
+- `npm run lint`（eslint 10 + prettier）与 `npm run build`（`vue-tsc -b && vite build`）全过；`dist/assets/index-*.js` gzip 275 KB。
+- 新增 dev 依赖：`vitest` / `@vue/test-utils` / `jsdom` / `@vitest/coverage-v8` / `vue-eslint-parser`（`openapi-typescript` 需 `--legacy-peer-deps`，见 ISSUE-73）。
+
 ### 新增（M4.1 ③ 审计与用户授权，2026-10-19）
 - **`modules/audit`** 落地：`sink.py` 的 `PgAuditSink` 把 `core.audit.AuditEntry` 写进 `audit_logs`（**只 `session.add`、不 commit**，与业务写同一条事务）；`repository.py` / `service.py` 提供 `id` 降序游标分页（游标是 `a:<id>` 的 base64url，非法游标 → 422）；`runtime.py` 与 `admin_router.py` 暴露 `GET /api/v1/admin/audit`（`app_id` / `action` / `actor_id` / `cursor` / `page_size`）与 `GET /api/v1/admin/audit/actions`。
 - **审计读权限**：平台级查询（不带 `app_id`）只有 super_admin；带 `app_id` 时按该应用的 `audit.read` 判定。路由路径没有 `app_id`，所以用 `require_user()` + 显式 `authorizer.authorize(...)`，不走 `require_perm`。
