@@ -33,6 +33,8 @@ from aics.modules.chat import openai
 from aics.modules.chat.openai_router import router as openai_router
 from aics.modules.chat.router import router as chat_router
 from aics.modules.chat.runtime import ChatRuntime
+from aics.modules.feedback.router import router as feedback_router
+from aics.modules.feedback.runtime import FeedbackRuntime
 from aics.modules.handoff.router import router as handoff_router
 from aics.modules.handoff.runtime import HandoffRuntime
 from aics.modules.knowledge.chunk_search import PgChunkSearch
@@ -139,6 +141,15 @@ def build_handoff_runtime(s: Settings, *, redis: Any | None = None) -> HandoffRu
     return HandoffRuntime(sessions=get_sessionmaker(), redis=redis, redis_prefix=s.redis_prefix)
 
 
+def build_feedback_runtime(s: Settings) -> FeedbackRuntime:
+    """Composition root of `modules.feedback`: 只写 `feedback` 一张表（M3.6 ②）。
+
+    `s` 目前没有用到的字段，签名保留是为了与其它 `build_*_runtime` 一致，将来接评测用例
+    （M5.3）时可以在这里塞依赖而不用改调用点。
+    """
+    return FeedbackRuntime(sessions=get_sessionmaker())
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     s = get_settings()
@@ -161,6 +172,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.knowledge_runtime = build_knowledge_runtime(s)
     if getattr(app.state, "handoff_runtime", None) is None:  # tests may install their own
         app.state.handoff_runtime = build_handoff_runtime(s, redis=redis)
+    if getattr(app.state, "feedback_runtime", None) is None:  # tests may install their own
+        app.state.feedback_runtime = build_feedback_runtime(s)
     log.info("app.started", env=s.env, version=__version__)
     yield
     await app.state.chat_runtime.drain()
@@ -239,6 +252,7 @@ def create_app() -> FastAPI:
     app.include_router(chat_router)
     app.include_router(knowledge_router)
     app.include_router(handoff_router)
+    app.include_router(feedback_router)
     app.include_router(openai_router)
     return app
 

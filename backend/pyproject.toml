@@ -212,9 +212,9 @@ forbidden_modules = ["aics.modules.auth", "aics.modules.apikeys", "aics.modules.
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
-name = "feedback 只可依赖 eval"
+name = "feedback 只可依赖 chat、eval"
 type = "forbidden"
 source_modules = ["aics.modules.feedback"]
-forbidden_modules = ["aics.modules.auth", "aics.modules.apikeys", "aics.modules.audit", "aics.modules.stats", "aics.modules.knowledge", "aics.modules.apps", "aics.modules.webhooks", "aics.modules.chat", "aics.modules.handoff"]
-# feedback→eval→chat 是设计允许的间接链路（ADR-0017）
+forbidden_modules = ["aics.modules.auth", "aics.modules.apikeys", "aics.modules.audit", "aics.modules.stats", "aics.modules.knowledge", "aics.modules.apps", "aics.modules.webhooks", "aics.modules.handoff"]
+# feedback 直接读消息角色（feedback→chat），并允许 feedback→eval（M5.3 转用例）；chat 不反向依赖 feedback（ADR-0017）
 allow_indirect_imports = true

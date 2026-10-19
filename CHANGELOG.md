@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+### 新增（M3.6 ② 反馈接口与迁移 0013，2026-10-19）
+- **迁移 `0013`**：`feedback` 表（`id`、`app_id`、`message_id` 唯一、`rating` ∈ {1,-1}、`comment`、`source` ∈ {api,admin} 默认 `api`、`handled` 默认 false、`eval_case_id`、`created_at` / `updated_at`；索引 `ix_feedback_app_created`）。`eval_case_id` 暂不加外键——`eval_cases` 要到 M5.1 才建表，M5.3 补约束。ORM 见 `db/models/feedback.py`（已导出）。
+- **开放接口** `POST /api/v1/apps/{app_id}/messages/{message_id}/feedback`（scope `chat`）：请求 `{"rating": 1|-1, "comment": "可选"}`，响应 `200 {"id", "rating"}`。只有 `role = assistant` 的回答可反馈（否则 422 `VALIDATION_ERROR`，`details.errors[0].loc = ["path", "message_id"]`）；`message_id` 在唯一键上 `ON CONFLICT DO UPDATE` **覆盖写**，重复提交不会新增行、`id` 与 `created_at` 不变；消息不存在或不属于本应用一律 404 `NOT_FOUND`（`details.message_id`，不新增 `MESSAGE_NOT_FOUND`，见 ISSUE-67）。
+- `modules/feedback`：`schemas.py`（`FeedbackBody`，`Literal[1, -1]` 与数据库 CHECK 双对齐、`comment` ≤2000 且空白归一成 NULL）、`repository.py`（`FeedbackRepository.upsert / by_message`）、`service.py`（校验消息角色 + 提交）、`runtime.py`、`router.py`；`main.build_feedback_runtime` 与 lifespan 装载（测试可预装）。
+- **依赖合同改判**：`feedback` 需要读消息角色，必须依赖 `modules.chat` 的 `MessageRepository`（`chat` 不反向依赖，无环），import-linter 合同由「feedback 只可依赖 eval」改为「feedback 只可依赖 chat、eval」（见 ISSUE-69）。`tests/open_api.py` 的开放接口清单增加到 **18 条**应用作用域路由。
+
+### 测试（M3.6 ②，2026-10-19）
+- 新增 `tests/unit/test_feedback_service.py`（5 例）与 `tests/unit/test_feedback_api.py`（13 例）：写入与提交、空白评论归一、消息不存在 404、非 assistant 三种角色 422、`rating` 越界与类型错误 6 组参数化、未知字段拒绝、2001 字评论拒绝、只有 `handoff:write` 的 Key 403、响应体只含 `{id, rating}` 且透传限流头。
+- 新增 `tests/integration/test_feedback_pg.py`（6 例，真 PG）：写入行、覆盖写保持 `id` / `created_at` 且 `updated_at` 变大、跨应用提交 404 且原行不变、消息不存在 404、非 assistant 422 且不落行、repository 直查。
+- `tests/integration/test_isolation_pg.py` 补 `test_cross_app_message_is_404_on_feedback`（A 的 Key + A 的路径 + B 的消息 → 404），并把反馈路由纳入参数化的跨应用清单（共 34 例）。
+- `tests/unit/test_apps_config_service.py` 的 scoped-repository 守卫补 `feedback` 表与 `FeedbackRepository`。
+- 门禁：`ruff check` / `ruff format --check`（312 文件）/ `lint-imports`（13 契约）/ `prompts check`（8 个）全绿；单测 **980 passed**、覆盖率 **82.51%**（10143 语句 / 1774 未覆盖；唯一失败是 Windows 符号链接环境用例 `tests/unit/test_storage.py::test_symlink_escape_rejected`）；本机 Docker 集成套件全量 **233 项全部通过**（489.99 s）。真实模型费用 0 元。
+
 ### 新增（M3.5 ⑤ 演示接收端与文档收尾，2026-10-19）
 - `scripts/e2e_m3/webhook_receiver.py`：可直接运行的**示例接收端**（FastAPI，`python -m scripts.e2e_m3.webhook_receiver`）。按第三方接入指南 §7.4 的示例验签（5 分钟窗口），`POST /hook` 记录每条投递（`GET /received` 可查），`POST /reset` 可换密钥、也可令它**先答 N 次 500** 用来演示退避重试。它同时是接入方的参考实现。
 - `scripts/e2e_m3/e2e_m35_webhooks.py`：里程碑验收脚本（真 HTTP + 真 PG + 真 Redis，默认假模型 0 元，`--real-llm` 走真模型）。六步 26 项判定：`handoff.requested` 投递到接收端且验签通过、`accept` → `handoff.accepted`、坐席发言 → `message.created` + 用户可见 `human_agent`、`release` → `handoff.released`、接收端先答 500 时按 10 秒退避重试且重试扫描能领到该条、事件流「补发 1 帧 → 带 `Last-Event-ID` 重连只收下一帧 → 同会话触发事件时收到实时帧」。结果写 `results/e2e_m35_webhooks.json`。

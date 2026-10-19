@@ -11,7 +11,7 @@
 新增接口时：在这里补一行（否则 CI 失败），并在 `tests/integration/test_isolation_pg.py` 补
 对应的隔离用例（设计讨论 0009 D22）。
 
-`{app_id}`、`{conversation_id}` 与 `{document_id}` 由测试填充；`body` 是请求体模板（GET 为 None）。
+`{app_id}`、`{conversation_id}`、`{document_id}` 与 `{message_id}` 由测试填充；`body` 是请求体模板（GET 为 None）。
 """
 
 from __future__ import annotations
@@ -47,6 +47,7 @@ OPEN_API: list[tuple[str, str, dict[str, Any] | None]] = [
         {"agent_id": "a_001"},
     ),
     ("GET", "/api/v1/apps/{app_id}/handoffs", None),
+    ("POST", "/api/v1/apps/{app_id}/messages/{message_id}/feedback", {"rating": -1}),
     ("GET", "/api/v1/apps/{app_id}/documents", None),
     ("POST", "/api/v1/apps/{app_id}/documents", None),  # multipart：由隔离用例单独构造
     ("POST", "/api/v1/apps/{app_id}/documents/url", {"url": "https://example.com/a.md"}),

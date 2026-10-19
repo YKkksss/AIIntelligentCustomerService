@@ -33,6 +33,7 @@ from aics.db.models import Document
 from aics.ingest.repository import DocumentRepository
 from aics.main import create_app
 from aics.modules.apikeys.service import ApiKeyAuthenticator, ApiKeyService
+from aics.modules.feedback.runtime import FeedbackRuntime
 from aics.modules.handoff.runtime import HandoffRuntime
 from aics.modules.knowledge.runtime import KnowledgeRuntime
 
@@ -98,6 +99,8 @@ def build_app(pg: dict[str, Any], redis: Any) -> FastAPI:
     app.state.handoff_runtime = HandoffRuntime(sessions=pg["sessions"])
     # 读接口无需存储/嵌入器/Qdrant；写接口（M3.2 ③）会换成带 fake 的运行时
     app.state.knowledge_runtime = KnowledgeRuntime(sessions=pg["sessions"])
+    # 反馈只写一张表（M3.6 ②）：消息不存在/不属于本应用要在 service 层收口成 404
+    app.state.feedback_runtime = FeedbackRuntime(sessions=pg["sessions"])
     return app
 
 
@@ -113,6 +116,12 @@ async def iso(pg: dict[str, Any], redis_it: Any) -> AsyncIterator[dict[str, Any]
         # 两个应用各自真实存在一个会话：A 的用于正向对照，B 的充当“别人的资源”
         conv_a = await ask(client, pg["app_a"], key_a)
         conv_b = await ask(client, pg["app_b"], key_b)
+        # 反馈路由要一个消息 id（B 的 assistant 回答）：跨应用时它是「别人的回答」
+        listing = await client.get(
+            f"/api/v1/apps/{pg['app_b']}/conversations/{conv_b}/messages", headers=auth(key_b)
+        )
+        assert listing.status_code == 200, listing.text
+        msg_b = next(m["id"] for m in listing.json()["items"] if m["role"] == "assistant")
         yield {
             "client": client,
             "app_a": pg["app_a"],
@@ -123,6 +132,7 @@ async def iso(pg: dict[str, Any], redis_it: Any) -> AsyncIterator[dict[str, Any]
             "conv_b": conv_b,
             "doc_a": doc_a,
             "doc_b": doc_b,
+            "msg_b": msg_b,
         }
     await app.state.chat_runtime.drain()
 
@@ -139,7 +149,12 @@ async def ask(client: httpx.AsyncClient, app_id: UUID, key: str) -> UUID:
 async def test_cross_app_key_is_404(
     iso: dict[str, Any], method: str, path: str, body: dict[str, Any] | None
 ) -> None:
-    url = path.format(app_id=iso["app_b"], conversation_id=iso["conv_b"], document_id=iso["doc_b"])
+    url = path.format(
+        app_id=iso["app_b"],
+        conversation_id=iso["conv_b"],
+        document_id=iso["doc_b"],
+        message_id=iso["msg_b"],
+    )
 
     r = await iso["client"].request(
         method, url, headers=auth(iso["key_a"]), **_payload(method, path, body)
@@ -194,6 +209,19 @@ async def test_cross_app_conversation_is_404_on_events(iso: dict[str, Any]) -> N
 
     assert r.status_code == 404, r.text
     assert r.json()["error"]["code"] == "CONVERSATION_NOT_FOUND"
+
+
+async def test_cross_app_message_is_404_on_feedback(iso: dict[str, Any]) -> None:
+    """A 的 Key 不能给 B 的回答点赞（M3.6 ②）：资源级 404，`details` 带 message_id。"""
+    r = await iso["client"].post(
+        f"/api/v1/apps/{iso['app_a']}/messages/{iso['msg_b']}/feedback",
+        headers=auth(iso["key_a"]),
+        json={"rating": -1, "comment": "跨应用"},
+    )
+
+    assert r.status_code == 404, r.text
+    assert r.json()["error"]["code"] == "NOT_FOUND"
+    assert r.json()["error"]["details"] == {"message_id": iso["msg_b"]}
 
 
 async def test_cross_app_conversation_does_not_leak_messages(iso: dict[str, Any]) -> None:
