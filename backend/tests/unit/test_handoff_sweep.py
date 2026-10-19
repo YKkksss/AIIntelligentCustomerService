@@ -18,6 +18,7 @@ import pytest
 
 from aics.modules.handoff import sweep as sw
 from aics.rag.config import HandoffConfig
+from tests import events_support
 
 NOW = datetime(2026, 10, 17, 12, 0, tzinfo=UTC)
 APP = uuid.uuid4()
@@ -108,10 +109,31 @@ class FakeRepo:
         self.state["seen_activity"] = seen_activity
         return 1 if self.state["idle_wins"] else 0
 
+    async def get(self, app_id: uuid.UUID, conversation_id: uuid.UUID) -> SimpleNamespace | None:
+        return _conv(app_id, conversation_id)
 
-def _row(app_id: uuid.UUID, handoff_config: dict[str, Any] | None = None) -> SimpleNamespace:
+
+def _conv(app_id: uuid.UUID, conversation_id: uuid.UUID) -> SimpleNamespace:
     return SimpleNamespace(
-        id=app_id, handoff_config=handoff_config, status="active", deleted_at=None
+        id=conversation_id,
+        app_id=app_id,
+        channel="api",
+        external_user_id="u_1",
+        handoff_agent_id="ag_1",
+    )
+
+
+def _row(
+    app_id: uuid.UUID,
+    handoff_config: dict[str, Any] | None = None,
+    webhook_config: dict[str, Any] | None = None,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=app_id,
+        handoff_config=handoff_config,
+        webhook_config=webhook_config,
+        status="active",
+        deleted_at=None,
     )
 
 
@@ -125,10 +147,11 @@ def rig(
     queue_wins: bool = True,
     idle_wins: bool = True,
     handoff_config: dict[str, Any] | None = None,
+    webhook_config: dict[str, Any] | None = None,
     explode_on: tuple[uuid.UUID, ...] = (),
 ) -> dict[str, Any]:
     ids = list(app_ids) if app_ids is not None else [APP]
-    rows = apps if apps is not None else [_row(a, handoff_config) for a in ids]
+    rows = apps if apps is not None else [_row(a, handoff_config, webhook_config) for a in ids]
     state: dict[str, Any] = {
         "app_ids": ids,
         "pending": list(pending or []),
@@ -169,10 +192,19 @@ def rig(
                 "content": content,
             }
         )
-        return SimpleNamespace(id=uuid.uuid4())
+        return SimpleNamespace(
+            id=uuid.uuid4(),
+            role=role,
+            kind=kind,
+            content=content,
+            agent_id=agent_id,
+            answer_type=None,
+            created_at=NOW,
+        )
 
     monkeypatch.setattr(sw, "HandoffRepository", lambda session: FakeRepo(state))
     monkeypatch.setattr(sw, "append_agent_message", fake_append)
+    state["events"] = events_support.install(monkeypatch)
     state["sessions"] = sessions
     return state
 
@@ -209,6 +241,11 @@ def test_queue_timeout_releases_and_writes_the_notice(monkeypatch: pytest.Monkey
     assert msg["role"] == "system" and msg["kind"] == "handoff_queue_timeout"
     assert msg["content"] == HandoffConfig().queue_timeout_text
     assert msg["conversation_id"] == CID and st["commits"] == 1
+    # M3.5：先这条系统消息，再排队超时事件（顺序 = 发生顺序，§7.3）
+    assert st["events"].types() == ["message.created", "handoff.queue_timeout"]
+    timeout = st["events"].of("handoff.queue_timeout")[0].data
+    assert timeout["waited_seconds"] == 360 and timeout["needs_callback"] is True
+    assert timeout["message"]["kind"] == "handoff_queue_timeout"
 
 
 def test_queue_timeout_uses_the_app_window(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -233,6 +270,7 @@ def test_lost_race_writes_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
     res = asyncio.run(sw.sweep(st["sessions"], now=NOW))
     assert (res.queue_timeouts, res.accepted_idle_closed) == (0, 0)
     assert st["messages"] == [] and st["commits"] == 0
+    assert st["events"].events == []  # 抢输就不发事件
 
 
 # ------------------------------------------------------------------ §3.8 accepted idle
@@ -246,6 +284,18 @@ def test_accepted_idle_closes_with_an_empty_marker(monkeypatch: pytest.MonkeyPat
     assert msg["role"] == "system" and msg["kind"] == "handoff_idle_closed"
     assert msg["content"] == ""  # 空内容时间线标记（§3.8）
     assert st["commits"] == 1
+    assert st["events"].types() == [
+        "message.created",
+        "handoff.released",
+        "conversation.closed",
+    ]
+    released = st["events"].of("handoff.released")[0].data
+    assert (released["released_by"], released["reason"], released["agent_id"]) == (
+        "system",
+        "accepted_idle",
+        "ag_1",
+    )
+    assert st["events"].of("conversation.closed")[0].data == {"reason": "handoff_idle"}
 
 
 def test_queue_timeouts_run_before_accepted_idle(monkeypatch: pytest.MonkeyPatch) -> None:

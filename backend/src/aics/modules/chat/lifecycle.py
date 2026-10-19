@@ -21,7 +21,9 @@ Rules:
 - an app whose stored config no longer validates falls back per object to the platform
   defaults (logged), so one broken app never stops the sweep for the others;
 - each step handles at most `batch` conversations per app per run; the rest wait 30 s.
-Events (`conversation.idle_notice` / `conversation.closed`) go out in M3.5 through `notify`.
+Events (`conversation.idle_notice` / `conversation.closed` + their `message.created`) are written
+in the same transaction as the state change (M3.5); `notify` is the post-commit hook used to wake
+event-stream subscribers.
 """
 
 from __future__ import annotations
@@ -40,9 +42,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from aics.core import metrics
 from aics.db.models import App
 from aics.modules.apps.service import AppService
+from aics.modules.chat import events
 from aics.modules.chat.repository import ConversationRepository, MessageRepository
 from aics.modules.chat.schemas import NewMessage
-from aics.rag.config import EffectiveSessionConfig, HandoffConfig, SessionConfig
+from aics.modules.webhooks import payloads
+from aics.rag.config import EffectiveSessionConfig, HandoffConfig, SessionConfig, WebhookConfig
 
 log = structlog.get_logger()
 
@@ -94,6 +98,15 @@ async def _db_now(s: AsyncSession) -> datetime:
     return (await s.execute(select(func.now()))).scalar_one()
 
 
+def _webhook_of(app: App) -> events.WebhookTarget:
+    """应用的出站 Webhook 目标；坏配置当作「没配」，不让一个应用拖垮整轮扫描。"""
+    try:
+        return events.WebhookTarget.of(WebhookConfig.model_validate(dict(app.webhook_config or {})))
+    except ValidationError:
+        log.warning("chat.lifecycle_invalid_webhook_config", app_id=str(app.id))
+        return events.WebhookTarget()
+
+
 async def sweep(
     sessions: async_sessionmaker[AsyncSession],
     *,
@@ -120,12 +133,16 @@ async def sweep(
             if app_ids
             else []
         )
-        policies = {a.id: (policy_of(a, platform), list(a.custom_dict or [])) for a in apps}
+        policies = {
+            a.id: (policy_of(a, platform), list(a.custom_dict or []), _webhook_of(a)) for a in apps
+        }
         res.skipped_apps = [str(a) for a in app_ids if a not in policies]
-    for app_id, (policy, custom_dict) in policies.items():
+    for app_id, (policy, custom_dict, webhook) in policies.items():
         res.apps += 1
         try:
-            n, c = await _sweep_app(sessions, app_id, policy, custom_dict, now, batch, notify)
+            n, c = await _sweep_app(
+                sessions, app_id, policy, custom_dict, webhook, now, batch, notify
+            )
         except Exception:  # one app failing must not stop the others; next run retries
             log.exception("chat.lifecycle_app_failed", app_id=str(app_id))
             continue
@@ -141,6 +158,7 @@ async def _sweep_app(
     app_id: UUID,
     policy: LifecyclePolicy,
     custom_dict: list[str],
+    webhook: events.WebhookTarget,
     now: datetime,
     batch: int,
     notify: Notify | None,
@@ -166,11 +184,27 @@ async def _sweep_app(
                 )
                 if not ok:
                     continue  # a new message (or a pause) arrived in between
-                await MessageRepository(s).append(
+                notice = await MessageRepository(s).append(
                     app_id,
                     cid,
                     NewMessage(role="system", kind="idle_notice", content=cfg.idle_close_notice),
                     custom_dict=custom_dict,
+                )
+                await _emit(
+                    s,
+                    app_id,
+                    cid,
+                    webhook,
+                    [
+                        ("message.created", payloads.message_created(notice)),
+                        (
+                            "conversation.idle_notice",
+                            payloads.idle_notice(
+                                message=notice,
+                                close_at=seen + timedelta(minutes=cfg.idle_close_minutes),
+                            ),
+                        ),
+                    ],
                 )
                 await s.commit()
             noticed += 1
@@ -188,11 +222,21 @@ async def _sweep_app(
             )
             if not ok:
                 continue
-            await MessageRepository(s).append(
+            marker = await MessageRepository(s).append(
                 app_id,
                 cid,
                 NewMessage(role="system", kind="idle_closed", content=""),
                 custom_dict=custom_dict,
+            )
+            await _emit(
+                s,
+                app_id,
+                cid,
+                webhook,
+                [
+                    ("message.created", payloads.message_created(marker)),
+                    ("conversation.closed", payloads.conversation_closed(reason="idle")),
+                ],
             )
             await s.commit()
         closed += 1
@@ -200,6 +244,17 @@ async def _sweep_app(
         if notify is not None:
             await notify("conversation.closed", app_id, cid)
     return noticed, closed
+
+
+async def _emit(
+    session: AsyncSession,
+    app_id: UUID,
+    conversation_id: UUID,
+    webhook: events.WebhookTarget,
+    items: list[tuple[str, dict[str, Any]]],
+) -> None:
+    """按顺序发这条会话的事件（与状态变更同事务；见 `chat.events.emit_all`）。"""
+    await events.emit_all(session, app_id, conversation_id, items, webhook=webhook)
 
 
 IDLE_SWEEP_TASK = "aics.idle_sweep"

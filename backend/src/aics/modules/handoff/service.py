@@ -28,10 +28,12 @@ from aics.core.errors import (
 )
 from aics.core.schedule import in_service_hours
 from aics.db.models.conversation import Conversation, Message
-from aics.modules.apps.service import AppService, HandoffConfig
+from aics.modules.apps.service import AppConfig, AppService, HandoffConfig
+from aics.modules.chat import events
 from aics.modules.chat.repository import ConversationClosedError
 from aics.modules.chat.service import append_agent_message
 from aics.modules.handoff.repository import OPEN_STATUSES, HandoffRepository
+from aics.modules.webhooks import payloads
 
 log = structlog.get_logger()
 
@@ -115,7 +117,7 @@ class HandoffService:
     ) -> HandoffState:
         """抢单接入：`pending → accepted`，随后写 `handoff_accepted` 系统提示（§3.3）。"""
         conv = await self._require_open(app_id, conversation_id)
-        cfg = await self._config(app_id)
+        cfg = await self._app_config(app_id)
         changed = await self.repo.accept(
             app_id,
             conversation_id,
@@ -127,14 +129,30 @@ class HandoffService:
             raise HandoffStateConflictError(
                 details={"handoff_status": await self.repo.status_of(app_id, conversation_id)}
             )
-        if cfg.accepted_text:
-            await append_agent_message(
+        target = events.Target.of(conv)
+        webhook = await self._webhook_of(cfg)
+        await events.emit(
+            self.session,
+            target,
+            "handoff.accepted",
+            payloads.handoff_accepted(agent_id=agent_id, agent_name=agent_name),
+            webhook=webhook,
+        )
+        if cfg.handoff.accepted_text:
+            notice = await append_agent_message(
                 self.session,
                 app_id,
                 conversation_id,
                 role="system",
                 kind="handoff_accepted",
-                content=cfg.accepted_text,
+                content=cfg.handoff.accepted_text,
+            )
+            await events.emit(
+                self.session,
+                target,
+                "message.created",
+                payloads.message_created(notice),
+                webhook=webhook,
             )
         await self.session.commit()
         await self.session.refresh(conv)
@@ -144,7 +162,7 @@ class HandoffService:
             conversation_id=str(conversation_id),
             agent_id=agent_id,
         )
-        return self._state_of(conv, cfg)
+        return self._state_of(conv, cfg.handoff)
 
     async def post_message(
         self,
@@ -164,6 +182,14 @@ class HandoffService:
             role="human_agent",
             content=content,
             agent_id=agent_id,
+        )
+        cfg = await self._app_config(app_id)
+        await events.emit(
+            self.session,
+            events.Target.of(conv),
+            "message.created",
+            payloads.message_created(msg),
+            webhook=await self._webhook_of(cfg),
         )
         await self.session.commit()
         log.info(
@@ -188,7 +214,7 @@ class HandoffService:
         接入的那个坐席释放，别人释放是 403。
         """
         conv = await self._require_open(app_id, conversation_id)
-        cfg = await self._config(app_id)
+        cfg = await self._app_config(app_id)
         if conv.handoff_status == "accepted":
             self._require_agent(conv, agent_id, expect="accepted")
         elif conv.handoff_status not in OPEN_STATUSES:
@@ -204,14 +230,35 @@ class HandoffService:
             raise HandoffStateConflictError(
                 details={"handoff_status": await self.repo.status_of(app_id, conversation_id)}
             )
-        if cfg.released_text:
-            await append_agent_message(
+        target = events.Target.of(conv)
+        webhook = await self._webhook_of(cfg)
+        await events.emit(
+            self.session,
+            target,
+            "handoff.released",
+            payloads.handoff_released(
+                agent_id=agent_id,
+                note=note,
+                released_by="agent",
+                reason=AGENT_END_REASON,
+            ),
+            webhook=webhook,
+        )
+        if cfg.handoff.released_text:
+            notice = await append_agent_message(
                 self.session,
                 app_id,
                 conversation_id,
                 role="system",
                 kind="handoff_released",
-                content=cfg.released_text,
+                content=cfg.handoff.released_text,
+            )
+            await events.emit(
+                self.session,
+                target,
+                "message.created",
+                payloads.message_created(notice),
+                webhook=webhook,
             )
         await self.session.commit()
         await self.session.refresh(conv)
@@ -224,7 +271,7 @@ class HandoffService:
             end_reason=AGENT_END_REASON,
             note=note,
         )
-        return self._state_of(conv, cfg)
+        return self._state_of(conv, cfg.handoff)
 
     # ------------------------------------------------------------ 内部
     async def _load(self, app_id: UUID, conversation_id: UUID) -> Conversation:
@@ -241,8 +288,15 @@ class HandoffService:
 
     async def _config(self, app_id: UUID) -> HandoffConfig:
         """读应用配置（不存在 / 已删除 → 404 `APP_NOT_FOUND`）。"""
+        return (await self._app_config(app_id)).handoff
+
+    async def _app_config(self, app_id: UUID) -> AppConfig:
         apps = await AppService.load(self.session)
-        return (await apps.get_config(app_id)).handoff
+        return await apps.get_config(app_id)
+
+    async def _webhook_of(self, cfg: AppConfig) -> events.WebhookTarget:
+        """应用的出站 Webhook 目标（只看地址与是否配了密钥）。"""
+        return events.WebhookTarget.of(cfg.webhook)
 
     @staticmethod
     def _require_agent(conv: Conversation, agent_id: str, *, expect: str) -> None:

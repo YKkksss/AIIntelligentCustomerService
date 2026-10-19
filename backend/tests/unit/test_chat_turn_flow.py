@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
@@ -31,6 +32,7 @@ from aics.modules.chat.service import (
 )
 from aics.rag.ports import ChatTurn
 from aics.rag.schemas import AppProfile, CitationsEvent, DeltaEvent
+from tests import events_support
 from tests.chat_support import KB, responder
 from tests.rag_support import FakeKB, FakeLLMProvider, node_of
 
@@ -312,11 +314,18 @@ async def test_handoff_outside_service_hours_goes_offline(monkeypatch: pytest.Mo
 
 
 @pytest.mark.parametrize(
-    "offline,expected_status,expected_end",
-    [(True, "released", "offline"), (False, "pending", None)],
+    "offline,expected_status,expected_end,expected_event",
+    [
+        (True, "released", "offline", "handoff.offline"),
+        (False, "pending", None, "handoff.requested"),
+    ],
 )
 async def test_write_assistant_marks_the_handoff_state(
-    offline: bool, expected_status: str, expected_end: str | None, monkeypatch: pytest.MonkeyPatch
+    offline: bool,
+    expected_status: str,
+    expected_end: str | None,
+    expected_event: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """§3.7 的落库值：非服务时间与正常转人工都一眼可辨，且清掉上一轮坐席信息。"""
     svc = ChatService(runtime(FakeLLMProvider(responder)))
@@ -325,6 +334,10 @@ async def test_write_assistant_marks_the_handoff_state(
     class Conv:
         refusal_streak = 0
         handoff_status = "released"
+        id = uuid.uuid4()
+        app_id = APP
+        channel = "api"
+        external_user_id = "u_10086"
 
     class Sessions:
         def __init__(self) -> None:
@@ -347,7 +360,16 @@ async def test_write_assistant_marks_the_handoff_state(
             pass
 
         async def append(self, *a: Any, **k: Any) -> Any:
-            return SimpleNamespace(id=uuid.uuid4())
+            data = a[2]
+            return SimpleNamespace(
+                id=uuid.uuid4(),
+                role=data.role,
+                kind=data.kind,
+                content=data.content,
+                agent_id=data.agent_id,
+                answer_type=data.answer_type,
+                created_at=datetime.now(UTC),
+            )
 
     class Convs:
         def __init__(self, session: Any) -> None:
@@ -361,6 +383,12 @@ async def test_write_assistant_marks_the_handoff_state(
 
     monkeypatch.setattr(chat_service, "MessageRepository", Msgs)
     monkeypatch.setattr(chat_service, "ConversationRepository", Convs)
+    recorder = events_support.install(monkeypatch)
+
+    async def fake_context(*a: Any, **k: Any) -> Any:
+        return None, {}, []
+
+    monkeypatch.setattr(chat_service, "handoff_context", fake_context)
     sessions = Sessions()
     monkeypatch.setattr(svc.runtime, "sessions", sessions)
     p = prepared("我要人工")
@@ -375,6 +403,12 @@ async def test_write_assistant_marks_the_handoff_state(
         p, msg, intent="handoff", handoff_reason="keyword", answer_type="handoff", offline=offline
     )
     assert status == expected_status and sessions.commits == 1
+    # M3.5：状态变化一律发事件；`message.created` 只覆盖 system 消息与人工介入期间的消息（§7.3），
+    # 所以触发转人工的这条 assistant 答复本身不进事件流，offline 的 system 留言才进。
+    assert recorder.types() == (
+        ["message.created", "handoff.offline"] if offline else ["handoff.requested"]
+    )
+    assert recorder.of(expected_event)[0].data["reason"] == "keyword"
     (values,) = updates
     assert values["handoff_status"] == expected_status
     assert values["handoff_reason"] == "keyword"

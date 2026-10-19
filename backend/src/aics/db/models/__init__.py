@@ -3,6 +3,7 @@
 from aics.db.models.apikey import ApiKey
 from aics.db.models.app import App, UserAppRole
 from aics.db.models.conversation import Conversation, Message, SystemSetting
+from aics.db.models.event import ConversationEvent, WebhookDelivery
 from aics.db.models.fact import ConversationFact, ConversationFactHistory
 from aics.db.models.job import Job
 from aics.db.models.knowledge import Chunk, ChunkParent, ChunkQuestion, Document
@@ -15,6 +16,7 @@ __all__ = [
     "ChunkParent",
     "ChunkQuestion",
     "Conversation",
+    "ConversationEvent",
     "ConversationFact",
     "ConversationFactHistory",
     "Document",
@@ -24,4 +26,5 @@ __all__ = [
     "SystemSetting",
     "User",
     "UserAppRole",
+    "WebhookDelivery",
 ]

@@ -26,6 +26,7 @@ from aics.modules.chat.repository import ConversationClosedError
 from aics.modules.handoff import service as handoff_service
 from aics.modules.handoff.repository import OPEN_STATUSES
 from aics.modules.handoff.service import HandoffService
+from tests import events_support
 
 NOW = datetime(2026, 10, 17, 12, 0, tzinfo=UTC)
 
@@ -129,11 +130,12 @@ class FakeRepo:
 
 
 class FakeSession:
-    """只被 `commit()` 与 `refresh()` 触达。"""
+    """只被 `commit()` 与 `refresh()` 触达；`events` 是 `chat.events` 的记录器。"""
 
     def __init__(self) -> None:
         self.commits = 0
         self.refreshed: list[Any] = []
+        self.events: Any = None
 
     async def commit(self) -> None:
         self.commits += 1
@@ -143,7 +145,7 @@ class FakeSession:
         self.refreshed.append(instance)
 
 
-def _fake_apps(cfg: HandoffConfig) -> type:
+def _fake_apps(cfg: HandoffConfig, webhook: Any = None) -> type:
     class FakeAppService:
         def __init__(self, session: Any) -> None:
             self.session = session
@@ -153,7 +155,7 @@ def _fake_apps(cfg: HandoffConfig) -> type:
             return cls(session)
 
         async def get_config(self, app_id: UUID) -> Any:
-            return SimpleNamespace(handoff=cfg)
+            return SimpleNamespace(handoff=cfg, webhook=webhook)
 
     return FakeAppService
 
@@ -163,6 +165,7 @@ def _rig(
     conv: Conversation,
     *,
     cfg: HandoffConfig | None = None,
+    webhook: Any = None,
     changed: bool = True,
     lost_to: str | None = None,
 ) -> tuple[HandoffService, FakeRepo, FakeSession, list[dict[str, Any]]]:
@@ -178,12 +181,15 @@ def _rig(
             kind=kw.get("kind", "chat"),
             content=kw["content"],
             agent_id=kw.get("agent_id"),
+            created_at=NOW,
         )
 
     monkeypatch.setattr(handoff_service, "append_agent_message", fake_append)
-    monkeypatch.setattr(handoff_service, "AppService", _fake_apps(cfg or HandoffConfig()))
+    monkeypatch.setattr(handoff_service, "AppService", _fake_apps(cfg or HandoffConfig(), webhook))
+    recorder = events_support.install(monkeypatch)
     repo = FakeRepo(conv, changed=changed, lost_to=lost_to)
     session = FakeSession()
+    session.events = recorder
     return HandoffService(session, repo=repo), repo, session, appends  # type: ignore[arg-type]
 
 
@@ -243,6 +249,12 @@ def test_accept_writes_the_system_notice(monkeypatch: pytest.MonkeyPatch) -> Non
     assert [a["kind"] for a in appends] == ["handoff_accepted"]
     assert appends[0]["role"] == "system"
     assert appends[0]["content"] == "客服已接入"
+    # M3.5：接入事件先发，随后才是这条系统提示（顺序 = 发生顺序）
+    assert session.events.types() == ["handoff.accepted", "message.created"]
+    assert session.events.of("handoff.accepted")[0].data == {
+        "agent_id": "a_001",
+        "agent_name": "小王",
+    }
 
 
 def test_accept_skips_the_notice_when_text_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -254,6 +266,7 @@ def test_accept_skips_the_notice_when_text_is_empty(monkeypatch: pytest.MonkeyPa
 
     assert appends == []
     assert session.commits == 1
+    assert session.events.types() == ["handoff.accepted"]  # 没有提示就只发接入事件
 
 
 def test_accept_conflict_reports_the_current_status(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -364,6 +377,8 @@ def test_agent_message_is_written_as_human_agent(monkeypatch: pytest.MonkeyPatch
     assert appends[0]["role"] == "human_agent"
     assert appends[0]["agent_id"] == "a_001"
     assert "kind" not in appends[0]  # 坐席消息是普通 chat 消息
+    assert session.events.types() == ["message.created"]
+    assert session.events.events[0].data["message"]["agent_id"] == "a_001"
 
 
 def test_release_from_pending_is_allowed_for_any_agent(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -381,6 +396,13 @@ def test_release_from_pending_is_allowed_for_any_agent(monkeypatch: pytest.Monke
     assert session.commits == 1
     assert ("release", OPEN_STATUSES, "agent") in repo.calls
     assert [a["kind"] for a in appends] == ["handoff_released"]
+    assert session.events.types() == ["handoff.released", "message.created"]
+    assert session.events.of("handoff.released")[0].data == {
+        "agent_id": "a_777",
+        "note": "批量回退",
+        "released_by": "agent",
+        "reason": "agent",
+    }
 
 
 def test_release_from_accepted_requires_the_accepting_agent(

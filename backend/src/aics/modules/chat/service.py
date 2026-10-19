@@ -44,12 +44,15 @@ from aics.core import metrics
 from aics.core.errors import AppError, ConversationNotFoundError
 from aics.core.schedule import in_service_hours
 from aics.db.base import new_id
-from aics.db.models.conversation import Message
+from aics.db.models.conversation import Conversation, Message
 from aics.memory.compactor import CompactParams
+from aics.memory.repository import ConversationFactRepository
 from aics.modules.apps.service import AppConfig, AppService
+from aics.modules.chat import events
 from aics.modules.chat.repository import ConversationRepository, MessageRepository
 from aics.modules.chat.runtime import ChatRuntime
 from aics.modules.chat.schemas import NewConversation, NewMessage
+from aics.modules.webhooks import payloads
 from aics.rag.graph import run_rag
 from aics.rag.intent.rules import next_refusal_streak
 from aics.rag.ports import ChatTurn
@@ -169,6 +172,28 @@ def dispatch_of(handoff_status: str, ai_mode: str) -> Dispatch:
 
 #: 请求级参数只允许这两个键（`TurnRequest.rag_overrides`），且只能收窄。
 OVERRIDABLE = ("temperature", "max_tokens")
+
+
+async def handoff_context(
+    session: AsyncSession, app_id: UUID, conversation: Conversation, *, limit: int = 10
+) -> tuple[str | None, dict[str, str], list[Message]]:
+    """转人工事件的上下文（第三方接入指南 §7.3）：摘要文本、事实、最近消息（旧→新）。
+
+    `summary` 取滚动摘要的渲染文本，没有摘要时回落成本轮改写问题之前的最近一条用户消息
+    由调用方决定（这里返回 `None`）。事实只取未撤回的当前值——发往接入方自己的系统，
+    接收方负责保护。
+    """
+    facts = await ConversationFactRepository(session).list_for_conversation(
+        app_id, conversation.id, include_retracted=False
+    )
+    recent = await MessageRepository(session).list_for_conversation(
+        app_id, conversation.id, limit=limit
+    )
+    return (
+        payloads.summary_text(conversation.summary),
+        {f.key: f.value for f in facts},
+        recent,
+    )
 
 
 def clamp_overrides(cfg: AppRagConfig, overrides: dict[str, Any]) -> dict[str, Any]:
@@ -343,16 +368,29 @@ class ChatService:
                 NewMessage(role="user", content=req.question),
                 custom_dict=app.custom_dict,
             )
+            target = events.Target.of(conv, user_id=req.external_user_id)
+            webhook = events.WebhookTarget.of(cfg.webhook)
+            if events.needs_message_event(user.role, conv.handoff_status):
+                await events.emit(
+                    s, target, "message.created", payloads.message_created(user), webhook=webhook
+                )
             dispatch = dispatch_of(conv.handoff_status, cfg.handoff.handoff_ai_mode)
             reply_id = new_id()
             system_reply = None
             if dispatch == "wait":
                 system_reply = cfg.handoff.wait_text
-                await msgs.append(
+                wait_msg = await msgs.append(
                     req.app_id,
                     conv.id,
                     NewMessage(role="system", kind="handoff_wait", content=system_reply),
                     message_id=reply_id,
+                )
+                await events.emit(
+                    s,
+                    target,
+                    "message.created",
+                    payloads.message_created(wait_msg),
+                    webhook=webhook,
                 )
             await s.commit()
             return _Prepared(
@@ -622,7 +660,7 @@ class ChatService:
             msgs = MessageRepository(s)
             # append locks the conversation row (FOR UPDATE) for the rest of the transaction,
             # so the streak / handoff update below sees concurrent turns serialized.
-            await msgs.append(
+            reply = await msgs.append(
                 app_id,
                 cid,
                 msg,
@@ -632,6 +670,12 @@ class ChatService:
             )
             convs = ConversationRepository(s)
             conv = await convs.get_or_404(app_id, cid)
+            target = events.Target.of(conv)
+            webhook = events.WebhookTarget.of(p.config.webhook)
+            if events.needs_message_event(reply.role, conv.handoff_status):
+                await events.emit(
+                    s, target, "message.created", payloads.message_created(reply), webhook=webhook
+                )
             values: dict[str, Any] = {}
             streak = next_refusal_streak(
                 conv.refusal_streak,
@@ -642,9 +686,11 @@ class ChatService:
             if streak != conv.refusal_streak:
                 values["refusal_streak"] = streak
             status = conv.handoff_status
+            asked_offline = asked_handoff = False
             if offline and not msg.interrupted and status in ("none", "released"):
                 # §3.7：不排队。`handoff_requested_at` 照常记录（后台按它看待回访时间）。
                 status = "released"
+                asked_offline = True
                 values.update(
                     handoff_status=status,
                     handoff_reason=handoff_reason,
@@ -662,6 +708,7 @@ class ChatService:
             elif msg.handoff and not msg.interrupted and status in ("none", "released"):
                 # §3.1: none / released → pending (webhooks: M3.5).
                 status = "pending"
+                asked_handoff = True
                 values.update(
                     handoff_status=status,
                     handoff_reason=handoff_reason,
@@ -676,6 +723,45 @@ class ChatService:
                 )
             if values:
                 await convs.update(app_id, cid, **values)
+            # 事件顺序 = 发生顺序：先这条消息，再它造成的状态变化（§7.3）。
+            if asked_offline:
+                summary, facts, recent = await handoff_context(s, app_id, conv)
+                await events.emit(
+                    s,
+                    target,
+                    "handoff.offline",
+                    payloads.handoff_offline(
+                        message=reply,
+                        reason=handoff_reason,
+                        needs_callback=True,
+                        summary=summary,
+                        facts=facts,
+                        recent=recent,
+                    ),
+                    webhook=webhook,
+                )
+            elif asked_handoff:
+                summary, facts, recent = await handoff_context(s, app_id, conv)
+                await events.emit(
+                    s,
+                    target,
+                    "handoff.requested",
+                    payloads.handoff_requested(
+                        reason=handoff_reason,
+                        intent=intent,
+                        handoff_ai_mode=p.config.handoff.handoff_ai_mode,
+                        summary=summary,
+                        facts=facts,
+                        recent=recent,
+                    ),
+                    webhook=webhook,
+                )
+            if p.stateless:
+                # ISSUE-37（M3.5 ①）：无状态会话在**同一条事务**里关掉，判据是「这条答复落库了」。
+                # 之前它在响应结束后另开事务关，失败就留下一个 `active` 的一次性会话，被
+                # idle_sweep 当成「用户离开」关成 `idle` 并可能发出空闲提醒（`_close_stateless`
+                # 只剩崩溃路径的兜底）。
+                await convs.close(app_id, cid, reason="stateless")
             await s.commit()
             return status
 
@@ -722,21 +808,29 @@ class ChatService:
         """无状态轮次收尾：本轮建出的会话立即关闭（`close_reason=stateless`，设计讨论 0009 D7）。
 
         条件单行更新，重复调用无副作用；这类会话已关闭，不会被 `idle_sweep` 扫到、也不会产生
-        空闲提醒。关闭失败只记日志——回答已经落库，不影响本轮结果。"""
-        try:
-            async with self.runtime.sessions() as s:
-                closed = await ConversationRepository(s).close(
-                    p.req.app_id, p.conversation_id, reason="stateless"
+        空闲提醒。关闭失败只记日志——回答已经落库，不影响本轮结果。
+
+        ISSUE-37（M3.5 ①）：失败会留下一个 `active` 的一次性会话，之后被 `idle_sweep` 当成
+        「用户离开」关掉（`close_reason=idle`，可能还发一条空闲提醒）。这里重试一次，仍失败时
+        记 `aics_stateless_close_failed` 指标——和别的告警走同一个计数出口（M6.3 `/metrics`）。"""
+        for attempt in (1, 2):
+            try:
+                async with self.runtime.sessions() as s:
+                    closed = await ConversationRepository(s).close(
+                        p.req.app_id, p.conversation_id, reason="stateless"
+                    )
+                    await s.commit()
+                if closed:
+                    log.info("chat.stateless_closed", conversation_id=str(p.conversation_id))
+                return
+            except Exception as e:
+                log.warning(
+                    "chat.stateless_close_failed",
+                    conversation_id=str(p.conversation_id),
+                    attempt=attempt,
+                    error_type=type(e).__name__,
                 )
-                await s.commit()
-            if closed:
-                log.info("chat.stateless_closed", conversation_id=str(p.conversation_id))
-        except Exception as e:
-            log.warning(
-                "chat.stateless_close_failed",
-                conversation_id=str(p.conversation_id),
-                error_type=type(e).__name__,
-            )
+        metrics.inc("aics_stateless_close_failed")
 
 
 def _ms(t0: float) -> int:

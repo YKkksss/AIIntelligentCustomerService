@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+### 新增（M3.5 ① 事件 outbox 与迁移 0012，2026-10-19）
+- 迁移 `0012`：`conversation_events`（`type` 八值 CHECK、`UNIQUE (conversation_id, seq)`、索引 `(app_id, created_at)`）与 `webhook_deliveries`（`id` 即事件 ID、`event_id` 唯一外键、`status` ∈ pending/delivered/failed、索引 `(app_id, created_at DESC)` 与 `(status, next_attempt_at)`）；两表的 ORM 模型 `ConversationEvent` / `WebhookDelivery` 在 `db/models/event.py`。
+- `modules/chat/events.py`：`emit(session, target, type, data, *, webhook=None)` 在**业务事务内**用 `UPDATE conversations SET event_seq = event_seq + 1 … RETURNING` 取 `seq`、插事件行，应用配了 Webhook 且渠道是 `api` / `openai` 时再排一条 `pending` 投递；`channel=eval` 不写事件、`debug` 写事件但不投递（ADR-0016）。`Target` / `WebhookTarget` 是两个纯数据视图，`emit_all` 按序发一组事件（先消息、后它造成的状态变化）。提交之后的 Redis 发布与任务投递留给 ② / ③。
+- `modules/webhooks/payloads.py`：第三方接入指南 §7 的固定格式（公共字段 `id` / `event` / `app_id` / `conversation_id` / `user_id` / `seq` / `occurred_at` / `data`，加八种事件的 `data` 构造器）。纯拼装，不碰 DB、加密与签名。
+- 八种事件全部接上：`chat.service`（`handoff.requested`、非服务时间 `handoff.offline`、pending / accepted 期间的 `message.created`，含排队等待话术）、`handoff.service`（`handoff.accepted` / `handoff.released` 与坐席消息）、`handoff/sweep.py`（两个 `TODO(M3.5)`：排队超时 `handoff.queue_timeout`、接入后无消息 `handoff.released` + `conversation.closed`）、`chat/lifecycle.py`（`conversation.idle_notice` / `conversation.closed`）。普通 AI 问答不进事件流（`needs_message_event`：`system` 或转人工 pending / accepted 期间的消息才发）。
+- 读取入口：`ConversationEventRepository`（`list_after` 补发、`last_seq`）与 `WebhookDeliveryRepository`（`list_recent`、跨应用 `due_all_apps` 的 `FOR UPDATE SKIP LOCKED` 扫描、`mark_delivered` / `mark_attempt` / `reset_for_redelivery` / `count_by_status`）——② 的事件流与 ③ 的投递任务直接用，管理接口的 HTTP 面仍留 M4.5。
+- 顺带解决 **ISSUE-09**（`conversations.event_seq` 建了列从不读写）与 **ISSUE-37**（无状态会话关闭失败只记 warning）：无状态会话改为在**答复落库的同一条事务**里关闭，`_close_stateless` 退化为崩溃路径的兜底（重试一次，仍失败记 `aics_stateless_close_failed` 指标）。
+
+### 测试（M3.5 ①，2026-10-19）
+- 新增 `tests/unit/test_chat_events.py`（12 例）与 `tests/unit/test_webhook_payloads.py`（9 例）：`eval` 不写事件、`debug` 写事件但不排投递、`seq` 逐条递增、投递行的 `id == event_id` + `status=pending` + envelope 全字段、未知事件名与不存在的会话报错、`emit_all` 顺序、八种 `data` 形状与 UTC 归一、摘要渲染。新增测试支撑 `tests/events_support.py`（记录器 + `install(monkeypatch)`）。
+- 三条既有单测跟着改：`test_handoff_sweep.py`（假应用补 `webhook_config`，断言事件序列 `["message.created", "handoff.queue_timeout"]` / `["message.created", "handoff.released", "conversation.closed"]`、抢输不发事件）、`test_handoff_service.py`（`_fake_apps` 返回 app 配置对象、假消息补 `created_at`）、`test_chat_turn_flow.py`（`_write_assistant` 参数化加事件列：offline → `handoff.offline`、进队列 → `handoff.requested`，且**触发转人工的那条 assistant 答复本身不进事件流**）。
+- 本机 `alembic upgrade head` 到 `0012` 成功；`pytest -q --cov=aics` → **902 passed**（1 例 Windows 符号链接环境失败）、覆盖率 **81.98%**（9639 语句 / 1737 未覆盖，门槛 80）；本机 Docker 集成套件全量复跑 **205 项全部通过**（381.76 s）。
+
 ### 测试（M3.4 ⑤ 里程碑验收脚本，2026-10-19）
 - 新增 `backend/scripts/e2e_m3/e2e_m34_handoff.py`：模拟坐席平台用真 HTTP + 真 PG / Redis 跑完 M3.4 验收条款，11 步 24 项判定——用户说「我要人工」→ 转人工进入排队 → 坐席 `GET /handoffs?status=pending` 看到 → `accept` → 第二个坐席再抢 `409 HANDOFF_STATE_CONFLICT` → 坐席发言 → 用户 `GET …/messages` 看到 `human_agent` → `release` → 用户再问 AI 恢复 → 排队超时由 `sweep` 释放并置待回访 → 非服务时间转留言话术。默认 `--stub-llm`（预装脚本模型，不花钱），`--real-llm` 走生产装配（本机模型 Key 是占位符，列入待复验）。首轮 20/22（两条都是断言写错：交还后 `handoff_status` 按设计保留 `released`；触发转人工的那一轮永远由 AI 回），修正后 **24/24**（1.5 s），证据在 `results/e2e_m34_handoff.json`。
 - 本机 Docker 集成套件全量复跑：**205 项全部通过**（357.57 s，M3.4 全量口径）。

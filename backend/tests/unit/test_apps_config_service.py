@@ -82,8 +82,10 @@ def test_every_app_scoped_table_has_scoped_repository() -> None:
     import aics.memory.repository  # noqa: F401
     import aics.modules.apikeys.repository  # noqa: F401
     import aics.modules.apps.repository  # noqa: F401
+    import aics.modules.chat.event_repository  # noqa: F401
     import aics.modules.chat.repository  # noqa: F401
     import aics.modules.knowledge.repository  # noqa: F401
+    import aics.modules.webhooks.repository  # noqa: F401
 
     repos = [r for r in registered_repositories() if r.__module__.startswith("aics.")]
     covered = {r.model.__tablename__ for r in repos}  # type: ignore[attr-defined]
@@ -100,6 +102,8 @@ def test_every_app_scoped_table_has_scoped_repository() -> None:
         "messages",
         "conversation_facts",
         "conversation_fact_history",
+        "conversation_events",
+        "webhook_deliveries",
         "api_keys",
     }
     assert tenant_tables <= covered

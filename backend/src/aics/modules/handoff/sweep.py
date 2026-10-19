@@ -14,8 +14,8 @@
 只跳过它自己，其它应用照跑。系统消息经 `chat.service.append_agent_message` 写，和坐席消息共用一份
 `message_count` / `last_activity_at` 联动规则（§3.3）。
 
-事件（`handoff.queue_timeout` / `handoff.released` / `conversation.closed`）在 M3.5 由
-`events.emit(...)` 发出，这里只在调用点留 TODO。
+事件（`handoff.queue_timeout` / `handoff.released` / `conversation.closed` 与配套的
+`message.created`）在 M3.5 起由 `events.emit(...)` 与状态变更同事务发出。
 """
 
 from __future__ import annotations
@@ -32,9 +32,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from aics.core import metrics
 from aics.db.models import App
+from aics.modules.chat import events
 from aics.modules.chat.service import append_agent_message
 from aics.modules.handoff.repository import HandoffRepository
-from aics.rag.config import HandoffConfig
+from aics.modules.webhooks import payloads
+from aics.rag.config import HandoffConfig, WebhookConfig
 
 log = structlog.get_logger()
 
@@ -70,6 +72,15 @@ async def _db_now(s: AsyncSession) -> datetime:
     return (await s.execute(select(func.now()))).scalar_one()
 
 
+def _webhook_of(app: App) -> events.WebhookTarget:
+    """应用的出站 Webhook 目标；坏配置当作「没配」，不让一个应用拖垮整轮扫描。"""
+    try:
+        return events.WebhookTarget.of(WebhookConfig.model_validate(dict(app.webhook_config or {})))
+    except ValidationError:
+        log.warning("handoff.invalid_webhook_config", app_id=str(app.id))
+        return events.WebhookTarget()
+
+
 async def sweep(
     sessions: async_sessionmaker[AsyncSession],
     *,
@@ -94,12 +105,12 @@ async def sweep(
             if app_ids
             else []
         )
-        configs = {a.id: _config_of(a) for a in apps}
+        configs = {a.id: (_config_of(a), _webhook_of(a)) for a in apps}
         res.skipped_apps = [str(a) for a in app_ids if a not in configs]
-    for app_id, cfg in configs.items():
+    for app_id, (cfg, webhook) in configs.items():
         res.apps += 1
         try:
-            timeouts, closed = await _sweep_app(sessions, app_id, cfg, now, batch)
+            timeouts, closed = await _sweep_app(sessions, app_id, cfg, webhook, now, batch)
         except Exception:  # one app failing must not stop the others; next run retries
             log.exception("handoff.sweep_app_failed", app_id=str(app_id))
             continue
@@ -114,12 +125,13 @@ async def _sweep_app(
     sessions: async_sessionmaker[AsyncSession],
     app_id: UUID,
     cfg: HandoffConfig,
+    webhook: events.WebhookTarget,
     now: datetime,
     batch: int,
 ) -> tuple[int, int]:
     """§3.10 的先后顺序：排队超时先于接入后无消息（两者互不影响，但顺序固定便于复现）。"""
-    timeouts = await _sweep_queue_timeouts(sessions, app_id, cfg, now, batch)
-    closed = await _sweep_accepted_idle(sessions, app_id, cfg, now, batch)
+    timeouts = await _sweep_queue_timeouts(sessions, app_id, cfg, webhook, now, batch)
+    closed = await _sweep_accepted_idle(sessions, app_id, cfg, webhook, now, batch)
     return timeouts, closed
 
 
@@ -127,6 +139,7 @@ async def _sweep_queue_timeouts(
     sessions: async_sessionmaker[AsyncSession],
     app_id: UUID,
     cfg: HandoffConfig,
+    webhook: events.WebhookTarget,
     now: datetime,
     batch: int,
 ) -> int:
@@ -140,7 +153,7 @@ async def _sweep_queue_timeouts(
                 app_id, conversation_id, seen_requested_at=seen, at=now
             ):
                 continue  # 期间被坐席接入、或又触发过一轮：留给下一次扫描
-            await append_agent_message(
+            notice = await append_agent_message(
                 s,
                 app_id,
                 conversation_id,
@@ -148,10 +161,26 @@ async def _sweep_queue_timeouts(
                 kind="handoff_queue_timeout",
                 content=cfg.queue_timeout_text,
             )
+            await _emit(
+                s,
+                app_id,
+                conversation_id,
+                webhook,
+                [
+                    ("message.created", payloads.message_created(notice)),
+                    (
+                        "handoff.queue_timeout",
+                        payloads.handoff_queue_timeout(
+                            message=notice,
+                            waited_seconds=max(int((now - seen).total_seconds()), 0),
+                            needs_callback=True,
+                        ),
+                    ),
+                ],
+            )
             await s.commit()
         done += 1
         metrics.inc("aics_handoff_queue_timeout_total", app_id=str(app_id))
-        # TODO(M3.5): events.emit("handoff.queue_timeout") + message.created
     return done
 
 
@@ -159,6 +188,7 @@ async def _sweep_accepted_idle(
     sessions: async_sessionmaker[AsyncSession],
     app_id: UUID,
     cfg: HandoffConfig,
+    webhook: events.WebhookTarget,
     now: datetime,
     batch: int,
 ) -> int:
@@ -172,7 +202,7 @@ async def _sweep_accepted_idle(
                 app_id, conversation_id, seen_activity=seen, at=now
             ):
                 continue  # 坐席或用户刚说过话（last_activity_at 变了）
-            await append_agent_message(
+            notice = await append_agent_message(
                 s,
                 app_id,
                 conversation_id,
@@ -180,11 +210,42 @@ async def _sweep_accepted_idle(
                 kind="handoff_idle_closed",
                 content="",
             )
+            # 释放事件的坐席来自会话行（`close_accepted_idle` 不清 `handoff_agent_id`）。
+            conv = await HandoffRepository(s).get(app_id, conversation_id)
+            await _emit(
+                s,
+                app_id,
+                conversation_id,
+                webhook,
+                [
+                    ("message.created", payloads.message_created(notice)),
+                    (
+                        "handoff.released",
+                        payloads.handoff_released(
+                            agent_id=None if conv is None else conv.handoff_agent_id,
+                            note=None,
+                            released_by="system",
+                            reason="accepted_idle",
+                        ),
+                    ),
+                    ("conversation.closed", payloads.conversation_closed(reason="handoff_idle")),
+                ],
+            )
             await s.commit()
         done += 1
         metrics.inc("aics_handoff_accepted_idle_total", app_id=str(app_id))
-        # TODO(M3.5): events.emit("handoff.released", released_by="system") + conversation.closed
     return done
+
+
+async def _emit(
+    session: AsyncSession,
+    app_id: UUID,
+    conversation_id: UUID,
+    webhook: events.WebhookTarget,
+    items: list[tuple[str, dict[str, Any]]],
+) -> None:
+    """按顺序发这条会话的事件（与状态变更同事务；见 `chat.events.emit_all`）。"""
+    await events.emit_all(session, app_id, conversation_id, items, webhook=webhook)
 
 
 async def run_handoff_sweep_job(settings: Any = None) -> dict[str, Any]:
