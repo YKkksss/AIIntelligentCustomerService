@@ -130,7 +130,12 @@ function Invoke-Test {
   $env:AICS_TEST_QDRANT_API_KEY = $stackEnv['AICS_QDRANT_API_KEY']
   Push-Location $backend
   try {
-    & uv run --frozen pytest -m integration -q @Rest
+    # $Service 是第二个位置参数：`dev-stack.cmd test -- <路径1> <路径2>` 会把路径 1
+    # 吞进 $Service（见待解决问题清单 ISSUE-57），所以先把它并回路径列表再转发。
+    $paths = @()
+    if ($Service) { $paths += $Service }
+    $paths += $Rest
+    & uv run --frozen pytest -m integration -q @paths
     if ($LASTEXITCODE -ne 0) { Write-Warning "集成测试有失败项（退出码 $LASTEXITCODE）" }
   } finally { Pop-Location }
 }

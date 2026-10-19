@@ -1,0 +1,307 @@
+{
+  "app": "e2e-m34-handoff",
+  "app_id": "01a15350-bde2-710b-b46a-3732e4cce44d",
+  "key_prefix": "aics_RfSJnVK",
+  "mode": "stub-llm",
+  "stub_llm": true,
+  "started_at": "2026-10-19T08:39:22.914974+00:00",
+  "seconds": 1.9,
+  "checks": {
+    "HTTP 200 且 handoff=true": true,
+    "状态 pending": true,
+    "转人工那一轮仍由 AI 回话术": true,
+    "排队答由系统给出": true,
+    "排队话术就是配置的 wait_text": true,
+    "列表里能看到这条会话": true,
+    "列表项字段齐全（id/状态/请求时间/待回访/消息数）": true,
+    "状态 accepted": true,
+    "记下坐席与接入时间": true,
+    "409 HANDOFF_STATE_CONFLICT": true,
+    "201 且 role=human_agent": true,
+    "用户能看到人工消息": true,
+    "人工消息在用户消息之后": true,
+    "状态 released": true,
+    "回复方是 AI": true,
+    "本轮没有再次转人工": true,
+    "自动释放": true,
+    "交还原因是 queue_timeout": true,
+    "置待回访（坐席没接上）": true,
+    "留下排队超时话术": true,
+    "不排队，直接释放": true,
+    "回留言话术（系统回复）": true,
+    "置待回访": true,
+    "落库 close_reason 不变（会话仍 active）": true
+  },
+  "passed": "24/24",
+  "steps": [
+    {
+      "step": "① 用户「我要人工」→ 转人工排队",
+      "body": {
+        "status": 200,
+        "handoff": true,
+        "handoff_status": "pending",
+        "handoff_reason": "keyword",
+        "reply_by": "ai",
+        "answer": "已为您转接人工客服"
+      }
+    },
+    {
+      "step": "①b 排队期间再问一句（wait 模式）",
+      "body": {
+        "status": 200,
+        "reply_by": "system",
+        "answer": "已为您转接人工客服，请稍候，坐席忙完会立刻回复您。",
+        "handoff_status": "pending"
+      }
+    },
+    {
+      "step": "② 坐席平台 GET /handoffs?status=pending",
+      "body": {
+        "status": 200,
+        "items": [
+          {
+            "handoff_status": "pending",
+            "handoff_reason": "keyword",
+            "requested_at": "2026-10-19T08:39:24.006253+00:00",
+            "accepted_at": null,
+            "agent_id": null,
+            "agent_name": null,
+            "needs_callback": false,
+            "message_count": 4,
+            "last_activity_at": "2026-10-19T08:39:24.054549+00:00",
+            "external_user_id": null,
+            "id": "01a15350-bf7c-753b-8b9a-cc87ffe5b98d"
+          }
+        ]
+      }
+    },
+    {
+      "step": "③ 坐席 accept 抢单",
+      "body": {
+        "handoff_status": "accepted",
+        "handoff_reason": "keyword",
+        "requested_at": "2026-10-19T08:39:24.006253+00:00",
+        "accepted_at": "2026-10-19T08:39:24.155719+00:00",
+        "released_at": null,
+        "handoff_end_reason": null,
+        "needs_callback": false,
+        "agent_id": "ag_demo_1",
+        "agent_name": "小柯",
+        "handoff_ai_mode": "wait",
+        "in_service_hours": true
+      }
+    },
+    {
+      "step": "③b 第二个坐席再抢（并发抢单的失败侧）",
+      "body": {
+        "status": 409,
+        "body": {
+          "error": {
+            "code": "HANDOFF_STATE_CONFLICT",
+            "message": "转人工状态已变更",
+            "details": {
+              "handoff_status": "accepted"
+            },
+            "request_id": "3b5ea6c444a6446ebad6bc5cdff783b3"
+          }
+        }
+      }
+    },
+    {
+      "step": "④ 坐席发言",
+      "body": {
+        "status": 201,
+        "message": {
+          "id": "01a15350-c339-78c3-94ac-8c1695181b63",
+          "role": "human_agent",
+          "kind": "chat",
+          "content": "您好，我是人工客服小柯，请把订单号发我。",
+          "answer_type": null,
+          "handoff": false,
+          "intent": null,
+          "citations": null,
+          "agent_id": "ag_demo_1",
+          "interrupted": false,
+          "created_at": "2026-10-19T08:39:24.221358+00:00"
+        }
+      }
+    },
+    {
+      "step": "⑤ 用户 GET …/messages",
+      "body": {
+        "status": 200,
+        "items": [
+          {
+            "id": "01a15350-c248-7294-8eef-8282e081ae81",
+            "role": "user",
+            "kind": "chat",
+            "content": "我要人工",
+            "answer_type": null,
+            "handoff": false,
+            "intent": null,
+            "citations": null,
+            "agent_id": null,
+            "interrupted": false,
+            "created_at": "2026-10-19T08:39:23.979621+00:00"
+          },
+          {
+            "id": "01a15350-c250-776e-b1ce-86f3ec0b8897",
+            "role": "assistant",
+            "kind": "chat",
+            "content": "已为您转接人工客服",
+            "answer_type": "handoff",
+            "handoff": true,
+            "intent": {
+              "name": "human",
+              "confidence": 1.0,
+              "source": "rule"
+            },
+            "citations": [],
+            "agent_id": null,
+            "interrupted": false,
+            "created_at": "2026-10-19T08:39:24.010116+00:00"
+          },
+          {
+            "id": "01a15350-c294-7b92-bded-95b5f0b5099c",
+            "role": "user",
+            "kind": "chat",
+            "content": "那大概要等多久？",
+            "answer_type": null,
+            "handoff": false,
+            "intent": null,
+            "citations": null,
+            "agent_id": null,
+            "interrupted": false,
+            "created_at": "2026-10-19T08:39:24.054549+00:00"
+          },
+          {
+            "id": "01a15350-c298-7645-8cdf-eb8938ed1e43",
+            "role": "system",
+            "kind": "handoff_wait",
+            "content": "已为您转接人工客服，请稍候，坐席忙完会立刻回复您。",
+            "answer_type": null,
+            "handoff": false,
+            "intent": null,
+            "citations": null,
+            "agent_id": null,
+            "interrupted": false,
+            "created_at": "2026-10-19T08:39:24.061576+00:00"
+          },
+          {
+            "id": "01a15350-c339-78c3-94ac-8c1695181b63",
+            "role": "human_agent",
+            "kind": "chat",
+            "content": "您好，我是人工客服小柯，请把订单号发我。",
+            "answer_type": null,
+            "handoff": false,
+            "intent": null,
+            "citations": null,
+            "agent_id": "ag_demo_1",
+            "interrupted": false,
+            "created_at": "2026-10-19T08:39:24.221358+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "step": "⑥ 坐席 release 交还 AI",
+      "body": {
+        "handoff_status": "released",
+        "handoff_reason": "keyword",
+        "requested_at": "2026-10-19T08:39:24.006253+00:00",
+        "accepted_at": "2026-10-19T08:39:24.155719+00:00",
+        "released_at": "2026-10-19T08:39:24.265920+00:00",
+        "handoff_end_reason": "agent",
+        "needs_callback": false,
+        "agent_id": "ag_demo_1",
+        "agent_name": "小柯",
+        "handoff_ai_mode": "wait",
+        "in_service_hours": true
+      }
+    },
+    {
+      "step": "⑦ 用户接着问 → AI 恢复应答",
+      "body": {
+        "status": 200,
+        "reply_by": "ai",
+        "answer": "签收后 7 天内可以无理由退货[1]。"
+      }
+    },
+    {
+      "step": "⑧ 排队超时：时钟推过 2 分钟后再扫描",
+      "body": {
+        "handoff": {
+          "handoff_status": "released",
+          "handoff_reason": "keyword",
+          "requested_at": "2026-10-19T08:39:24.385727+00:00",
+          "accepted_at": null,
+          "released_at": "2026-10-19T08:41:24.403742+00:00",
+          "handoff_end_reason": "queue_timeout",
+          "needs_callback": true,
+          "agent_id": null,
+          "agent_name": null,
+          "handoff_ai_mode": "wait",
+          "in_service_hours": true
+        },
+        "messages": [
+          {
+            "role": "user",
+            "kind": "chat",
+            "content": "我要人工",
+            "answer_type": null
+          },
+          {
+            "role": "assistant",
+            "kind": "chat",
+            "content": "已为您转接人工客服",
+            "answer_type": "handoff"
+          },
+          {
+            "role": "system",
+            "kind": "handoff_queue_timeout",
+            "content": "当前客服繁忙，您可以留下问题和联系方式，我们会尽快回复您",
+            "answer_type": null
+          }
+        ]
+      }
+    },
+    {
+      "step": "⑨ 非服务时间：用户再转人工",
+      "body": {
+        "turn": {
+          "handoff_status": "released",
+          "handoff_reason": "keyword",
+          "reply_by": "system",
+          "answer": "当前为非服务时间，您可以留下问题和联系方式，我们会在服务时间内尽快回复您"
+        },
+        "handoff": {
+          "handoff_status": "released",
+          "handoff_reason": "keyword",
+          "requested_at": "2026-10-19T08:39:24.589994+00:00",
+          "accepted_at": null,
+          "released_at": "2026-10-19T08:39:24.589994+00:00",
+          "handoff_end_reason": "offline",
+          "needs_callback": true,
+          "agent_id": null,
+          "agent_name": null,
+          "handoff_ai_mode": "wait",
+          "in_service_hours": false
+        },
+        "messages": [
+          {
+            "role": "user",
+            "kind": "chat",
+            "content": "我要人工",
+            "answer_type": null
+          },
+          {
+            "role": "system",
+            "kind": "handoff_offline",
+            "content": "当前为非服务时间，您可以留下问题和联系方式，我们会在服务时间内尽快回复您",
+            "answer_type": null
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+__pycache__/
+results/*_cache.json
+results/qdrant/
+results/storage/

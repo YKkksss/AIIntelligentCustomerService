@@ -4,42 +4,52 @@
 
 ## [Unreleased]
 
-### 新增（M3.4 ③ 服务时间与两种超时，2026-10-17）
+### 测试（M3.4 ⑤ 里程碑验收脚本，2026-10-19）
+- 新增 `backend/scripts/e2e_m3/e2e_m34_handoff.py`：模拟坐席平台用真 HTTP + 真 PG / Redis 跑完 M3.4 验收条款，11 步 24 项判定——用户说「我要人工」→ 转人工进入排队 → 坐席 `GET /handoffs?status=pending` 看到 → `accept` → 第二个坐席再抢 `409 HANDOFF_STATE_CONFLICT` → 坐席发言 → 用户 `GET …/messages` 看到 `human_agent` → `release` → 用户再问 AI 恢复 → 排队超时由 `sweep` 释放并置待回访 → 非服务时间转留言话术。默认 `--stub-llm`（预装脚本模型，不花钱），`--real-llm` 走生产装配（本机模型 Key 是占位符，列入待复验）。首轮 20/22（两条都是断言写错：交还后 `handoff_status` 按设计保留 `released`；触发转人工的那一轮永远由 AI 回），修正后 **24/24**（1.5 s），证据在 `results/e2e_m34_handoff.json`。
+- 本机 Docker 集成套件全量复跑：**205 项全部通过**（357.57 s，M3.4 全量口径）。
+
+### 文档（M3.4 ⑤ 文档收尾，2026-10-19）
+- [M3 测试报告](docs/06-development/10-M3测试报告.md) 增 §15（M3.4 转人工：提交与范围、判决表与 5 个端点、三种超时与幂等口径、用例矩阵、验收脚本 11 步 24 项判定、门禁与预算）与 §16（本机集成复验 205 项）。
+- [参数默认值与依据](docs/06-development/09-参数默认值与依据.md) 增 M3.4 一节（关键词与拒答阈值、`handoff_ai_mode`、排队 / 接入后无消息两种超时、服务时间窗口语义、扫描批量与顺序、幂等口径、时区与 `tzdata`）。
+- [实现现状与代码地图](docs/00-handoff/02-实现现状与代码地图.md)（M3.4 ✅ + 集成 205 项、core / chat / handoff / main / cli 五行、HTTP 表 5 条坐席路由、`idle_sweep` 先 handoff 后 lifecycle、测试计数 58 文件 / 556 函数与 30 文件 / 160 函数、覆盖率 81.94%、差距表清掉 import-linter 一条）、[模块划分](docs/02-architecture/02-模块划分.md)（handoff ✅ 与 `handoff.sweep.sweep()`）、[开放接口参考](docs/04-api/02-开放接口参考.md) §5 标注已实现、[开发计划](docs/00-planning/03-开发计划.md) M3.4 ✅ 与状态块。
+- [待解决问题清单](docs/00-planning/07-待解决问题清单.md)：新增 ISSUE-57（`dev-stack.cmd test <路径1> <路径2>` 把路径1 吞成 `-Service`，静默只跑第二个路径，退出码仍为 0）与 ISSUE-58（CHANGELOG 与文档把 M3.2–M3.4 的日期普遍写成 2026-10-17，实际晚 1–2 天，M3.5 开工前按 `git log` 统一校正）；修 `docker/dev-stack.ps1` 的 `Invoke-Test`（先把 `$Service` 并回路径列表再转发给 pytest，验证：两个集成文件一起跑 = 39 passed，即 9 + 30）；同时记下两条工具约定——该命令**不加 `--`**（PS 5.1 会把它当空参数名报 `ambiguous`），`.ps1` 的 UTF-8 BOM 用编辑器重写后必须补回（丢了就按 GBK 解析、中文注释直接变语法错误）。
+
+### 新增（M3.4 ③ 服务时间与两种超时，2026-10-19）
 - 转人工超时扫描 `modules/handoff/sweep.py`：`sweep(sessions, *, now=None, batch=…)` 逐应用先读 `handoff_config`（脏配置回落默认值并计入 `skipped_apps`），再按[会话生命周期与转人工](docs/02-architecture/09-会话生命周期与转人工.md) §3.6 / §3.8 做两种超时——**排队超时**（`pending` 且 `handoff_requested_at ≤ now - handoff_queue_timeout_minutes` → `released`、`handoff_end_reason=queue_timeout`、置待回访、写 `system/handoff_queue_timeout`）与**接入后无消息**（`accepted` 且 `last_activity_at ≤ now - handoff_accepted_idle_minutes` → `released`、`accepted_idle`，会话 `closed` + `close_reason=handoff_idle`，写空内容 `system/handoff_idle_closed`）。两者都是条件单行 UPDATE 并比对读到的 `handoff_requested_at` / `last_activity_at`：影响 0 行说明坐席或用户刚动过，本轮跳过——幂等、可并发、重复跑不会误杀；时钟优先用入参 `now`，缺省取数据库时钟。
 - `tasks/maintenance.py::idle_sweep`（beat 每 30 s）改为**先 handoff 后 lifecycle**（§3.10），返回 `{"handoff": …, "lifecycle": …}`（两个 job 各自 `asyncio.run` + NullPool 引擎，沿用既有写法）；CLI 增 `aics-cli sweep-handoff`。
 - 非服务时间（§3.7）在 `chat.service` 落库时判定：触发转人工的那一刻用 `core.schedule.in_service_hours` 判当前是否在服务时间内，不在就**不进队列**——会话直接 `released`、`handoff_end_reason=offline`、置 `needs_callback`（`callback_reason=offline`）、清掉上一轮坐席信息，本轮回复换成 `system/handoff_offline` 的留言话术（`reply_by=system`、`answer_type=null`）；服务时间取应用的 `handoff_config.service_hours`，未配置即 7×24。
 - `modules/chat/schemas.py`：空内容白名单加入 `handoff_idle_closed`（§3.8 的时间线标记本就是空内容，不是漏写）。
 - 依赖：显式声明 `tzdata`（Windows 没有系统时区库，`ZoneInfo("Asia/Shanghai")` 靠它；服务器 Linux 上无副作用）。
 
-### 测试（M3.4 ③，2026-10-17）
+### 测试（M3.4 ③，2026-10-19）
 - 新增 `tests/unit/test_handoff_sweep.py`（10 例：超时窗口取的是应用配置、条件更新比对的正是刚读到的值、被抢先或读后被动过就什么都不写、接入空闲同时关会话并留空标记、排队超时先于接入空闲、缺应用行进 `skipped_apps`、单个应用出错不影响其它应用、缺省走数据库时钟）。
 - `tests/unit/test_chat_turn_flow.py`：补服务时间外触发转人工的整轮路径（判定入参、`system/handoff_offline`、`reply_by=system`）与 `_write_assistant` 的落库值（`released` / `offline` / `needs_callback` 对比 `pending` 分支）；`tests/unit/test_chat_lifecycle.py` 补空标记白名单两例。
 - 本机门禁：`ruff check` / `ruff format --check`（277 文件）/ `lint-imports`（13 契约）/ `prompts check`（8 个）全绿；`pytest -q` 875 passed（1 例 Windows 符号链接环境失败）、196 deselected，覆盖率 81.94%；本机 Docker 集成套件 `docker\dev-stack.cmd test` **195 项全部通过**（6 分 16 秒，提交 ② 时是 190 项）；真实模型费用 0 元。
 
-### 测试（M3.4 ④ 用例与跨应用隔离收口，2026-10-17）
-- 新增 `tests/integration/test_handoff_pg.py`（8 例，真实 PG）：排队超时按应用配置到点才释放（`released` / `queue_timeout`、话术、待回访、空闲计时重置）；同一轮重复扫描与很久以后都不重复处理；接入后无消息超时释放并关会话（`close_reason=handoff_idle` + 空标记）；**两条竞态分支**——扫描读到 `pending` 之后坐席抢先接入、以及坐席刚说过话——条件更新 0 行时一个字都不写；两个事务同时抢单只有一个成功；软删除的应用不再被扫描；非服务时间走真 `/chat` 接口回留言话术并置待回访；`handoff_queue_timeout_minutes` ≥ 有效 `idle_close_minutes` 在保存时被拒（M2.7 校验回归）。
+### 测试（M3.4 ④ 用例与跨应用隔离收口，2026-10-19）
+- 新增 `tests/integration/test_handoff_pg.py`（9 例，真实 PG）：排队超时按应用配置到点才释放（`released` / `queue_timeout`、话术、待回访、空闲计时重置）；同一轮重复扫描与很久以后都不重复处理；接入后无消息超时释放并关会话（`close_reason=handoff_idle` + 空标记）；**两条竞态分支**——扫描读到 `pending` 之后坐席抢先接入、以及坐席刚说过话——条件更新 0 行时一个字都不写；两个事务同时抢单只有一个成功；软删除的应用不再被扫描；非服务时间走真 `/chat` 接口回留言话术并置待回访；`handoff_queue_timeout_minutes` ≥ 有效 `idle_close_minutes` 在保存时被拒（M2.7 校验回归）。
 - `tests/unit/test_handoff_service.py` 补齐「状态 × 动作」矩阵的缺格：`accept` 在 `none` / `released` 上冲突（报的是数据库里现在的状态、不留坐席痕迹）、坐席发言在 `pending` 上冲突（参数化补 `pending`）、会话关闭后三个写动作全部 409 且连 UPDATE 都不发。
 - `tests/integration/test_isolation_pg.py` 补坐席接口的跨应用 404（4 条带会话 id 的路由：A 的 Key + A 的路径 + B 的会话 → `CONVERSATION_NOT_FOUND`），并给隔离夹具装上 `HandoffRuntime`——**这 5 条路由虽然早已登记，但夹具里没有这个运行时，用例只走到认证层就 404 了**（登记 ≠ 真的打到 service），本步才真正覆盖；遗留的守卫缺口记入 ISSUE-56。
-- 门禁：`pytest -q` 881 passed（1 例 Windows 符号链接环境失败）、206 deselected，覆盖率 81.94%；本机 Docker 集成套件 **205 项全部通过**（`test_handoff_pg.py` 8 例 + 隔离套件）；`ruff check` / `ruff format --check` / `lint-imports`（13 契约）/ `prompts check`（8 个）全绿；真实模型费用 0 元。
+- 门禁：`pytest -q` 881 passed（1 例 Windows 符号链接环境失败）、206 deselected，覆盖率 81.94%；本机 Docker 集成套件 **205 项全部通过**（`test_handoff_pg.py` 9 例 + 隔离套件）；`ruff check` / `ruff format --check` / `lint-imports`（13 契约）/ `prompts check`（8 个）全绿；真实模型费用 0 元。
 
-### 文档（M3.4 ③，2026-10-17）
+### 文档（M3.4 ③，2026-10-19）
 - [待解决问题清单](docs/00-planning/07-待解决问题清单.md)：新增 ISSUE-54（待回访的六个 `callback_*` 列从本步起被写入，但列表接口与「标记已回访」在 M4.5 才有——标记进去暂时查不出来）与 ISSUE-55（偏差：扫描落在新模块 `modules/handoff/sweep.py`，而不是计划里的 `handoff.service.sweep()`）。
 
-### 新增（M3.4 ② 转人工状态机与坐席接口，2026-10-17）
+### 新增（M3.4 ② 转人工状态机与坐席接口，2026-10-18）
 - 坐席接口 5 个端点（`modules/handoff/router.py`，`prefix=/api/v1/apps/{app_id}`）：`GET …/conversations/{id}/handoff`（状态查询，接受 `chat` 或 `handoff:write`）、`POST …/handoff/accept`（抢单接入，`pending → accepted`）、`POST …/handoff/messages`（坐席发言，201）、`POST …/handoff/release`（交还 AI）、`GET …/handoffs`（`pending` / `accepted` 队列，`id` 升序游标分页）用 `handoff:write`。
 - 状态迁移全部是**条件单行 UPDATE**（`WHERE app_id=… AND id=… AND handoff_status=…`，交还还限定会话仍 `active`）：受影响 0 行时重读数据库里的当前状态并抛 `409 HANDOFF_STATE_CONFLICT`（`details.handoff_status`），并发抢单因此只有一个成功；会话已关闭 → `409 CONVERSATION_CLOSED`（坐席接口不会自动开新会话）；不是接入的那个坐席发言或交还 → `403 FORBIDDEN`。抢单成功同时清掉上一轮遗留的坐席信息与释放时间戳。
 - `chat.service.append_agent_message(...)` 是坐席消息与系统提示（`handoff_accepted` / `handoff_released`）的唯一写入口：直接调 `chat.repository` 会把「`message_count` / `last_message_at` / `last_activity_at` / 清 `idle_notice_sent_at`」的联动规则抄成第二份，空闲扫描会误判；`accepted_text` / `released_text` 为空时不写系统提示（§3.5 允许 null）。
 - `core/schedule.py::in_service_hours(cfg, now)`：服务时间纯函数（区间左闭右开、不跨零点、按 `zoneinfo` 的本地钟面判定、未配置即 7×24、脏配置按不服务兜底）。放在 `core` 是为了避免 `chat` 与 `handoff` 互相依赖，入参用结构化协议 `WeeklyHours`，`rag.config.ServiceHours` 天然满足它（`core` 不许反向 import `rag`）。
 
-### 测试（M3.4 ②，2026-10-17）
+### 测试（M3.4 ②，2026-10-18）
 - 新增 `tests/unit/test_schedule.py`（15 例：左闭右开边界、多时段与午休、时区错位、夏令时 3 月切换、未配置 7×24、脏配置兜底）、`tests/unit/test_handoff_service.py`（18 例：抢单成功/被抢先/已关闭/不存在、坐席发言的「本人 + `accepted`」前置条件、交还的三种冲突、队列列表映射）、`tests/unit/test_handoff_api.py`（34 例：契约字段、`chat` 与 `handoff:write` 的 scope 组合、body 与 query 校验、409 / 403 / 404 映射、游标回传）。
 - `tests/open_api.py` 登记 5 条坐席路由（应用作用域 11 → 16），清单守卫继续在默认套件里拦截「挂了路由没登记」。
 - 本机门禁：`ruff check` / `ruff format --check` / `lint-imports`（13 契约，含新的「handoff 只可依赖 chat、webhooks、apps」）/ `prompts check`（8 个）全绿；`pytest -q` 862 passed（1 例 Windows 符号链接环境失败）、196 deselected；真实模型费用 0 元。
 
-### 文档（M3.4 ②，2026-10-17）
+### 文档（M3.4 ②，2026-10-18）
 - [待解决问题清单](docs/00-planning/07-待解决问题清单.md)：新增 ISSUE-53（交还备注只进日志、缺可查询审计，M4.1 接 `AuditSink`）与 ISSUE-52（偏差：`core/schedule.py` 从提交 ③ 提到提交 ②——状态查询响应里的 `in_service_hours` 不能返回恒 `true` 的假值）；更新 ISSUE-04（`HANDOFF_STATE_CONFLICT` 已落地，剩 `TOKEN_EXPIRED` / `ACCOUNT_LOCKED` 留给 M4.1）。
 
-### 工程（M3.4 ① 依赖合同修订，2026-10-17）
+### 工程（M3.4 ① 依赖合同修订，2026-10-18）
 - import-linter 依赖合同按 [ADR-0017](docs/02-architecture/adr/0017-模块依赖合同修订与横切能力注入.md) 修订：`handoff 只可依赖 chat、webhooks` → `handoff 只可依赖 chat、webhooks、apps`（转人工要读应用的 `handoff_config`），`chat` / `handoff` / `eval` / `feedback` 四条「X 只可依赖…」合同加 `allow_indirect_imports = true`（只约束直接 import），消除「经允许的直接依赖叠加出的间接链路被误判违规」的老问题（待解决问题清单 ISSUE-28）；分层合同与 `rag` / `memory` / `ingest` / `core` 的 forbidden 合同不变，仍检查间接依赖。
 - 门禁：`lint-imports` 13 kept / 0 broken（191 files、945 dependencies）。
 
@@ -49,7 +59,7 @@
 - 门禁：集成 190 passed（本机 Docker 栈）；单元 795 passed / 1 failed（Windows 符号链接特权，环境问题）/ 191 deselected，覆盖率 81%；`ruff check` / `ruff format --check` / `lint-imports`（13 契约）/ `prompts check`（8 个）全绿；真实模型费用 0 元。
 - 修 `docker/dev-stack.cmd`：其 `rem` 注释里的中文被 cmd.exe 按 OEM 代码页（GBK）解析后**当成命令执行**，`.cmd` 的任何动作都跑不起来（与 `alembic.ini` 同类问题，ISSUE-51）；该文件改纯 ASCII 并写明「必须保持 ASCII」，同时给 `docker/dev-stack.ps1` 加 UTF-8 BOM（本机没有 `pwsh`，包装脚本实际由 Windows PowerShell 5.1 执行）。
 
-### 文档（M3.4 子步骤计划，2026-10-17）
+### 文档（M3.4 子步骤计划，2026-10-18）
 - 新增 M3.4 子步骤计划（[开发计划](docs/00-planning/03-开发计划.md)）：① import-linter 合同改造（ADR-0017，`allow_indirect_imports`，对应待解决问题清单 ISSUE-28）；② `modules/handoff` 状态机与坐席接口（条件单行更新 + `409 HANDOFF_STATE_CONFLICT`、人工消息走 `chat.service`）；③ 服务时间与三种超时（`core/schedule.py` 纯函数、`handoff.sweep`、`idle_sweep` 先 handoff 后 lifecycle、留 `events.emit` TODO 给 M3.5）；④ 用例（状态迁移表、并发 accept、sweep 幂等、DST 时区、开放接口清单 5 条）；⑤ 文档收尾。预算 < 0.1 元。
 
 ### 新增（M3.3 OpenAI 兼容接口，2026-10-17）
