@@ -165,6 +165,44 @@ async def test_deliveries_are_queued_for_apps_with_a_webhook(pg: dict[str, Any])
     assert d.payload["conversation_id"] == str(turn.conversation_id)
 
 
+async def test_rolled_back_transaction_leaves_no_event(pg: dict[str, Any]) -> None:
+    """事件与状态变更同事务（ADR-0016）：回滚后既没有事件行，`event_seq` 也没动。"""
+    a = pg["app_a"]
+    cid = await new_conv(pg, a)
+    async with pg["sessions"]() as s:
+        conv = await ConversationRepository(s).get_or_404(a, cid)
+        await events.emit(s, events.Target.of(conv), "message.created", {"message": {"id": "m1"}})
+        assert await ConversationRepository(s).close(a, cid, reason="idle") is True
+        await s.rollback()
+
+    assert await events_of(pg, cid) == []
+    async with pg["sessions"]() as s:
+        conv = await ConversationRepository(s).get_or_404(a, cid)
+        assert (conv.event_seq, conv.status) == (0, "active")
+
+
+async def test_concurrent_messages_get_contiguous_seq(pg: dict[str, Any]) -> None:
+    """并发 10 条消息：`UPDATE … RETURNING` 把同一行串行化，`seq` 连续、不重、不跳号。"""
+    a = pg["app_a"]
+    cid = await new_conv(pg, a)
+
+    async def one(i: int) -> int:
+        async with pg["sessions"]() as s:
+            conv = await ConversationRepository(s).get_or_404(a, cid)
+            row = await events.emit(
+                s, events.Target.of(conv), "message.created", {"message": {"id": f"m{i}"}}
+            )
+            assert row is not None
+            await s.commit()
+            return row.seq
+
+    seqs = await asyncio.gather(*(one(i) for i in range(10)))
+    assert sorted(seqs) == list(range(1, 11))
+    rows = await events_of(pg, cid)
+    assert [r.seq for r in rows] == list(range(1, 11))
+    assert len({r.id for r in rows}) == 10
+
+
 # --------------------------------------------------------------------------- 事件流（HTTP）
 
 

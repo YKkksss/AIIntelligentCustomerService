@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### 测试（M3.5 ④ 用例与隔离收口，2026-10-19）
+- 新增 `tests/unit/test_webhook_contract.py`（18 例）与 `tests/webhook_support.py`：把第三方接入指南 §7.4 的**验签示例代码原样搬进测试并真的跑一遍**——示例能验过我们的签名，密钥不对 / 正文被改 / 时间戳超 5 分钟 / 签名不匹配四种情况都拒绝；八种事件的 `data` 与公共字段改为**快照断言**（字段名、字段顺序、UTC 时间、中文不转义），形状一变就必须显式改这里；退避表、5 秒超时、单批 100 与文档写死的数字对齐。
+- `tests/integration/test_chat_events_pg.py` 补 2 例：事件与状态变更**同事务**（同一事务里改状态 + 发事件，回滚后既没有事件行、`event_seq` 也没动）、**并发 10 条消息**的 `seq` 连续且不重复（`UPDATE … RETURNING` 把同一行串行化）。
+- `tests/integration/test_webhook_delivery_pg.py` 补 2 例：本地接收端用 `httpx.MockTransport` 接真投递并按 §7.4 验签（验签通过 → `delivered`，发出去的字节与库里 `payload` 一致）、接收端返回 401 时按非 2xx 退避重试（`pending`、`attempts=1`、`last_error="HTTP 401"`）。
+- 本机 Docker 集成套件全量 **225 项全部通过**；单测 **962 passed**（1 例 Windows 符号链接环境失败），覆盖率 **82.42%**（10020 语句 / 1762 未覆盖，门槛 80）。
+
 ### 新增（M3.5 ③ 出站 Webhook 投递，2026-10-19）
 - `core/secretbox.py`：签名密钥工具（`whsec_` + 32 字节随机，`prefix_of` 只外泄前缀，Fernet 加解密，主密钥取 `AICS_DATA_ENCRYPTION_KEY`；44 字符的标准 Fernet key 直接当密钥，否则由口令派生）。放在 `core` 是因为 `apps` 与 `webhooks` 是**互不依赖**的独立模块（import-linter 合同），两边都要用。
 - `modules/webhooks/signing.py`：`X-AICS-Event` / `X-AICS-Delivery` / `X-AICS-Timestamp` / `X-AICS-Signature: sha256=hex(HMAC_SHA256(secret, "{ts}.{body}"))`，正文与 `Content-Type: application/json`（第三方接入指南 §7）。

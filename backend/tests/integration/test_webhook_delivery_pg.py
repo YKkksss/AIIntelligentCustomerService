@@ -6,13 +6,16 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+import httpx
 import pytest
 from sqlalchemy import select, update
 from tests.chat_support import make_runtime  # noqa: F401  (保持与其它集成用例相同的导入风格)
+from tests.webhook_support import verify
 
 from aics.core import netguard, secretbox
 from aics.core.config import get_settings
@@ -22,6 +25,7 @@ from aics.modules.chat import events
 from aics.modules.chat.repository import ConversationRepository
 from aics.modules.chat.schemas import NewConversation
 from aics.modules.webhooks import service as wh
+from aics.modules.webhooks import signing
 from aics.rag.config import WebhookConfig
 
 pytestmark = pytest.mark.integration
@@ -220,3 +224,91 @@ async def test_private_conversation_is_not_shared(pg: dict[str, Any]) -> None:
         assert (
             await s.execute(select(Conversation).where(Conversation.id == cid))
         ).scalar_one().app_id == pg["app_b"]
+
+
+async def test_local_receiver_verifies_the_signature(pg: dict[str, Any], monkeypatch: Any) -> None:
+    """本地接收端收全流程：真投递走 `httpx.MockTransport`，按指南 §7.4 的写法验签。"""
+    plain, cfg = _webhook_config()
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.content
+        # `dict(request.headers)` 会把头名小写化，取值一律走 httpx 的大小写无关映射
+        seen["body"] = json.loads(body)
+        seen["event"] = request.headers[signing.EVENT_HEADER]
+        seen["delivery"] = request.headers[signing.DELIVERY_HEADER]
+        seen["content_type"] = request.headers["content-type"]
+        ok = verify(
+            plain,
+            request.headers[signing.TIMESTAMP_HEADER],
+            body,
+            request.headers[signing.SIGNATURE_HEADER],
+        )
+        return httpx.Response(200 if ok else 401, json={"ok": ok})
+
+    transport = httpx.MockTransport(handler)
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        wh.httpx, "AsyncClient", lambda **kwargs: real_client(transport=transport, **kwargs)
+    )
+
+    async with pg["sessions"]() as s:
+        await s.execute(update(App).where(App.id == pg["app_a"]).values(webhook_config=cfg))
+        conv = await ConversationRepository(s).create(
+            pg["app_a"], NewConversation(channel="api", external_user_id="u1")
+        )
+        await events.emit(
+            s,
+            events.Target.of(conv),
+            "handoff.requested",
+            {"reason": "keyword"},
+            webhook=events.WebhookTarget.of(WebhookConfig.model_validate(cfg)),
+        )
+        await s.commit()
+        cid = conv.id
+
+    row = await _delivery(pg, cid)
+    result = await _call(pg, lambda svc: svc.deliver(row.id))
+    assert (result.status, result.status_code) == ("delivered", 200)
+    assert seen["event"] == "handoff.requested"
+    assert seen["delivery"] == str(row.id)
+    assert seen["content_type"] == "application/json"
+    assert seen["body"] == row.payload  # 发出去的字节就是库里那份 payload
+
+    row = await _delivery(pg, cid)
+    assert (row.status, row.attempts) == ("delivered", 1) and row.delivered_at is not None
+
+
+async def test_local_receiver_rejecting_the_signature_retries(
+    pg: dict[str, Any], monkeypatch: Any
+) -> None:
+    """接收端验签失败返回 401：按非 2xx 退避重试，不会误判成投递成功。"""
+    _, cfg = _webhook_config()
+    transport = httpx.MockTransport(lambda request: httpx.Response(401, json={"ok": False}))
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        wh.httpx, "AsyncClient", lambda **kwargs: real_client(transport=transport, **kwargs)
+    )
+
+    async with pg["sessions"]() as s:
+        await s.execute(update(App).where(App.id == pg["app_a"]).values(webhook_config=cfg))
+        conv = await ConversationRepository(s).create(
+            pg["app_a"], NewConversation(channel="api", external_user_id="u1")
+        )
+        await events.emit(
+            s,
+            events.Target.of(conv),
+            "handoff.requested",
+            {"reason": "keyword"},
+            webhook=events.WebhookTarget.of(WebhookConfig.model_validate(cfg)),
+        )
+        await s.commit()
+        cid = conv.id
+
+    row = await _delivery(pg, cid)
+    before = datetime.now(UTC)
+    result = await _call(pg, lambda svc: svc.deliver(row.id))
+    assert (result.status, result.status_code) == ("retry", 401)
+    row = await _delivery(pg, cid)
+    assert (row.status, row.attempts, row.last_error) == ("pending", 1, "HTTP 401")
+    assert row.next_attempt_at is not None and row.next_attempt_at - before >= timedelta(seconds=9)
