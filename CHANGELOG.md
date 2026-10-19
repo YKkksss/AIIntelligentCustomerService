@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### 测试（M3.6 ③ 错误码一致性，2026-10-19）
+- 新增 `tests/unit/test_error_codes.py`（7 例）：解析[接口规范 §4](../docs/04-api/01-接口规范.md) 的错误码表，与代码双向比对——① 文档里有、代码里没有的码只允许在 `PENDING` 里（`TOKEN_EXPIRED` / `ACCOUNT_LOCKED`，M4.1），实现后忘记删也会失败；② 代码里有、文档里没有的码不允许；③ 同一个码两侧的 HTTP 状态码必须一致（`PARSE_FAILED` 例外：它不是响应，只在 `documents.error` 与 job 里）；④ 遍历 `aics` 包收集 `AppError` 子类，并额外扫全仓 `code="…"` 字面量，防止新码绕过类层次悄悄出现；⑤ 每个码都要有非空的中文 `message`。
+- 修正接口规范 §4 的漂移：`HANDOFF_STATE_CONFLICT` 已在 M3.4 实现，此前仍写在「随 M3/M4 落地」一档；现在只列 `TOKEN_EXPIRED` / `ACCOUNT_LOCKED` 两个登录相关码。
+- 开发计划 M3.6 ② 的 `comment` 上限由 500 更正为 **2000**（与开放接口参考 §2 的契约一致，实现按契约来）。
+
 ### 新增（M3.6 ② 反馈接口与迁移 0013，2026-10-19）
 - **迁移 `0013`**：`feedback` 表（`id`、`app_id`、`message_id` 唯一、`rating` ∈ {1,-1}、`comment`、`source` ∈ {api,admin} 默认 `api`、`handled` 默认 false、`eval_case_id`、`created_at` / `updated_at`；索引 `ix_feedback_app_created`）。`eval_case_id` 暂不加外键——`eval_cases` 要到 M5.1 才建表，M5.3 补约束。ORM 见 `db/models/feedback.py`（已导出）。
 - **开放接口** `POST /api/v1/apps/{app_id}/messages/{message_id}/feedback`（scope `chat`）：请求 `{"rating": 1|-1, "comment": "可选"}`，响应 `200 {"id", "rating"}`。只有 `role = assistant` 的回答可反馈（否则 422 `VALIDATION_ERROR`，`details.errors[0].loc = ["path", "message_id"]`）；`message_id` 在唯一键上 `ON CONFLICT DO UPDATE` **覆盖写**，重复提交不会新增行、`id` 与 `created_at` 不变；消息不存在或不属于本应用一律 404 `NOT_FOUND`（`details.message_id`，不新增 `MESSAGE_NOT_FOUND`，见 ISSUE-67）。
