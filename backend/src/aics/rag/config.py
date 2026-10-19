@@ -418,7 +418,8 @@ class HandoffConfig(_Cfg):
 
 # ---------------------------------------------------------------- webhook
 class WebhookConfig(_Cfg):
-    """`apps.webhook_config`。URL 只做格式校验；SSRF 校验（`400 URL_NOT_ALLOWED`）由 webhooks 模块在保存与投递时执行。"""
+    """`apps.webhook_config`。URL 只做格式校验；SSRF 校验（`400 URL_NOT_ALLOWED`）由
+    `core.netguard` 在保存（`apps.service`）与投递（`webhooks.service`）时各做一次。"""
 
     url: Annotated[str, StringConstraints(max_length=2048, pattern=r"^https?://\S+$")] | None = None
     secret_enc: str | None = None

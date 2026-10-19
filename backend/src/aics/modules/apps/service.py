@@ -15,6 +15,7 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from aics.core import netguard, secretbox
 from aics.core.config import Settings, get_settings
 from aics.core.errors import AppNotFoundError, ValidationAppError
 from aics.db.models import App, Document
@@ -307,6 +308,11 @@ class AppService:
             )
             doc_chunks = tuple(ChunkConfig.model_validate(c) for c in rows.scalars())
         cfg = self.build_config(**merged, doc_chunks=doc_chunks)
+        if "url" in webhook_patch and cfg.webhook.url:
+            # 保存期 SSRF 校验（安全设计 §4.1：与 URL 导入同规则）；投递前 webhooks 会再校验一次
+            netguard.check_url(
+                cfg.webhook.url, netguard.Allowlist.parse(self.settings.url_fetch_allowlist)
+            )
         new_values: dict[str, Any] = {
             "rag_config": _dump(cfg.rag),
             "handoff_config": _dump(cfg.handoff),
@@ -335,3 +341,23 @@ class AppService:
             reindex_required=reindex,
             custom_dict_changed=dict_changed,
         )
+
+    # ------------------------------------------------------------ Webhook 密钥
+    async def rotate_webhook_secret(self, app_id: UUID) -> str:
+        """生成（或轮换）Webhook 签名密钥，**明文只在这里返回一次**（安全设计 §4.1）。
+
+        库里只留 `secret_enc`（Fernet 密文，主密钥 `AICS_DATA_ENCRYPTION_KEY`）与
+        `secret_prefix`（日志 / 接口只出现前缀）。加密工具在 `core.secretbox`：`apps` 与
+        `webhooks` 是互不依赖的独立模块，谁也不能 import 谁。
+        """
+        app = await self.get_app(app_id)
+        plain = secretbox.new_secret()
+        encrypted = secretbox.encrypt(plain, self.settings.data_encryption_key.get_secret_value())
+        cfg = WebhookConfig.model_validate(dict(app.webhook_config or {}))
+        values = cfg.model_dump()
+        values.update(secret_enc=encrypted, secret_prefix=secretbox.prefix_of(plain))
+        await self.repo.save_values(
+            app_id, {"webhook_config": _dump(WebhookConfig.model_validate(values))}
+        )
+        await self.session.refresh(app)
+        return plain

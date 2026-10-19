@@ -38,6 +38,12 @@ class WebhookDeliveryRepository(AppScopedRepository[WebhookDelivery]):
         )
         return list((await self.session.execute(stmt)).scalars())
 
+    async def load_all_apps(self, id: UUID) -> WebhookDelivery | None:
+        """按投递 ID 取一条（投递任务只拿到 id，没有 app_id：系统级方法用 `_all_apps` 后缀）。"""
+        return (
+            await self.session.execute(select(WebhookDelivery).where(WebhookDelivery.id == id))
+        ).scalar_one_or_none()
+
     async def due_all_apps(self, *, before: datetime, limit: int = 100) -> list[UUID]:
         """到期该重试的投递 id（`pending` 且 `next_attempt_at <= before`）。
 
@@ -57,13 +63,27 @@ class WebhookDeliveryRepository(AppScopedRepository[WebhookDelivery]):
         )
         return list((await self.session.execute(stmt)).scalars())
 
+    async def claim_all_apps(self, id: UUID, *, at: datetime) -> int:
+        """重试扫描取到一条后把 `next_attempt_at` 推后，让下一轮 10 秒扫描不会再抢它。"""
+        stmt = (
+            update(WebhookDelivery)
+            .where(WebhookDelivery.id == id, WebhookDelivery.status == "pending")
+            .values(next_attempt_at=at)
+        )
+        return int((await self.session.execute(stmt)).rowcount)
+
     async def mark_delivered(self, app_id: UUID, id: UUID, *, at: datetime) -> int:
-        """`pending → delivered`（幂等：只有还没结束的投递会被改）。"""
+        """`pending → delivered`（幂等：只有还没结束的投递会被改）；成功也算一次尝试。"""
         return await self._finish(
             app_id,
             id,
             status="delivered",
-            values={"delivered_at": at, "next_attempt_at": None},
+            values={
+                "attempts": WebhookDelivery.attempts + 1,
+                "delivered_at": at,
+                "next_attempt_at": None,
+                "last_error": None,
+            },
         )
 
     async def mark_attempt(

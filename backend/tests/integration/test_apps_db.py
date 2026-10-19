@@ -62,7 +62,14 @@ async def _user(s: AsyncSession) -> User:
     return u
 
 
-async def test_create_read_update_app(session: AsyncSession) -> None:
+async def test_create_read_update_app(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 保存 Webhook 地址会做 SSRF 校验（M3.5 ③）；本机 DNS 把测试域名解到保留网段，这里放行
+    monkeypatch.setattr(
+        "aics.modules.apps.service.netguard.check_url",
+        lambda url, allow, resolver=None: ["93.184.216.34"],
+    )
     svc = AppService(session)
     u = await _user(session)
     app = await svc.create_app(name=" 售后 ", created_by=u.id, rag_config={"vector_top_k": 12})

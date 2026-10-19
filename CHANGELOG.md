@@ -4,6 +4,22 @@
 
 ## [Unreleased]
 
+### 新增（M3.5 ③ 出站 Webhook 投递，2026-10-19）
+- `core/secretbox.py`：签名密钥工具（`whsec_` + 32 字节随机，`prefix_of` 只外泄前缀，Fernet 加解密，主密钥取 `AICS_DATA_ENCRYPTION_KEY`；44 字符的标准 Fernet key 直接当密钥，否则由口令派生）。放在 `core` 是因为 `apps` 与 `webhooks` 是**互不依赖**的独立模块（import-linter 合同），两边都要用。
+- `modules/webhooks/signing.py`：`X-AICS-Event` / `X-AICS-Delivery` / `X-AICS-Timestamp` / `X-AICS-Signature: sha256=hex(HMAC_SHA256(secret, "{ts}.{body}"))`，正文与 `Content-Type: application/json`（第三方接入指南 §7）。
+- `modules/webhooks/service.py`：`WebhookService.deliver`（2xx 置 `delivered`；非 2xx / 网络异常按 **10 s / 30 s / 2 min / 10 min / 30 min** 退避，共 6 次；第 6 次置 `failed`；`attempts` 每次都 +1）、`redeliver`、`due`（到期扫描并领取 60 秒）、`send_test`（`event=ping`，同步一次、不落表）、`_webhook_of`（坏配置回落空配置）；投递前重做一次 SSRF 校验（`core.netguard`，端口白名单 + `AICS_URL_FETCH_ALLOWLIST`），不跟随重定向、超时 5 秒。任务体 `run_deliver_job` / `run_retry_sweep_job` 自建 NullPool 引擎。
+- `tasks/webhooks.py` + beat：`aics.deliver_webhook`（队列 `context`）与 `aics.webhook_retry_sweep`（队列 `context`，**每 10 秒**把 `pending` 且到期的投递重新入队，`FOR UPDATE SKIP LOCKED`、单批 100）——不用 Celery 长 `countdown`（RabbitMQ `consumer_timeout` 默认 30 分钟）。
+- `WebhookDeliveryRepository` 新增 `load_all_apps`（按投递 ID 取一条，投递任务没有 `app_id`）与 `claim_all_apps`（领取后把 `next_attempt_at` 推后 60 秒）；`mark_delivered` 同时 `attempts += 1` 并清 `last_error`。
+- `AppService.rotate_webhook_secret`（生成/轮换密钥，**明文只返回一次**，库里只留 `secret_enc` + `secret_prefix`）与保存期 SSRF 校验（`PATCH /apps/{id}` 改 `webhook_config.url` 时校验，`core.netguard`）。
+- 新依赖 `cryptography>=43`（Fernet）。
+- ISSUE-60（保存期 SSRF 缺失，P1）就此结案；ISSUE-59（测试事件无处落表）定案为「不落表」，两条都记进清单。
+
+### 测试（M3.5 ③，2026-10-19）
+- 新增 `tests/unit/test_webhook_delivery.py`（22 例）：密钥往返 / 标准 Fernet key / 坏主密钥、签名已知向量与四个头、投递成功 / 非 2xx 退避 / 第 6 次置 `failed` / 异常按失败重试 / 缺配置与坏密钥与地址被拒都直接置 `failed` / 非 `pending` 跳过 / `due` 领取 / `redeliver` / `send_test` 不落表、`rotate_webhook_secret` 只存密文、保存期 SSRF 拒绝与放行。
+- 新增 `tests/integration/test_webhook_delivery_pg.py`（8 例）：真 PG 上事件排投递（`id == event_id`）、投递成功落 `delivered`、失败按 10 秒退避、第 6 次置 `failed`、重试扫描领取一次且不重复、`send_test` 不新增行、私网地址投递前被拒、保存私网地址被拒。
+- `tests/unit/test_celery_app.py` 补 2 例：新任务的路由与 beat 节拍（10 秒、`expires` 8）、两个任务体真的调到 job。
+- 单测 **944 passed**（1 例 Windows 符号链接环境失败），覆盖率 **82.42%**（10020 语句 / 1762 未覆盖，门槛 80）；本机 Docker 集成套件全量复跑 **221 项全部通过**（新增 8 项 Webhook 投递用例；既有 `test_apps_db.py::test_create_read_update_app` 随新校验调整——保存 Webhook 地址前会先做 SSRF 校验）。
+
 ### 新增（M3.5 ② 会话事件流 SSE，2026-10-19）
 - `GET /api/v1/apps/{app_id}/conversations/{conversation_id}/events`（scope `chat` 或 `handoff:write`）：`text/event-stream`，`id:` 行是 `seq`、`data:` 行是与出站 Webhook **逐字段相同**的 payload，15 秒一帧 `: ping`，推完 `conversation.closed` 结束连接；`Last-Event-ID` 补发（非法值 422 `VALIDATION_ERROR`）。帧不带 `event:` 行——事件名在 payload 的 `event` 字段里，浏览器默认的 `onmessage` 也能收到。
 - 新模块 `modules/chat/event_stream.py`：**先 `SUBSCRIBE` 再按 `seq > Last-Event-ID` 回表补发**，同一 `seq` 只发一次；连接期间不持事务（每批一次短事务），关闭时 `unsubscribe` / `aclose` 各自吞异常记日志（ADR-0016）。

@@ -117,3 +117,50 @@ def test_key_usage_flush_task_calls_the_job(monkeypatch: object) -> None:
     mp: pytest.MonkeyPatch = monkeypatch  # type: ignore[assignment]
     mp.setattr(maintenance, "run_key_usage_flush_job", fake_job)
     assert maintenance.flush_key_usage() == out
+
+
+def test_webhook_tasks_routed_and_swept_every_10s() -> None:
+    from aics.modules.webhooks.service import DELIVER_TASK, RETRY_SWEEP_TASK
+    from aics.tasks import webhooks  # noqa: F401
+    from aics.tasks.celery_app import WEBHOOK_RETRY_INTERVAL_S, celery_app
+
+    for name in (DELIVER_TASK, RETRY_SWEEP_TASK):
+        assert name in celery_app.tasks
+        assert celery_app.conf.task_routes[name]["queue"] == "context"
+    entry = celery_app.conf.beat_schedule["webhook-retry-sweep"]
+    assert entry["task"] == RETRY_SWEEP_TASK
+    assert entry["schedule"] == WEBHOOK_RETRY_INTERVAL_S == 10.0
+    assert 0 < entry["options"]["expires"] < entry["schedule"]
+    assert "aics.tasks.webhooks" in celery_app.conf.include
+
+
+def test_webhook_tasks_call_the_jobs(monkeypatch: object) -> None:
+    import pytest
+
+    from aics.modules.webhooks.service import DELIVER_TASK
+    from aics.tasks import webhooks
+
+    deliver = webhooks.deliver_webhook
+    sweep = webhooks.webhook_retry_sweep
+    out = {"status": "delivered"}
+    due = ["0198f4b0-0000-7000-8000-000000000001", "0198f4b0-0000-7000-8000-000000000002"]
+    enqueued: list[str] = []
+
+    async def fake_deliver(delivery_id: object, settings: object = None) -> dict:
+        return out
+
+    async def fake_sweep(settings: object = None) -> list[str]:
+        return due
+
+    class FakeTask:
+        def delay(self, value: str) -> None:
+            enqueued.append(value)
+
+    mp: pytest.MonkeyPatch = monkeypatch  # type: ignore[assignment]
+    mp.setattr(webhooks, "run_deliver_job", fake_deliver)
+    mp.setattr(webhooks, "run_retry_sweep_job", fake_sweep)
+    mp.setattr(webhooks, "deliver_webhook", FakeTask())
+    assert deliver.name == DELIVER_TASK
+    assert deliver("0198f4b0-0000-7000-8000-000000000001") == out
+    assert sweep() == {"due": 2}
+    assert enqueued == due

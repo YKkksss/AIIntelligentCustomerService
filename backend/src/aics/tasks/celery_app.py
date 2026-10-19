@@ -18,6 +18,8 @@ from aics.core.logging import configure_logging
 
 IDLE_SWEEP_INTERVAL_S = 30.0  # = chat.lifecycle.IDLE_SWEEP_INTERVAL_S (tests keep them equal)
 KEY_USAGE_FLUSH_INTERVAL_S = 60.0  # = apikeys.keyusage.KEY_USAGE_FLUSH_INTERVAL_S
+#: 出站 Webhook 的到期重试扫描（M3.5 ③；ADR-0016：不依赖 Celery 长 countdown）。
+WEBHOOK_RETRY_INTERVAL_S = 10.0
 
 
 def create_celery() -> Celery:
@@ -62,11 +64,22 @@ def create_celery() -> Celery:
                 "schedule": KEY_USAGE_FLUSH_INTERVAL_S,
                 "options": {"expires": KEY_USAGE_FLUSH_INTERVAL_S - 5},
             },
+            # M3.5：出站 Webhook 的到期重试（10 秒一次；投递本身在 context 队列）。
+            "webhook-retry-sweep": {
+                "task": "aics.webhook_retry_sweep",
+                "schedule": WEBHOOK_RETRY_INTERVAL_S,
+                "options": {"expires": WEBHOOK_RETRY_INTERVAL_S - 2},
+            },
         },
         broker_connection_retry_on_startup=True,
     )
     # 任务模块随里程碑加入
-    app.conf.include = ["aics.tasks.ingest", "aics.tasks.maintenance", "aics.tasks.context"]
+    app.conf.include = [
+        "aics.tasks.ingest",
+        "aics.tasks.maintenance",
+        "aics.tasks.context",
+        "aics.tasks.webhooks",
+    ]
     app.conf.task_routes = {
         "aics.ingest_document": {"queue": "ingest", "routing_key": "ingest"},
         "aics.retokenize_app": {"queue": "ingest", "routing_key": "ingest"},
@@ -76,6 +89,8 @@ def create_celery() -> Celery:
         "aics.compact_conversation": {"queue": "context", "routing_key": "context"},
         "aics.idle_sweep": {"queue": "maintenance", "routing_key": "maintenance"},
         "aics.flush_key_usage": {"queue": "maintenance", "routing_key": "maintenance"},
+        "aics.deliver_webhook": {"queue": "context", "routing_key": "context"},
+        "aics.webhook_retry_sweep": {"queue": "context", "routing_key": "context"},
     }
     return app
 
