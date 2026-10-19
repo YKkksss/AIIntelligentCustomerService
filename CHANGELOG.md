@@ -16,6 +16,12 @@
 - `tests/unit/test_chat_turn_flow.py`：补服务时间外触发转人工的整轮路径（判定入参、`system/handoff_offline`、`reply_by=system`）与 `_write_assistant` 的落库值（`released` / `offline` / `needs_callback` 对比 `pending` 分支）；`tests/unit/test_chat_lifecycle.py` 补空标记白名单两例。
 - 本机门禁：`ruff check` / `ruff format --check`（277 文件）/ `lint-imports`（13 契约）/ `prompts check`（8 个）全绿；`pytest -q` 875 passed（1 例 Windows 符号链接环境失败）、196 deselected，覆盖率 81.94%；本机 Docker 集成套件 `docker\dev-stack.cmd test` **195 项全部通过**（6 分 16 秒，提交 ② 时是 190 项）；真实模型费用 0 元。
 
+### 测试（M3.4 ④ 用例与跨应用隔离收口，2026-10-17）
+- 新增 `tests/integration/test_handoff_pg.py`（8 例，真实 PG）：排队超时按应用配置到点才释放（`released` / `queue_timeout`、话术、待回访、空闲计时重置）；同一轮重复扫描与很久以后都不重复处理；接入后无消息超时释放并关会话（`close_reason=handoff_idle` + 空标记）；**两条竞态分支**——扫描读到 `pending` 之后坐席抢先接入、以及坐席刚说过话——条件更新 0 行时一个字都不写；两个事务同时抢单只有一个成功；软删除的应用不再被扫描；非服务时间走真 `/chat` 接口回留言话术并置待回访；`handoff_queue_timeout_minutes` ≥ 有效 `idle_close_minutes` 在保存时被拒（M2.7 校验回归）。
+- `tests/unit/test_handoff_service.py` 补齐「状态 × 动作」矩阵的缺格：`accept` 在 `none` / `released` 上冲突（报的是数据库里现在的状态、不留坐席痕迹）、坐席发言在 `pending` 上冲突（参数化补 `pending`）、会话关闭后三个写动作全部 409 且连 UPDATE 都不发。
+- `tests/integration/test_isolation_pg.py` 补坐席接口的跨应用 404（4 条带会话 id 的路由：A 的 Key + A 的路径 + B 的会话 → `CONVERSATION_NOT_FOUND`），并给隔离夹具装上 `HandoffRuntime`——**这 5 条路由虽然早已登记，但夹具里没有这个运行时，用例只走到认证层就 404 了**（登记 ≠ 真的打到 service），本步才真正覆盖；遗留的守卫缺口记入 ISSUE-56。
+- 门禁：`pytest -q` 881 passed（1 例 Windows 符号链接环境失败）、206 deselected，覆盖率 81.94%；本机 Docker 集成套件 **205 项全部通过**（`test_handoff_pg.py` 8 例 + 隔离套件）；`ruff check` / `ruff format --check` / `lint-imports`（13 契约）/ `prompts check`（8 个）全绿；真实模型费用 0 元。
+
 ### 文档（M3.4 ③，2026-10-17）
 - [待解决问题清单](docs/00-planning/07-待解决问题清单.md)：新增 ISSUE-54（待回访的六个 `callback_*` 列从本步起被写入，但列表接口与「标记已回访」在 M4.5 才有——标记进去暂时查不出来）与 ISSUE-55（偏差：扫描落在新模块 `modules/handoff/sweep.py`，而不是计划里的 `handoff.service.sweep()`）。
 

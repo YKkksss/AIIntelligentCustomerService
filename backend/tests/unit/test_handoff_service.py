@@ -57,9 +57,12 @@ def _conversation(app_id: UUID, **kw: Any) -> Conversation:
 class FakeRepo:
     """只实现 `HandoffService` 用到的方法，行为对齐真实 SQL 的语义。"""
 
-    def __init__(self, conv: Conversation, *, changed: bool = True) -> None:
+    def __init__(
+        self, conv: Conversation, *, changed: bool = True, lost_to: str | None = None
+    ) -> None:
         self.conv = conv
         self.changed = changed
+        self.lost_to = lost_to or "accepted"  # changed=False 时数据库里实际已经是这个状态
         self.calls: list[tuple[Any, ...]] = []
 
     async def get(self, app_id: UUID, conversation_id: UUID) -> Conversation | None:
@@ -79,8 +82,9 @@ class FakeRepo:
     ) -> int:
         self.calls.append(("accept", agent_id, agent_name))
         if not self.changed:
-            self.conv.handoff_status = "accepted"  # 另一个坐席刚好抢先
-            self.conv.handoff_agent_id = "a_999"
+            self.conv.handoff_status = self.lost_to  # 条件更新落空：状态已被别人改掉
+            if self.lost_to == "accepted":
+                self.conv.handoff_agent_id = "a_999"  # 另一个坐席刚好抢先
             return 0
         self.conv.handoff_status = "accepted"
         self.conv.handoff_agent_id = agent_id
@@ -160,6 +164,7 @@ def _rig(
     *,
     cfg: HandoffConfig | None = None,
     changed: bool = True,
+    lost_to: str | None = None,
 ) -> tuple[HandoffService, FakeRepo, FakeSession, list[dict[str, Any]]]:
     appends: list[dict[str, Any]] = []
 
@@ -177,7 +182,7 @@ def _rig(
 
     monkeypatch.setattr(handoff_service, "append_agent_message", fake_append)
     monkeypatch.setattr(handoff_service, "AppService", _fake_apps(cfg or HandoffConfig()))
-    repo = FakeRepo(conv, changed=changed)
+    repo = FakeRepo(conv, changed=changed, lost_to=lost_to)
     session = FakeSession()
     return HandoffService(session, repo=repo), repo, session, appends  # type: ignore[arg-type]
 
@@ -279,6 +284,46 @@ def test_accept_on_closed_conversation_is_409(monkeypatch: pytest.MonkeyPatch) -
 
 
 @pytest.mark.parametrize("status", ["none", "released"])
+def test_accept_conflicts_when_the_queue_item_is_gone(
+    monkeypatch: pytest.MonkeyPatch, status: str
+) -> None:
+    """排队项已经没了（从未排队、或被扫描/别的坐席释放）：条件更新 0 行 → 409 报现在的状态。"""
+    app_id = uuid4()
+    conv = _conversation(app_id, handoff_status=status)
+    svc, _, session, appends = _rig(monkeypatch, conv, changed=False, lost_to=status)
+
+    with pytest.raises(HandoffStateConflictError) as err:
+        asyncio.run(svc.accept(app_id, conv.id, agent_id="a_001"))
+
+    assert err.value.details == {"handoff_status": status}
+    assert session.commits == 0 and appends == []
+    assert conv.handoff_agent_id is None  # 没抢到就不能留下坐席痕迹
+
+
+@pytest.mark.parametrize("action", ["accept", "post_message", "release"])
+def test_closed_conversation_rejects_every_write_action(
+    monkeypatch: pytest.MonkeyPatch, action: str
+) -> None:
+    """会话一关，三个写动作都是 409 CONVERSATION_CLOSED，且连 UPDATE 都不发（§3.3）。"""
+    app_id = uuid4()
+    conv = _conversation(
+        app_id, status="closed", handoff_status="accepted", handoff_agent_id="a_001"
+    )
+    svc, repo, session, appends = _rig(monkeypatch, conv)
+
+    with pytest.raises(ConversationClosedError):
+        if action == "accept":
+            asyncio.run(svc.accept(app_id, conv.id, agent_id="a_001"))
+        elif action == "post_message":
+            asyncio.run(svc.post_message(app_id, conv.id, agent_id="a_001", content="您好"))
+        else:
+            asyncio.run(svc.release(app_id, conv.id, agent_id="a_001"))
+
+    assert repo.calls == [("get", conv.id)]
+    assert session.commits == 0 and appends == []
+
+
+@pytest.mark.parametrize("status", ["none", "pending", "released"])
 def test_agent_message_requires_pending_to_have_been_accepted(
     monkeypatch: pytest.MonkeyPatch, status: str
 ) -> None:

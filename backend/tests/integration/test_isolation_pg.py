@@ -33,6 +33,7 @@ from aics.db.models import Document
 from aics.ingest.repository import DocumentRepository
 from aics.main import create_app
 from aics.modules.apikeys.service import ApiKeyAuthenticator, ApiKeyService
+from aics.modules.handoff.runtime import HandoffRuntime
 from aics.modules.knowledge.runtime import KnowledgeRuntime
 
 pytestmark = pytest.mark.integration
@@ -42,7 +43,10 @@ async def new_key(pg: dict[str, Any], redis: Any, app_id: UUID) -> str:
     pepper = get_settings().api_key_pepper.get_secret_value()
     async with pg["sessions"]() as s:
         _, plain = await ApiKeyService(s, pepper=pepper, redis=redis).create(
-            app_id, name="isolation-it", scopes=["chat", "kb:read", "kb:write"], rpm_limit=1000
+            app_id,
+            name="isolation-it",
+            scopes=["chat", "kb:read", "kb:write", "handoff:write"],
+            rpm_limit=1000,
         )
         await s.commit()
     return plain
@@ -90,6 +94,8 @@ def build_app(pg: dict[str, Any], redis: Any) -> FastAPI:
         redis=redis,
     )
     app.state.chat_runtime = make_runtime(pg["sessions"])
+    # 坐席接口只需要会话工厂（M3.4 ②）：跨应用用例要真的走到 service 才验得到 404 的收口
+    app.state.handoff_runtime = HandoffRuntime(sessions=pg["sessions"])
     # 读接口无需存储/嵌入器/Qdrant；写接口（M3.2 ③）会换成带 fake 的运行时
     app.state.knowledge_runtime = KnowledgeRuntime(sessions=pg["sessions"])
     return app
@@ -163,6 +169,21 @@ async def test_cross_app_conversation_is_404_on_chat(iso: dict[str, Any]) -> Non
 
     assert r.status_code == 404, r.text
     assert r.json()["error"]["code"] == "CONVERSATION_NOT_FOUND"
+
+
+async def test_cross_app_conversation_is_404_on_handoff(iso: dict[str, Any]) -> None:
+    """坐席接口同源收口：A 的 Key + A 的路径 + B 的会话 id → 404（5 条路由共用同一个 service）。"""
+    base = f"/api/v1/apps/{iso['app_a']}/conversations/{iso['conv_b']}/handoff"
+    cases = (
+        ("GET", base, None),
+        ("POST", f"{base}/accept", {"agent_id": "a_001"}),
+        ("POST", f"{base}/messages", {"agent_id": "a_001", "content": "您好"}),
+        ("POST", f"{base}/release", {"agent_id": "a_001", "note": "转回 AI"}),
+    )
+    for method, url, body in cases:
+        r = await iso["client"].request(method, url, headers=auth(iso["key_a"]), json=body)
+        assert r.status_code == 404, f"{method} {url}: {r.text}"
+        assert r.json()["error"]["code"] == "CONVERSATION_NOT_FOUND"
 
 
 async def test_cross_app_conversation_does_not_leak_messages(iso: dict[str, Any]) -> None:
