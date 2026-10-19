@@ -24,6 +24,7 @@ from aics.core.config import get_settings
 from aics.core.errors import FileTooLargeError, ValidationAppError
 from aics.core.idempotency import HEADER as IDEMPOTENCY_HEADER
 from aics.core.idempotency import Idempotency, IdempotencyGuard, digest_json, digest_upload
+from aics.core.openapi import APP_SCOPE_ERRORS, errors
 from aics.core.security import Principal, require_scope
 from aics.db.models import Chunk, Document
 from aics.ingest.parsers import EXTENSIONS, UnsupportedFileTypeError
@@ -83,7 +84,7 @@ def _page_body(page: Any, items: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-@router.get("/documents")
+@router.get("/documents", summary="文档列表（游标分页）", responses=errors(*APP_SCOPE_ERRORS))
 async def list_documents(
     app_id: UUID,
     request: Request,
@@ -104,7 +105,11 @@ async def list_documents(
     )
 
 
-@router.get("/documents/{document_id}")
+@router.get(
+    "/documents/{document_id}",
+    summary="文档详情（含处理状态与错误）",
+    responses=errors(*APP_SCOPE_ERRORS),
+)
 async def get_document(
     app_id: UUID,
     document_id: UUID,
@@ -117,7 +122,11 @@ async def get_document(
     return JSONResponse(jsonable_encoder(document_body(doc)), headers=principal.rate_headers)
 
 
-@router.get("/documents/{document_id}/chunks")
+@router.get(
+    "/documents/{document_id}/chunks",
+    summary="文档切块列表（含父块与补充问题）",
+    responses=errors(*APP_SCOPE_ERRORS),
+)
 async def list_chunks(
     app_id: UUID,
     document_id: UUID,
@@ -236,7 +245,11 @@ def _replayed(guard: IdempotencyGuard, principal: Principal) -> JSONResponse | N
     )
 
 
-@router.post("/documents")
+@router.post(
+    "/documents",
+    summary="上传文档（multipart，超过上限立即 413）",
+    responses=errors(*APP_SCOPE_ERRORS, 409, 413, 429),
+)
 async def upload_document(
     app_id: UUID,
     request: Request,
@@ -269,7 +282,11 @@ async def upload_document(
     return JSONResponse(jsonable_encoder(body), status_code=status, headers=principal.rate_headers)
 
 
-@router.post("/documents/url")
+@router.post(
+    "/documents/url",
+    summary="从 URL 导入网页（阻断私网地址）",
+    responses=errors(*APP_SCOPE_ERRORS, 409, 429),
+)
 async def import_document_url(
     app_id: UUID,
     body: UrlImportBody,
@@ -296,7 +313,11 @@ async def import_document_url(
     )
 
 
-@router.put("/documents/{document_id}/file")
+@router.put(
+    "/documents/{document_id}/file",
+    summary="替换文档文件（新版本，旧向量作废）",
+    responses=errors(*APP_SCOPE_ERRORS, 409, 413, 429),
+)
 async def replace_document_file(
     app_id: UUID,
     document_id: UUID,
@@ -327,7 +348,11 @@ async def replace_document_file(
     return JSONResponse(jsonable_encoder(body), status_code=status, headers=principal.rate_headers)
 
 
-@router.post("/documents/{document_id}/reindex")
+@router.post(
+    "/documents/{document_id}/reindex",
+    summary="重新索引（切块配置变更后使用）",
+    responses=errors(*APP_SCOPE_ERRORS, 409, 429),
+)
 async def reindex_document(
     app_id: UUID,
     document_id: UUID,
@@ -342,7 +367,11 @@ async def reindex_document(
     return JSONResponse(jsonable_encoder(body), status_code=202, headers=principal.rate_headers)
 
 
-@router.patch("/documents/{document_id}")
+@router.patch(
+    "/documents/{document_id}",
+    summary="更新文档元数据（分类、标签等）",
+    responses=errors(*APP_SCOPE_ERRORS, 409),
+)
 async def patch_document(
     app_id: UUID,
     document_id: UUID,
@@ -364,7 +393,13 @@ async def patch_document(
     return JSONResponse(jsonable_encoder(document_body(doc)), headers=principal.rate_headers)
 
 
-@router.delete("/documents/{document_id}", status_code=204, response_class=Response)
+@router.delete(
+    "/documents/{document_id}",
+    status_code=204,
+    response_class=Response,
+    summary="删除文档（逻辑删除，向量与切块一并清理）",
+    responses=errors(*APP_SCOPE_ERRORS, 409),
+)
 async def delete_document(
     app_id: UUID,
     document_id: UUID,

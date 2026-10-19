@@ -4,8 +4,18 @@
 
 ## [Unreleased]
 
+### 新增（M3.6 ④ OpenAPI 整理与接入指南示例，2026-10-19）
+- **`core/openapi.py`**：共享的 `ErrorItem` / `ErrorEnvelope` 模型（`error.code / message / details / request_id`）与 `errors(*statuses)` 助手（12 个状态码的中文描述）；**22 条路由全部补 `summary` 与错误响应声明**——应用作用域路由统一 `401/403/404/422`（上传再加 `409/413/429`、对话加 `429`、坐席接入加 `409`），`/v1` 的两种路由用各自错误体（`{"error": {message, type, code}}`），因此只声明描述、不复用 `ErrorEnvelope`。
+- `/docs`、`/redoc`、`/openapi.json` 在 `AICS_ENV=prod` 下整体关闭（`docs_url` / `redoc_url` / `openapi_url` 均为 `None`），非生产环境开放；[接口规范 §1](docs/04-api/01-接口规范.md) 的「生产环境仅管理员网段可访问」改成「生产整体关闭」（ISSUE-68 归档）。
+- **测试夹具上移**：`pg_migrated` / `pg` / `redis_it` 从 `tests/integration/conftest.py` 移到根 `tests/conftest.py`，供 `tests/e2e` 复用；`tests/integration/conftest.py` 只留需要 Qdrant 与对象存储的 `ingest_migrated` / `env`。
+
+### 测试（M3.6 ④，2026-10-19）
+- 新增 `tests/unit/test_openapi_docs.py`（6 例）：每条路由都有 `summary`、非 `/v1` 的 4xx 都指向 `ErrorEnvelope`、`/v1` 只要求声明 4xx（错误体不同）、所有路由的 4xx 合集覆盖 `401/403/404/422`、生产环境三个文档地址都是 `None`、非生产分别是 `/docs` 与 `/openapi.json`。
+- 新增 `tests/e2e/test_integration_guide.py`（5 例，**真 uvicorn + 真 PG/Redis + 假模型**）：把[第三方接入指南](docs/04-api/04-第三方接入指南.md)的示例逐段跑一遍——§2 `curl`（阻塞 / `-N` 流式 / `-F` 上传 + `Idempotency-Key`）、§3 `httpx` 问答与 `X-Conversation-Id` 追问、§4 OpenAI SDK（`models.list` 与应用 id、阻塞与流式）、§5 SSE 解析规则（`delta` 拼接等于 `end.answer`）、§7.4 验签示例（四头齐全且通过、篡改正文失败）。运行时预装 authenticator / chat_runtime / knowledge_runtime，不碰真模型、Qdrant 与 broker，成本 0 元。
+- 本机 Docker 集成套件（docker\dev-stack.cmd test）**239 项全部通过**（551 秒），其中 	ests/e2e 6 例、	ests/integration 233 项；单测 **993 passed**（唯一失败仍是 Windows 符号链接环境用例）、覆盖率 **82.54%**（10162 语句 / 1774 未覆盖）。
+
 ### 测试（M3.6 ③ 错误码一致性，2026-10-19）
-- 新增 `tests/unit/test_error_codes.py`（7 例）：解析[接口规范 §4](../docs/04-api/01-接口规范.md) 的错误码表，与代码双向比对——① 文档里有、代码里没有的码只允许在 `PENDING` 里（`TOKEN_EXPIRED` / `ACCOUNT_LOCKED`，M4.1），实现后忘记删也会失败；② 代码里有、文档里没有的码不允许；③ 同一个码两侧的 HTTP 状态码必须一致（`PARSE_FAILED` 例外：它不是响应，只在 `documents.error` 与 job 里）；④ 遍历 `aics` 包收集 `AppError` 子类，并额外扫全仓 `code="…"` 字面量，防止新码绕过类层次悄悄出现；⑤ 每个码都要有非空的中文 `message`。
+- 新增 `tests/unit/test_error_codes.py`（7 例）：解析[接口规范 §4](docs/04-api/01-接口规范.md) 的错误码表，与代码双向比对——① 文档里有、代码里没有的码只允许在 `PENDING` 里（`TOKEN_EXPIRED` / `ACCOUNT_LOCKED`，M4.1），实现后忘记删也会失败；② 代码里有、文档里没有的码不允许；③ 同一个码两侧的 HTTP 状态码必须一致（`PARSE_FAILED` 例外：它不是响应，只在 `documents.error` 与 job 里）；④ 遍历 `aics` 包收集 `AppError` 子类，并额外扫全仓 `code="…"` 字面量，防止新码绕过类层次悄悄出现；⑤ 每个码都要有非空的中文 `message`。
 - 修正接口规范 §4 的漂移：`HANDOFF_STATE_CONFLICT` 已在 M3.4 实现，此前仍写在「随 M3/M4 落地」一档；现在只列 `TOKEN_EXPIRED` / `ACCOUNT_LOCKED` 两个登录相关码。
 - 开发计划 M3.6 ② 的 `comment` 上限由 500 更正为 **2000**（与开放接口参考 §2 的契约一致，实现按契约来）。
 

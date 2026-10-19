@@ -13,6 +13,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
+from aics.core.openapi import APP_SCOPE_ERRORS, errors
 from aics.core.security import Principal, require_scope
 from aics.modules.feedback.runtime import FeedbackRuntime
 from aics.modules.feedback.schemas import FeedbackBody
@@ -30,7 +31,11 @@ def _body(row: Any) -> dict[str, Any]:
     return {"id": str(row.id), "rating": row.rating}
 
 
-@router.post("/messages/{message_id}/feedback")
+@router.post(
+    "/messages/{message_id}/feedback",
+    summary="给 assistant 回答点赞或点踩（同一消息覆盖写）",
+    responses=errors(*APP_SCOPE_ERRORS, 429),
+)
 async def put_feedback(
     app_id: UUID,
     message_id: UUID,

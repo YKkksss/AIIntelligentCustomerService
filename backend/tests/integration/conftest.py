@@ -1,8 +1,11 @@
-"""集成测试 fixture：迁移到 head 的 PG + aics_test_ 前缀 Qdrant 集合 + 每个测试一个新应用。"""
+"""集成测试夹具：迁移到 head 的 PG + `aics_test_` 前缀 Qdrant 集合 + 每个测试一个新应用。
+
+真 PG / 真 Redis 的公共夹具（`pg_migrated` / `pg` / `redis_it`）在 `tests/conftest.py`，
+因为 `tests/e2e`（接入指南示例）也要用；这里只留需要 Qdrant 与对象存储的那几件。
+"""
 
 from __future__ import annotations
 
-import os
 import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -32,47 +35,6 @@ def ingest_migrated(monkeypatch: pytest.MonkeyPatch) -> str:
     get_settings.cache_clear()
     command.upgrade(Config(str(Path(__file__).resolve().parents[2] / "alembic.ini")), "head")
     return DB
-
-
-@pytest.fixture
-def pg_migrated(monkeypatch: pytest.MonkeyPatch) -> str:
-    """PG only (no Qdrant): migrated to head."""
-    if not DB:
-        pytest.skip("未设置 AICS_TEST_DB_URL")
-    monkeypatch.setenv("AICS_DB_URL", DB)
-    get_settings.cache_clear()
-    command.upgrade(Config(str(Path(__file__).resolve().parents[2] / "alembic.ini")), "head")
-    return DB
-
-
-@pytest.fixture
-async def pg(pg_migrated: str) -> AsyncIterator[dict[str, Any]]:
-    """Two fresh apps (A, B) for isolation tests; their conversations are removed afterwards."""
-    engine = create_async_engine(pg_migrated)
-    sessions = async_sessionmaker(engine, expire_on_commit=False)
-    async with sessions() as s:
-        u = User(email=f"u{uuid.uuid4().hex[:8]}@x.io", display_name="u", password_hash="h")
-        s.add(u)
-        await s.flush()
-        svc = AppService(s)
-        a = await svc.create_app(name=f"it-{uuid.uuid4().hex[:6]}", created_by=u.id)
-        b = await svc.create_app(name=f"it-{uuid.uuid4().hex[:6]}", created_by=u.id)
-        await s.commit()
-        ids, user_id = [a.id, b.id], u.id
-    try:
-        yield {"sessions": sessions, "app_a": ids[0], "app_b": ids[1], "user_id": user_id}
-    finally:
-        async with sessions() as s:
-            # messages / facts / fact history cascade from conversations
-            await s.execute(delete(Conversation).where(Conversation.app_id.in_(ids)))
-            await s.execute(delete(ApiKey).where(ApiKey.app_id.in_(ids)))
-            # 知识库文档：切块/父块随文档级联，Job 与 Document 需显式删除（M3.2 起用例会建文档）
-            for m in (Chunk, ChunkParent, Job, Document):
-                await s.execute(delete(m).where(m.app_id.in_(ids)))
-            await s.execute(delete(App).where(App.id.in_(ids)))
-            await s.execute(delete(User).where(User.id == user_id))
-            await s.commit()
-        await engine.dispose()
 
 
 @pytest.fixture
@@ -117,20 +79,3 @@ async def env(ingest_migrated: str, tmp_path: Path) -> AsyncIterator[dict[str, A
         await store.drop_chunks_collection()
         await client.close()
         await engine.dispose()
-
-
-REDIS_URL = os.environ.get("AICS_TEST_REDIS_URL", "redis://127.0.0.1:6379/7")
-
-
-@pytest.fixture
-async def redis_it() -> AsyncIterator[Any]:
-    """Real Redis (test db 7); skipped when unreachable."""
-    import redis.asyncio as aioredis
-
-    client = aioredis.from_url(REDIS_URL)
-    try:
-        await client.ping()
-    except Exception:
-        pytest.skip("redis not reachable")
-    yield client
-    await client.aclose()

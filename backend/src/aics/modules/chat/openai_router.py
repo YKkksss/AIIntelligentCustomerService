@@ -35,7 +35,24 @@ def _same_app(model: str, principal: Principal) -> str:
     return str(principal.app_id)
 
 
-@router.get("/models")
+# `/v1` 的错误体不是原生接口的 `{"error": {code, message, details, request_id}}`，
+# 而是 OpenAI 的 `{"error": {message, type, code}}`（映射见 `openai.error_body`），
+# 所以这里只写描述、不给响应模型——否则文档会把两种形状混成一个。
+V1_ERRORS: dict[int, dict[str, str]] = {
+    400: {"description": "请求不合法（OpenAI 风格错误体，`type=invalid_request_error`）"},
+    401: {"description": "缺少或无效凭证（`type=authentication_error`）"},
+    403: {"description": "scope 不足或应用停用（`type=permission_error`）"},
+    404: {"description": "`model` 与 Key 所属应用不一致（`code=model_not_found`）"},
+    422: {"description": "请求体校验失败（`type=invalid_request_error`）"},
+    429: {"description": "超过速率或配额限制（`type=rate_limit_error`）"},
+}
+
+
+@router.get(
+    "/models",
+    summary="模型列表（OpenAI 兼容）",
+    responses={k: V1_ERRORS[k] for k in (401, 403, 404)},
+)
 async def list_models(
     principal: Annotated[Principal, Depends(require_key_scope("chat"))],
 ) -> JSONResponse:
@@ -53,7 +70,12 @@ async def list_models(
     return JSONResponse(body, headers=principal.rate_headers)
 
 
-@router.post("/chat/completions", response_model=None)
+@router.post(
+    "/chat/completions",
+    response_model=None,
+    summary="对话补全（OpenAI 兼容，支持 stream）",
+    responses=V1_ERRORS,
+)
 async def chat_completions(
     request: Request,
     body: openai.ChatCompletionRequest,

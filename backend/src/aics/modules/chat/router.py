@@ -25,6 +25,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from aics.core.errors import ValidationAppError
+from aics.core.openapi import APP_SCOPE_ERRORS, errors
 from aics.core.security import Principal, require_scope
 from aics.db.models import Message
 from aics.modules.chat import event_stream, sse
@@ -42,7 +43,11 @@ def _rid(request: Request) -> str | None:
     return request.scope.get("state", {}).get("request_id")
 
 
-@router.post("/chat")
+@router.post(
+    "/chat",
+    summary="对话（阻塞返回，或 SSE 流式）",
+    responses=errors(*APP_SCOPE_ERRORS, 429),
+)
 async def chat(
     app_id: UUID,
     body: ChatRequest,
@@ -84,7 +89,11 @@ def _stream_headers(principal: Principal) -> dict[str, str]:
     return headers
 
 
-@router.get("/conversations/{conversation_id}/events")
+@router.get(
+    "/conversations/{conversation_id}/events",
+    summary="会话事件流（SSE，支持 Last-Event-ID 补发）",
+    responses=errors(*APP_SCOPE_ERRORS, 429),
+)
 async def stream_events(
     app_id: UUID,
     conversation_id: UUID,
@@ -152,7 +161,11 @@ def message_object(m: Message) -> dict[str, Any]:
     }
 
 
-@router.get("/conversations/{conversation_id}/messages")
+@router.get(
+    "/conversations/{conversation_id}/messages",
+    summary="会话消息（游标分页，旧→新）",
+    responses=errors(*APP_SCOPE_ERRORS),
+)
 async def list_messages(
     app_id: UUID,
     conversation_id: UUID,

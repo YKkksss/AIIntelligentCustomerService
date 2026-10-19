@@ -18,6 +18,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
 from aics.core.errors import ValidationAppError
+from aics.core.openapi import APP_SCOPE_ERRORS, errors
 from aics.core.security import Principal, require_scope
 from aics.modules.chat.router import message_object
 from aics.modules.handoff.runtime import HandoffRuntime
@@ -67,7 +68,11 @@ def _item_body(item: HandoffItem) -> dict[str, Any]:
     return body
 
 
-@router.get("/conversations/{conversation_id}/handoff")
+@router.get(
+    "/conversations/{conversation_id}/handoff",
+    summary="查询会话的转人工状态",
+    responses=errors(*APP_SCOPE_ERRORS),
+)
 async def get_handoff(
     app_id: UUID,
     conversation_id: UUID,
@@ -81,7 +86,11 @@ async def get_handoff(
     return JSONResponse(_state_body(state), headers=principal.rate_headers)
 
 
-@router.post("/conversations/{conversation_id}/handoff/accept")
+@router.post(
+    "/conversations/{conversation_id}/handoff/accept",
+    summary="坐席接入（并发只有一个成功）",
+    responses=errors(*APP_SCOPE_ERRORS, 409),
+)
 async def accept_handoff(
     app_id: UUID,
     conversation_id: UUID,
@@ -98,7 +107,12 @@ async def accept_handoff(
     return JSONResponse(_state_body(state), headers=principal.rate_headers)
 
 
-@router.post("/conversations/{conversation_id}/handoff/messages", status_code=201)
+@router.post(
+    "/conversations/{conversation_id}/handoff/messages",
+    status_code=201,
+    summary="坐席发送人工消息",
+    responses=errors(*APP_SCOPE_ERRORS, 409),
+)
 async def post_agent_message(
     app_id: UUID,
     conversation_id: UUID,
@@ -117,7 +131,11 @@ async def post_agent_message(
     )
 
 
-@router.post("/conversations/{conversation_id}/handoff/release")
+@router.post(
+    "/conversations/{conversation_id}/handoff/release",
+    summary="坐席交还（AI 恢复接管）",
+    responses=errors(*APP_SCOPE_ERRORS, 409),
+)
 async def release_handoff(
     app_id: UUID,
     conversation_id: UUID,
@@ -134,7 +152,11 @@ async def release_handoff(
     return JSONResponse(_state_body(state), headers=principal.rate_headers)
 
 
-@router.get("/handoffs")
+@router.get(
+    "/handoffs",
+    summary="转人工队列（按状态分页，id 升序游标）",
+    responses=errors(*APP_SCOPE_ERRORS),
+)
 async def list_handoffs(
     app_id: UUID,
     request: Request,
