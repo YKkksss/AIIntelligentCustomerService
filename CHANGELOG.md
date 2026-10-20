@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### 新增（M4.2 ⑤ 里程碑验收与收尾，2026-10-20）
+- 里程碑验收脚本 `backend/scripts/e2e_m4/e2e_m42_apps.py`：真 PG / Redis、不调模型，九步 **36 项判定**——建应用（`config_version=1`）、乐观并发 409 且 `details` 带 expected/current、非法字段 422 精确到 `["rag_config","fuse_top_k"]`、模型与切块预设、系统设置读写与非法值、复制不带 Key / 会话 / 文档、删除 202 + 清理后数据归零且任务行保留、重跑幂等、审计动作齐全；结果写 `results/e2e_m42_apps.json`。
+- 修 `PATCH /api/v1/admin/system/settings` 的部分字段语义：与现值合并后再整对象校验（此前只给一个字段会被另外两个必填项拒成 422）。
+- 修创建与复制的审计丢失：`POST /admin/apps` 与 `…/copy` 的审计写入发生在 `_create_from` 的提交之后、又没有再次提交，请求结束即回滚；现在两处补 `commit`，`app.create` / `app.copy` 才真正进审计表。
+- 新增集成用例 `backend/tests/integration/test_apps_admin_pg.py` 4 例：字段级 422、旧版本 409、复制只带配置、删除后列表与详情都消失。
+
+### 测试（M4.2 ⑤，2026-10-20）
+- `e2e_m42_apps.py` **36/36**；`test_apps_admin_pg.py` 4 例；`test_system_settings_admin.py` 补「部分字段与现值合并」；`test_apps_admin_lifecycle.py` 断言创建与复制各有两次提交（业务 + 审计）。
+- 后端单测 **1088 passed**、1 failed（`tests/unit/test_storage.py::test_symlink_escape_rejected`，`OSError: [WinError 1314]`，Windows 符号链接权限，环境问题）、259 deselected；覆盖率 **82.21%**（11530 语句 / 2051 未覆盖）。
+- 本机 Docker 集成套件：**258 passed, 1090 deselected in 391.89s**（含 `tests/e2e` 6 例）。
+- `ruff check` All passed、`ruff format` 355 文件、`lint-imports` 13 kept / 0 broken、`prompts check` 8 个 ok；前端 `vitest` 39 例。
+
 ### 新增（M4.2 ④ 系统设置与前端应用管理，2026-10-20）
 - **管理接口**：`GET /api/v1/admin/system/settings`（`system.read`）与 `PATCH`（`system.write`），v1 只有 `default_session_config`（`idle_close_minutes` / `idle_notice_before_minutes` / `idle_close_notice`）；缺失时返回代码默认值，pydantic 校验失败 422 且 `details.errors[0].loc` 以 `["default_session_config", …]` 开头；写审计 `system.update`（`app_id` 为空、`target_type="system"`，`diff` 只留变化键）。
 - **前端**：应用列表页（卡片：名称 / 状态 / 文档数 / 配置版本；新建、复制、删除、进入配置）、应用配置页（基础信息 + 检索与意图 + 会话 + 转人工 + Webhook 地址 + 切块（可套用预设）+ 自定义词典；`changedFields` 深比较只提交改动字段，并带 `config_version` 触发 409；422 的 `details.errors` 逐条展示；无 `app.write` 时整表只读）、系统设置页。

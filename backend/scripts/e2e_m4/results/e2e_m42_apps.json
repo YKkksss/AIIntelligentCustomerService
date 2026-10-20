@@ -1,0 +1,92 @@
+{
+  "started_at": "2026-10-20T02:25:57.178768+00:00",
+  "checks": {
+    "bootstrap-admin 退出码 0": true,
+    "管理员登录 200": true,
+    "应用列表 200 且带 items": true,
+    "未带 token 建应用 401": true,
+    "建应用 201": true,
+    "默认配置版本 1": true,
+    "新建应用带生效会话配置": true,
+    "详情 200 且文档数为 0": true,
+    "新建应用出现在列表里": true,
+    "PATCH 200": true,
+    "检索参数已写入": true,
+    "配置版本递增到 2": true,
+    "旧版本号 409 CONFIG_VERSION_CONFLICT": true,
+    "409 带 expected / current": true,
+    "非法值 422 且 loc 指到字段": true,
+    "模型列表 200 且有对话模型": true,
+    "切块预设 200 且首项含 chunk_size": true,
+    "系统设置 200 且含三项": true,
+    "改系统设置 200 且值生效": true,
+    "再次读取仍是 20": true,
+    "非法系统设置 422 且 loc 带前缀": true,
+    "复原默认会话设置": true,
+    "复制 201": true,
+    "副本名称带（副本）": true,
+    "副本沿用配置（fuse_top_k=33）": true,
+    "副本没有 Key / 会话 / 文档": true,
+    "删除 202": true,
+    "删除回 job_id / 吊销数 / 关闭会话数": true,
+    "删除后详情 404": true,
+    "删除后列表里消失": true,
+    "清理完成且删掉会话与消息": true,
+    "Key / 会话 / 应用行都已清空": true,
+    "清理任务保留为平台级记录（app_id 空、done）": true,
+    "重跑返回 already_done": true,
+    "审计含 app.create / app.update / app.copy / app.delete / system.update": true,
+    "删除副本 202": true
+  },
+  "steps": [
+    {
+      "step": "create_app",
+      "body": {
+        "status": 201,
+        "config_version": 1
+      }
+    },
+    {
+      "step": "patch",
+      "body": {
+        "status": 200,
+        "config_version": 2
+      }
+    },
+    {
+      "step": "delete",
+      "body": {
+        "status": 202,
+        "body": {
+          "job_id": "01a15721-3491-7cb3-9d9c-235974fd8cc8",
+          "revoked_keys": 1,
+          "closed_conversations": 1
+        }
+      }
+    },
+    {
+      "step": "cleanup",
+      "body": {
+        "status": "done",
+        "deleted": {
+          "webhook_deliveries": 0,
+          "conversation_events": 0,
+          "messages": 1,
+          "conversation_fact_history": 0,
+          "conversation_facts": 0,
+          "conversations": 1,
+          "chunk_questions": 0,
+          "chunk_parents": 0,
+          "chunks": 0,
+          "documents": 0,
+          "feedback": 0,
+          "api_keys": 1,
+          "user_app_roles": 0,
+          "jobs": 0
+        }
+      }
+    }
+  ],
+  "passed": 36,
+  "total": 36
+}

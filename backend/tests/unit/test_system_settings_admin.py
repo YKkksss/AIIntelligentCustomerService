@@ -120,3 +120,18 @@ async def test_update_reports_the_invalid_field_path() -> None:
 
     errors = err.value.details["errors"]
     assert errors[0]["loc"] == [DEFAULT_SESSION_CONFIG_KEY, "idle_close_minutes"]
+
+
+async def test_partial_patch_merges_with_the_current_values() -> None:
+    """PATCH 只给部分字段也要成立（M4.2 ⑤ 验收脚本发现的 422 回归）。"""
+    stored = PLATFORM_DEFAULT_SESSION.model_dump(mode="json")
+    service, session, audit = _service(stored)
+
+    body = await service.update_system_settings(
+        {DEFAULT_SESSION_CONFIG_KEY: {"idle_close_minutes": 20}}, actor_id=uuid4(), meta=Meta
+    )
+
+    assert body[DEFAULT_SESSION_CONFIG_KEY] == {**stored, "idle_close_minutes": 20}
+    assert session.commits == 1 and session.executed
+    (entry,) = audit.entries
+    assert entry.diff == {"before": {"idle_close_minutes": 10}, "after": {"idle_close_minutes": 20}}

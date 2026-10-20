@@ -130,7 +130,7 @@ async def test_create_requires_a_name() -> None:
 
 async def test_create_passes_fields_and_audits() -> None:
     audit = FakeAudit()
-    service, _session, _app, fake = _service(audit=audit)
+    service, session, _app, fake = _service(audit=audit)
 
     body = await service.create(
         {"name": "新应用", "greeting": "你好", "custom_dict": ["小优"]}, actor_id=uuid4(), meta=META
@@ -141,11 +141,13 @@ async def test_create_passes_fields_and_audits() -> None:
     assert fake.created_kwargs["custom_dict"] == ["小优"]
     assert body["name"] == "新建"
     assert audit.entries[0].action == "app.create"
+    # `_create_from` 提交一次，审计行写完后必须再提交一次，否则请求结束被回滚
+    assert session.commits == 2
 
 
 async def test_copy_appends_the_suffix_and_omits_documents() -> None:
     created = FakeApp(id=uuid4(), name="售后客服（副本）")
-    service, _session, app, fake = _service(created=created)
+    service, session, app, fake = _service(created=created)
     app.custom_dict = ["小优"]
 
     body = await service.copy(app.id, actor_id=uuid4(), meta=META)
@@ -154,6 +156,7 @@ async def test_copy_appends_the_suffix_and_omits_documents() -> None:
     assert fake.created_kwargs["custom_dict"] == ["小优"]
     assert "documents" not in fake.created_kwargs
     assert body["id"] == str(created.id)
+    assert session.commits == 2
 
 
 async def test_delete_marks_revokes_closes_and_dispatches() -> None:

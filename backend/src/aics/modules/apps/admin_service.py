@@ -283,6 +283,7 @@ class AppsAdminService:
         await self._record(
             actor_id, meta, "app.create", app.id, {"before": {}, "after": {"name": name}}
         )
+        await self.session.commit()  # `_create_from` 已提交过，审计行要在同一请求里落库
         return await self.detail(app.id)
 
     async def copy(
@@ -312,6 +313,7 @@ class AppsAdminService:
             app.id,
             {"before": {}, "after": {"name": payload["name"], "source_app_id": str(app_id)}},
         )
+        await self.session.commit()  # 同 `create`：审计行不能被请求结束时回滚掉
         return await self.detail(app.id)
 
     async def _create_from(self, payload: Mapping[str, Any], *, name: str, actor_id: UUID) -> App:
@@ -402,9 +404,11 @@ class AppsAdminService:
             )
         service = SystemSettingsService(self.session)
         before = (await service.get_default_session_config()).model_dump(mode="json")
-        after = (
-            await service.set_default_session_config(dict(value), updated_by=actor_id)
-        ).model_dump(mode="json")
+        # PATCH 语义：只给部分字段也要成立，合并现值后再整对象校验（否则必填字段报 422）
+        merged = {**before, **dict(value)}
+        after = (await service.set_default_session_config(merged, updated_by=actor_id)).model_dump(
+            mode="json"
+        )
         changed = [k for k in after if before.get(k) != after.get(k)]
         if changed and self.audit is not None:
             await self.audit.write(
