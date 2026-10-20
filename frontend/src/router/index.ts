@@ -50,6 +50,12 @@ const routes: RouteRecordRaw[] = [
         meta: { permission: 'kb.read', title: '文档切块' },
       },
       {
+        path: 'apps/:appId/debug',
+        name: 'app-debug',
+        component: () => import('@/views/DebugView.vue'),
+        meta: { permission: 'chat.debug', title: '调试对话' },
+      },
+      {
         path: 'users',
         name: 'users',
         component: () => import('@/views/UsersView.vue'),

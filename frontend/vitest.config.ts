@@ -16,7 +16,15 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.spec.ts', 'src/api/schema.d.ts', 'src/env.d.ts', 'src/main.ts'],
+      exclude: [
+        'src/**/*.spec.ts',
+        'src/api/schema.d.ts',
+        'src/env.d.ts',
+        'src/main.ts',
+        // ai-elements-vue / shadcn-vue 的 copy-in 源码与 `cn()` 辅助：第三方代码，不计覆盖率（ADR-0019）。
+        'src/components/**',
+        'src/lib/**',
+      ],
       reporter: ['text'],
       thresholds: { lines: 80, statements: 80 },
     },

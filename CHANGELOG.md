@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+### 新增（M4.4 ③④ 调试对话页面与 AI 交互组件，2026-10-20）
+- 前端按 ADR-0019 接入 ai-elements-vue（copy-in）：`components/ai-elements/{conversation,message,loader}`、`components/ui/collapsible`、`lib/utils.ts`（`cn()`）；Tailwind v4 只引 `theme.css` + `utilities.css`，不引 preflight，语义变量限定在 `.aics-ai` 作用域，避免重置 Element Plus。
+- `api/debug.ts`：`parseFrame` 解析 SSE 帧、`streamTurn` 用 `fetch` + `ReadableStream` 逐帧派发（axios 浏览器端不支持流式）、`useTurnAbort` 管理停止；`views/DebugView.vue` 按设计稿 04 画板两栏（左聊天 692 / 右检索面板 464），右栏展示意图、四路命中数、`timings`、引用、tokens、压缩结果与原始 trace。
+- 路由 `/apps/:appId/debug`（`chat.debug`）+ 应用菜单「调试对话」解禁；`vite.config.ts` 加 `@tailwindcss/vite`。
+
+### 新增（M4.4 ⑤ 调试对话验收脚本，2026-10-20）
+- `backend/scripts/e2e_m4/e2e_m44_debug.py`：八步 **22 项判定**（登录与演示应用、首轮 SSE 帧序与 trace、落库 `channel=debug`、临时参数只影响本轮、历史接口、viewer 脱敏、压缩写 `jobs(type=compact)`、非法 `debug_config` 422 且不新建会话），真 HTTP + 真 PG/Redis，假模型 0 元；结果 `results/e2e_m44_debug.json`。
+
+### 测试（M4.4 ③④⑤，2026-10-20）
+- 前端 Vitest 63 例 / 10 文件、覆盖率 82.97% 语句（`api/debug.spec.ts` 10 例：帧解析、流式派发、握手错误体、停止）；`vue-tsc`、eslint、prettier、`vite build` 全过（`DebugView` chunk 433.91 kB / gzip 170.83）。
+- 验收脚本 22/22；本步只动前端与脚本，后端单测 1137 / 集成 277 项维持不变。
 ### 新增（M4.4 ② 管理版调试对话接口，2026-10-20）
 - `modules/chat/debug.py`：`merge_debug_config` 把调试页的临时 `rag_config` 深合并后按应用配置同一套 pydantic 规则校验——未知字段也报 422 并带 `loc`（`AppRagConfig` 是 `extra="ignore"`，拼错的键不能静默丢弃）；`DebugChat.history` 返回会话元信息 + 最近 50 条消息（含 `citations` 与 `retrieval_trace`）；`DebugChat.compact` 先写 `jobs(type=compact)` 再调 `memory.compact_now`，成功与失败都回写 `status`/`finished_at`；`message_dict` / `masked_trace` 对没有 `app.write` 的只读成员打码手机号与订单号。
 - `modules/chat/admin_router.py`：`POST /api/v1/admin/apps/{app_id}/debug/chat`（SSE，`channel=debug`、`run_mode=debug` 由路由写死）、`GET …/debug/conversations/{conversation_id}`、`POST …/debug/compact`，权限 `chat.debug`；`main.py` 挂载（OpenAPI 52 条路径）。

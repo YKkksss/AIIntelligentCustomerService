@@ -48,7 +48,7 @@ const appMenu = computed<MenuItem[]>(() =>
     { name: 'app-overview', title: '概览', icon: DataBoard, pending: 'M4.6' },
     { name: 'app-config', title: '配置', icon: Setting },
     { name: 'app-knowledge', title: '知识库', icon: Collection, permission: 'kb.read' },
-    { name: 'app-debug', title: '调试对话', icon: ChatDotRound, pending: 'M4.4' },
+    { name: 'app-debug', title: '调试对话', icon: ChatDotRound, permission: 'chat.debug' },
     { name: 'app-eval', title: '评测', icon: DataAnalysis, pending: 'M5' },
     { name: 'app-keys', title: 'API Key', icon: Key, pending: 'M4.5' },
   ].filter((item) => !item.permission || auth.can(item.permission)),
@@ -84,6 +84,8 @@ const breadcrumb = computed<string[]>(() => {
       return ['应用', appName, '知识库']
     case 'app-knowledge-document':
       return ['应用', appName, '知识库', '文档切块']
+    case 'app-debug':
+      return ['应用', appName, '调试对话']
     case 'users':
       return ['用户']
     case 'audit':

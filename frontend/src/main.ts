@@ -6,6 +6,7 @@ import 'element-plus/dist/index.css'
 
 import App from './App.vue'
 import './styles/theme.css'
+import './styles/tailwind.css'
 import router from './router'
 import { perm } from './directives/perm'
 

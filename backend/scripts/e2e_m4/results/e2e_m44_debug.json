@@ -1,0 +1,117 @@
+{
+  "passed": 22,
+  "total": 22,
+  "checks": {
+    "应用配置可读": true,
+    "事件序 start → trace → citations → delta → end": true,
+    "end 携带非空 answer": true,
+    "trace 带决策与耗时": true,
+    "trace 带检索命中": true,
+    "citations 非空": true,
+    "channel=debug": true,
+    "assistant 消息带 retrieval_trace": true,
+    "同会话续聊复用 conversation_id": true,
+    "调试参数生效（向量命中被收窄到 1）": true,
+    "调试参数不写回应用配置": true,
+    "历史 ≥ 4 条且首条是 user": true,
+    "历史 assistant 带 trace": true,
+    "历史回显正文未打码（超级管理员）": true,
+    "含手机号一轮仍有 end": true,
+    "viewer 拿到打码后的正文": true,
+    "viewer 有 chat.debug 权限（能读）": true,
+    "压缩返回 job_id 且落库为 compact": true,
+    "压缩结果字段齐全": true,
+    "非法 debug_config → 422": true,
+    "错误 loc 指向 debug_config": true,
+    "非法参数不新建会话": true
+  },
+  "steps": [
+    {
+      "step": "① 登录与演示应用",
+      "body": {
+        "app_id": "01a15939-967b-75ae-851d-2d3aab2f9f48",
+        "viewer": "e2e-m44-viewer-8f58fcbb@x.io"
+      }
+    },
+    {
+      "step": "② 第一轮调试对话（SSE）",
+      "body": {
+        "frames": [
+          "start",
+          "trace",
+          "citations",
+          "delta",
+          "delta",
+          "delta",
+          "delta",
+          "delta",
+          "end"
+        ],
+        "conversation_id": "01a15939-9d2a-7386-af67-bf0bcaffe91c",
+        "answer": "签收后 7 天内可以无理由退货[1]。",
+        "intent": "kb_qa",
+        "citations": 2
+      }
+    },
+    {
+      "step": "③ 会话与消息落库",
+      "body": {
+        "channel": "debug",
+        "status": "active",
+        "messages": 2
+      }
+    },
+    {
+      "step": "④ 临时调试参数（vector_top_k=1）",
+      "body": {
+        "conversation_id": "01a15939-9d2a-7386-af67-bf0bcaffe91c",
+        "vector": [
+          [
+            "f06a5c0f-00c5-482f-9b98-3ae6ad07236b",
+            0.8
+          ]
+        ]
+      }
+    },
+    {
+      "step": "⑤ 历史消息",
+      "body": {
+        "items": 4,
+        "roles": [
+          "user",
+          "assistant",
+          "user",
+          "assistant"
+        ]
+      }
+    },
+    {
+      "step": "⑥ viewer 读取历史",
+      "body": {
+        "masked": true,
+        "leaked": false
+      }
+    },
+    {
+      "step": "⑦ 手动压缩",
+      "body": {
+        "job_id": "01a15939-a095-7b54-8b46-1916dc6d7a57",
+        "compacted": true,
+        "job.status": "done"
+      }
+    },
+    {
+      "step": "⑧ 非法调试参数",
+      "body": {
+        "status": 422,
+        "locs": [
+          [
+            "debug_config",
+            "vector_top_k"
+          ]
+        ]
+      }
+    }
+  ],
+  "mode": "stub-llm"
+}
