@@ -208,6 +208,10 @@ onMounted(load)
       <el-button @click="router.push({ name: 'apps' })">返回</el-button>
       <span class="title">{{ detail?.name ?? appId }}</span>
       <el-tag v-if="detail" size="small">v{{ detail.config_version }}</el-tag>
+      <div class="spacer" />
+      <el-button @click="router.push({ name: 'app-knowledge', params: { appId } })">
+        知识库
+      </el-button>
       <el-button v-if="canWrite" type="primary" :loading="saving" @click="save">保存</el-button>
     </div>
 
@@ -286,6 +290,9 @@ onMounted(load)
 }
 .title {
   font-weight: 600;
+}
+.spacer {
+  flex: 1;
 }
 .el-alert {
   margin-bottom: 12px;

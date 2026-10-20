@@ -87,6 +87,13 @@ onMounted(load)
             >
               配置
             </el-button>
+            <el-button
+              link
+              type="primary"
+              @click="router.push({ name: 'app-knowledge', params: { appId: row.id } })"
+            >
+              知识库
+            </el-button>
             <el-button v-if="canWrite()" link type="primary" @click="onCopy(row)">复制</el-button>
             <el-button v-if="canWrite()" link type="danger" @click="onDelete(row)">删除</el-button>
           </div>

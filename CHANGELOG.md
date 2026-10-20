@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### 新增（M4.3 ④ 管理后台知识库页面，2026-10-20）
+- 新页面 `/apps/:appId/knowledge`（`frontend/src/views/KnowledgeView.vue`）：Tab「文档」= 单文件拖拽上传（标题、切块预设或自定义 JSON、**上传前切块预览**）+ 状态 / 标题筛选 + 分页表格（状态标签、切块数、大小、更新时间）与行操作「切块 / 重建 / 替换 / 删除」；Tab「待复核切块」=`GET /chunks?review_status=flagged` 列表（文档、序号、命中短语、正文摘要）与「复核通过 / 禁用」；Tab「任务」= 入库 / 重建 / 删除任务与错误；写操作只对 `kb.write` 显示。
+- 新页面 `/apps/:appId/knowledge/:documentId`（`KnowledgeDocumentView.vue`）：文档元信息（切块数、生效构建号、大小、来源、错误）、分页切块表（展开看正文、`enabled` 开关、复核状态、复核通过）、重建入口。
+- 新增 `frontend/src/api/knowledge.ts`：类型 + `knowledgeApi` 的 14 个方法，一一对应管理端知识库路由（列表 / 详情 / 单文档切块 / 跨文档切块 / 任务 / 上传 / URL 导入 / 替换 / 重建 / 改名 / 删除 / 两条预览 / 切块启停）；multipart 只在有值时追加 `title`、`chunk_config`（避免空串被后端当值）。
+- 新增 `frontend/src/utils/knowledge.ts`：切块配置文本框解析与回填（`parseChunkConfig` / `formatChunkConfig`）、文档与复核状态标签、体积与正文摘要格式化；纯逻辑放 utils 便于 Vitest 覆盖。
+- 路由新增 `app-knowledge` / `app-knowledge-document`（`meta.permission = "kb.read"`，不进左侧菜单）；应用卡片与配置页工具栏各加一个「知识库」入口，应用切换不丢上下文。
+
+### 测试（M4.3 ④，2026-10-20）
+- 新增 `frontend/src/api/knowledge.spec.ts`（6 例：读取路径与查询串、multipart 只带非空字段、URL 导入的查询串、替换 / 重建 / 改名 / 删除 / 切块启停、两条预览）。
+- 新增 `frontend/src/utils/knowledge.spec.ts`（8 例：空文本跟随应用配置、合法 JSON、非法 JSON 与数组、回填缩进、文档与复核状态标签、体积、摘要折叠与截断）。
+- 前端 `vitest` **53 例 / 9 文件**全绿，覆盖率 **81.94% 语句 / 81.88% 行**（`src/utils/knowledge.ts` 与 `src/api/knowledge.ts` 语句 100%）；`vue-tsc -b`、`npm run lint`（eslint + prettier）、`npm run build` 全过。
+
 ### 新增（M4.3 ③ 切块复核与启停，2026-10-20）
 - 新增 `GET /api/v1/admin/apps/{app_id}/chunks`：跨文档切块查询（`document_id` / `review_status=none|flagged|approved` / `enabled` / 分页），只返回各文档**生效构建号**且未删除文档的切块，条目带文档标题、`flag_reason` 与复核时间——这就是「待复核切块」列表的数据源。
 - 新增 `PATCH /api/v1/admin/apps/{app_id}/chunks/{chunk_id}`：`{"enabled": false}` 禁用切块、`{"review_status": "approved"}` 复核通过（同时恢复 `enabled`，让它重新进入可检索集合）；先提交数据库再同步 Qdrant payload，向量库失败只记 `knowledge.chunk_payload_sync_failed`（重试接口幂等）；写审计 `kb.chunk.update`（`target_type="chunk"`，`diff` 只含变化字段），`reviewed_by` / `reviewed_at` 落库。

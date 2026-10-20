@@ -38,6 +38,18 @@ const routes: RouteRecordRaw[] = [
         meta: { permission: 'app.read', title: '应用配置' },
       },
       {
+        path: 'apps/:appId/knowledge',
+        name: 'app-knowledge',
+        component: () => import('@/views/KnowledgeView.vue'),
+        meta: { permission: 'kb.read', title: '知识库' },
+      },
+      {
+        path: 'apps/:appId/knowledge/:documentId',
+        name: 'app-knowledge-document',
+        component: () => import('@/views/KnowledgeDocumentView.vue'),
+        meta: { permission: 'kb.read', title: '文档切块' },
+      },
+      {
         path: 'users',
         name: 'users',
         component: () => import('@/views/UsersView.vue'),
