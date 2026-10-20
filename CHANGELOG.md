@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+### 新增（M4.5 ⑤ 里程碑验收，2026-10-20）
+
+- 新增 `backend/scripts/e2e_m4/e2e_m45_ops.py`：真 HTTP + 真 PG/Redis/Qdrant，九步 **32 项判定** 覆盖 Key 创建与吊销的缓存失效、日志筛选与详情、强制释放、待回访、反馈标记、Webhook 签名投递 / 重发 / 密钥轮换与八个审计动作；结果写 `backend/scripts/e2e_m4/results/e2e_m45_ops.json`。
+- 文档：M3 测试报告新增 §23（提交表、接口与权限、语义要点、验收九步、门禁），`docs/00-planning/03-开发计划.md` 补 M4.5 完成状态块与里程碑行，`docs/00-handoff/02-实现现状与代码地图.md` 同步脚本清单与测试数字。
+
+### 修复（M4.5 ⑤，2026-10-20）
+
+- 验收脚本暴露并纠正一处口径：Webhook 首次投递失败后状态仍是 `pending`（等待退避重试），不是 `failed`；只有第 6 次仍失败才转 `failed`。文档与脚本断言已按此实现对齐。
+
+### 测试（M4.5 ⑤，2026-10-20）
+
+- 验收脚本九步 32/32（假模型、0 元）；单测 1213 passed / 1 环境失败 / 307 deselected、覆盖率 81.57%；本机 Docker 全量集成 **302 passed / 424.67 s**；前端 `vitest` 11 文件 / 69 例 / 84.13% 语句。
+- `ruff check` / `ruff format` 干净，`lint-imports` 13 kept / 0 broken，`prompts check` 8 ok，文档链接无死链。
+
+
 ### 新增（M4.5 ④ Webhook 管理与前端三页，2026-10-20）
 
 - Webhook 管理五条（`/api/v1/admin/apps/{app_id}`）：`GET /webhook`（`url` + `secret_prefix` + `ready`，密文不出接口）、`GET /webhook-deliveries`（`status` / `limit` / `before`，每条记录不回传 `payload`）、`POST /webhook-deliveries/{id}/redeliver`（`failed`/`delivered` → `pending`、`attempts` 归零，`pending` 行 404）、`POST /webhook/test`（`ping` 事件不落投递表）、`POST /webhook/secret`（轮换密钥，明文只返回一次）；读走 `app.read`、写走 `webhook.write`，审计 `webhook.redeliver` / `webhook.test` / `webhook.secret`。
@@ -638,3 +653,4 @@
 - 服务器侧 Qdrant 编排文件 deploy/server/docker-compose.yml。
 - 对话上下文管理设计（docs/02-architecture/07-对话上下文管理.md）与 ADR-0006：按 token 预算组装历史、异步滚动摘要、关键事实槽、按需回查；同步更新 RAG 流程、数据库、功能需求、管理接口、管理后台、开发计划、评测指南。
 - 意图识别设计（docs/02-architecture/08-意图识别.md）与 ADR-0007：规则层 + condense 合并分类 + 向量快速通道（M5+），6 类意图（kb_qa、chitchat、human、out_of_scope、action、clarify）与路由，寒暄不再计入连续拒答；同步更新 RAG 流程、数据库、功能需求、管理接口、开放接口、管理后台、开发计划、评测指南、安全设计、文档索引。
+

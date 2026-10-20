@@ -1,0 +1,151 @@
+{
+  "passed": 32,
+  "total": 32,
+  "checks": {
+    "创建返回 201": true,
+    "响应含一次性明文 key": true,
+    "列表不回传明文": true,
+    "Key 可调用 /chat": true,
+    "吊销返回 200": true,
+    "吊销后立即 401（缓存已删）": true,
+    "第二个 Key 创建成功": true,
+    "关键字命中会话": true,
+    "详情含 user/assistant 消息": true,
+    "详情不带摘要时报空": true,
+    "释放后 handoff_status=released": true,
+    "释放记录结束原因为 admin": true,
+    "二次释放 409": true,
+    "待回访列表含该会话": true,
+    "标记已回访并记录备注": true,
+    "二次标记 409": true,
+    "点踩写入 200": true,
+    "反馈列表含该条且未处理": true,
+    "标记已处理": true,
+    "配置就绪且不回传密文": true,
+    "测试事件 200 且收到 ping": true,
+    "签名可用共享密钥校验": true,
+    "轮换密钥返回新明文与前缀": true,
+    "吊销后的 Key 仍被拒": true,
+    "新 Key 可调用": true,
+    "事件产生投递记录": true,
+    "记录不含 payload": true,
+    "500 → 记一次失败并排下次重试": true,
+    "达到 6 次后转 failed": true,
+    "重发复位为 pending 并把 attempts 归零": true,
+    "重发后投递成功": true,
+    "八个审计动作全部落库": true
+  },
+  "steps": [
+    {
+      "step": "① 创建 Key",
+      "body": {
+        "status": 201,
+        "prefix": "aics_L3ldkus"
+      }
+    },
+    {
+      "step": "② Key 调用开放接口",
+      "body": {
+        "status": 200
+      }
+    },
+    {
+      "step": "② 吊销后调用",
+      "body": {
+        "status": 401,
+        "code": "API_KEY_REVOKED"
+      }
+    },
+    {
+      "step": "③ 日志筛选",
+      "body": {
+        "total": 1
+      }
+    },
+    {
+      "step": "④ 强制释放",
+      "body": {
+        "status": 200
+      }
+    },
+    {
+      "step": "⑥ 提交点踩",
+      "body": {
+        "status": 200
+      }
+    },
+    {
+      "step": "⑦ Webhook 配置",
+      "body": {
+        "ready": true
+      }
+    },
+    {
+      "step": "⑦ 发送测试事件",
+      "body": {
+        "status": 200,
+        "ok": true,
+        "status_code": 200,
+        "error": null,
+        "elapsed_ms": 47
+      }
+    },
+    {
+      "step": "⑧ 投递记录",
+      "body": {
+        "count": 1,
+        "first": [
+          {
+            "id": "01a15a25-b172-7958-88a0-2d8160e86c75",
+            "event": "handoff.requested",
+            "seq": 1,
+            "conversation_id": "01a15a25-b149-74f8-b642-9a46ed53d8f6",
+            "status": "pending",
+            "attempts": 0,
+            "status_code": null,
+            "error": null,
+            "next_attempt_at": "2026-10-20T16:29:42.129291Z",
+            "delivered_at": null,
+            "created_at": "2026-10-20T16:29:42.129291Z"
+          }
+        ]
+      }
+    },
+    {
+      "step": "⑧ 首次失败",
+      "body": {
+        "status": "pending",
+        "attempts": 1
+      }
+    },
+    {
+      "step": "⑧ 退避耗尽",
+      "body": {
+        "status": "failed",
+        "attempts": 6
+      }
+    },
+    {
+      "step": "⑧ 重发",
+      "body": {
+        "status": 200
+      }
+    },
+    {
+      "step": "⑨ 审计动作",
+      "body": {
+        "actions": [
+          "chat.callback.clear",
+          "chat.conversation.release",
+          "feedback.handle",
+          "key.create",
+          "key.revoke",
+          "webhook.redeliver",
+          "webhook.secret",
+          "webhook.test"
+        ]
+      }
+    }
+  ],
+  "mode": "stub-llm"
+}
