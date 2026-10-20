@@ -74,6 +74,14 @@ class HandoffStateConflictError(ConflictError):
     code, message = "HANDOFF_STATE_CONFLICT", "转人工状态已变更"
 
 
+class CallbackStateConflictError(ConflictError):
+    """待回访状态迁移被抢先（M4.5 ③）：条件 UPDATE 返回 0 行时抛出。
+
+    `details.needs_callback` 是数据库里的当前值——管理接口重复标记同一条待回访时返回 409。"""
+
+    code, message = "CALLBACK_STATE_CONFLICT", "待回访状态已变更"
+
+
 class ConfigVersionConflictError(ConflictError):
     """配置保存的乐观并发失败（M4.2 ②）：`details` 里带期望与实际版本。
 

@@ -4,6 +4,23 @@
 
 ## [Unreleased]
 
+### 新增（M4.5 ③ 会话日志与运营接口，2026-10-20）
+
+- 会话日志五条（`/api/v1/admin/apps/{app_id}`，`log.read`）：`GET /conversations`（按 `(last_activity_at, id)` 游标分页；筛选 `channel` 默认 `api,openai`、`status`、`handoff_status`、`close_reason`、`needs_callback`、`intent`、`downvoted`、`since`/`until`、`q` 走 `messages.tsv` 的 `plainto_tsquery('simple', …)`）、`GET /conversations/{id}`（最近 200 条消息 + 当前摘要 + 未撤回事实，viewer 脱敏）、`POST /conversations/{id}/release`（强制释放，`HANDOFF_STATE_CONFLICT`）、`GET /callbacks`、`POST /callbacks/{id}`（标记已回访，`CALLBACK_STATE_CONFLICT`）。
+- `modules/chat/logs.py`（`ConversationLogs`）：条件单行 UPDATE 抢状态、事件 `handoff.released`、审计 `chat.conversation.release` / `chat.callback.clear`，写与事件/审计同事务后 `publish_pending`。
+- 反馈管理两条（`feedback.write` 写、`log.read` 读）：`GET /feedback`（`rating` / `handled` / 游标）、`PATCH /feedback/{id}`（标记已处理，审计 `feedback.handle`）；`modules/feedback/{admin_service,admin_router}.py` 与 `repository.page/handled`。
+- 新错误码 `CALLBACK_STATE_CONFLICT`（409，`details.needs_callback`），接口规范 §4 同步。
+
+### 修复（M4.5 ③，2026-10-20）
+
+- `feedback/repository.py::handled` 的 `UPDATE` 带 `synchronize_session=False`，同一会话里紧接着的 `SELECT` 命中 identity map 的旧对象，`PATCH /feedback/{id}` 返回 `handled: false`；改 `evaluate` 后回读一致（集成用例抓到）。
+- `modules/chat/logs.py::_message_row` 的 `degraded` 列在本库里是 JSONB 数组语义（`[]`），直接放进 `response_model` 的 `bool` 会 `ValidationError` → 500；改为 `bool(...)` 归一。
+
+### 测试（M4.5 ③，2026-10-20）
+
+- 单测 `tests/unit/test_chat_logs.py` 16 例、`tests/unit/test_feedback_admin.py` 12 例（游标往返、筛选透传、viewer 脱敏、404/409/403/401 映射）。
+- 集成 `tests/integration/test_chat_logs_pg.py` 10 例（真 PG + Qdrant）：默认渠道隐藏 debug/eval、`q` 命中 jieba 词元、意图与点踩筛选、同时间戳游标不重不漏、强制释放事件与审计、待回访标记与 409、跨应用 404。
+- 门禁：单测 **1192 passed / 1 环境失败 / 296 deselected**，覆盖率 **81.35%**（12672 语句 / 2363 未覆盖）；本机 Docker 全量集成 **295 passed**（455.63 s）。
 ### 新增（M4.5 ② Key 管理，2026-10-20）
 
 - 管理版 Key 接口五条（`/api/v1/admin/apps/{app_id}/keys*`，权限 `key.read` / `key.write`）：列表只回 `prefix` 与 `hint`、创建明文只出现一次、`PATCH` 按字段改限额与白名单、`DELETE` 吊销、`GET …/example` 返回 curl / Python / JavaScript 三段接入示例（Key 用占位符）。

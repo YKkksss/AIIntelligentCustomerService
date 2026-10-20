@@ -45,6 +45,7 @@ from aics.modules.chat.admin_router import router as chat_admin_router
 from aics.modules.chat.openai_router import router as openai_router
 from aics.modules.chat.router import router as chat_router
 from aics.modules.chat.runtime import ChatRuntime
+from aics.modules.feedback.admin_router import router as feedback_admin_router
 from aics.modules.feedback.router import router as feedback_router
 from aics.modules.feedback.runtime import FeedbackRuntime
 from aics.modules.handoff.router import router as handoff_router
@@ -378,6 +379,7 @@ def create_app() -> FastAPI:
     app.include_router(apps_admin_router)
     app.include_router(apikeys_admin_router)
     app.include_router(chat_admin_router)
+    app.include_router(feedback_admin_router)
     app.include_router(openai_router)
     return app
 
