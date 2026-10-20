@@ -50,6 +50,18 @@ class ApiKeyRepository(AppScopedRepository[ApiKey]):
         )
         return (await self.session.execute(stmt)).scalar_one_or_none()
 
+    async def update_limits(
+        self, app_id: UUID, key_id: UUID, *, rpm_limit: int, daily_quota: int | None
+    ) -> str | None:
+        """Replace the key's rate limit and quota (M4.5 ②); returns its prefix or None."""
+        stmt = (
+            update(ApiKey)
+            .where(ApiKey.app_id == app_id, ApiKey.id == key_id)
+            .values(rpm_limit=rpm_limit, daily_quota=daily_quota)
+            .returning(ApiKey.prefix)
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
     async def get_by_prefix_all_apps(self, prefix: str) -> tuple[ApiKey, str] | None:
         """Authentication lookup before the app is known: (key, apps.status)."""
         stmt = (

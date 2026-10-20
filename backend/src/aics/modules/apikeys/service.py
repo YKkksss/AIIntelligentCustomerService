@@ -177,6 +177,35 @@ class ApiKeyService:
         )
         return True
 
+    async def update_limits(
+        self, app_id: UUID, key_id: UUID, *, rpm_limit: int, daily_quota: int | None
+    ) -> bool:
+        """Replace a key's rate limit and daily quota, dropping its cached record (M4.5 ②).
+
+        Returns False when the key does not belong to the app. The cache is dropped so a
+        tightened limit takes effect on the next request."""
+        errors = []
+        if rpm_limit < 1:
+            errors.append({"loc": ["rpm_limit"], "msg": "必须 ≥ 1"})
+        if daily_quota is not None and daily_quota < 1:
+            errors.append({"loc": ["daily_quota"], "msg": "必须 ≥ 1 或为空"})
+        if errors:
+            raise ValidationAppError(details={"errors": errors})
+        prefix = await self.repo.update_limits(
+            app_id, key_id, rpm_limit=rpm_limit, daily_quota=daily_quota
+        )
+        if prefix is None:
+            return False
+        await self._invalidate([prefix])
+        log.info(
+            "apikeys.limits_updated",
+            app_id=str(app_id),
+            prefix=prefix,
+            rpm_limit=rpm_limit,
+            daily_quota=daily_quota,
+        )
+        return True
+
     async def _invalidate(self, prefixes: Sequence[str]) -> None:
         if self.redis is None or not prefixes:
             return

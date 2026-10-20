@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+### 新增（M4.5 ② Key 管理，2026-10-20）
+
+- 管理版 Key 接口五条（`/api/v1/admin/apps/{app_id}/keys*`，权限 `key.read` / `key.write`）：列表只回 `prefix` 与 `hint`、创建明文只出现一次、`PATCH` 按字段改限额与白名单、`DELETE` 吊销、`GET …/example` 返回 curl / Python / JavaScript 三段接入示例（Key 用占位符）。
+- `modules/apikeys/admin_service.py` + `admin_runtime.py` + `admin_router.py`：脱敏视图 `key_row`（`status` 吊销优先于过期）、`KEEP` 哨兵区分"没传"与"显式 null"、审计 `key.create` / `key.update` / `key.revoke` 与业务写同事务。
+- `ApiKeyService.update_limits`（校验 + 删鉴权缓存）与 `ApiKeyRepository.update_limits`（`UPDATE … RETURNING prefix`）；改限额 / 改白名单 / 吊销都立即删 `aics:apikey:<prefix>`，下一个请求就生效。
+
+### 修复（M4.5 ②，2026-10-20）
+
+- 审计 `diff` 里的 UUID / datetime 无法写 jsonb：`modules/apikeys/admin_service.py` 新增 `_jsonable`，递归转字符串后再交给 `AuditEntry`（此前 `key.create` 审计会 `StatementError`）。
+
+### 测试（M4.5 ②，2026-10-20）
+
+- 单测 27 例（`test_apikeys_admin_service.py` 16、`test_apikeys_admin_api.py` 11）：视图状态优先级、明文不进审计、`KEEP` 语义、401/403/404/422 形状。
+- 集成 8 例（`tests/integration/test_apikeys_admin_pg.py`，真 PG + 真 Redis）：明文只出现一次且库里只有哈希、吊销后缓存立即失效（`API_KEY_REVOKED`）、收紧白名单下一请求即拒（`IP_NOT_ALLOWED`）、跨应用 404、三条审计行落库。
+
 ### 新增（M4.4 ③④ 调试对话页面与 AI 交互组件，2026-10-20）
 - 前端按 ADR-0019 接入 ai-elements-vue（copy-in）：`components/ai-elements/{conversation,message,loader}`、`components/ui/collapsible`、`lib/utils.ts`（`cn()`）；Tailwind v4 只引 `theme.css` + `utilities.css`，不引 preflight，语义变量限定在 `.aics-ai` 作用域，避免重置 Element Plus。
 - `api/debug.ts`：`parseFrame` 解析 SSE 帧、`streamTurn` 用 `fetch` + `ReadableStream` 逐帧派发（axios 浏览器端不支持流式）、`useTurnAbort` 管理停止；`views/DebugView.vue` 按设计稿 04 画板两栏（左聊天 692 / 右检索面板 464），右栏展示意图、四路命中数、`timings`、引用、tokens、压缩结果与原始 trace。

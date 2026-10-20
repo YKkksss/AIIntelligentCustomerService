@@ -30,6 +30,8 @@ from aics.memory.compactor import Compactor, CompactParams
 from aics.memory.locks import RedisLock
 from aics.memory.service import COMPACT_TASK, MemoryService
 from aics.memory.units import pg_units
+from aics.modules.apikeys.admin_router import router as apikeys_admin_router
+from aics.modules.apikeys.admin_runtime import ApiKeyAdminRuntime
 from aics.modules.apikeys.service import ApiKeyAuthenticator
 from aics.modules.apps.admin_router import router as apps_admin_router
 from aics.modules.apps.runtime import AppsAdminRuntime
@@ -223,6 +225,17 @@ def build_apps_admin_runtime(
     )
 
 
+def build_apikeys_admin_runtime(
+    s: Settings, *, audit: AuditSink | None = None, redis: Any | None = None
+) -> ApiKeyAdminRuntime:
+    """Composition root of `modules.apikeys` 的管理接口（M4.5 ②）。
+
+    创建 / 吊销 / 改限额复用开放接口的 `ApiKeyService`；`redis` 用来在写操作后删鉴权缓存，
+    让吊销与收紧的限额在下一个请求就生效。
+    """
+    return ApiKeyAdminRuntime(sessions=get_sessionmaker(), settings=s, audit=audit, redis=redis)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     s = get_settings()
@@ -257,6 +270,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.authorizer = app.state.auth_runtime.authorizer()
     if getattr(app.state, "apps_admin_runtime", None) is None:  # tests may install their own
         app.state.apps_admin_runtime = build_apps_admin_runtime(
+            s, audit=app.state.audit_runtime.sink(), redis=redis
+        )
+    if getattr(app.state, "apikeys_admin_runtime", None) is None:  # tests may install their own
+        app.state.apikeys_admin_runtime = build_apikeys_admin_runtime(
             s, audit=app.state.audit_runtime.sink(), redis=redis
         )
     log.info("app.started", env=s.env, version=__version__)
@@ -359,6 +376,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(audit_router)
     app.include_router(apps_admin_router)
+    app.include_router(apikeys_admin_router)
     app.include_router(chat_admin_router)
     app.include_router(openai_router)
     return app
