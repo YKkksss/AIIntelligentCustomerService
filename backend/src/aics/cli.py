@@ -161,7 +161,7 @@ async def _apikey(args: argparse.Namespace) -> int:
 
 
 async def _bootstrap_admin(args: argparse.Namespace) -> int:
-    from aics.core.config import get_settings
+    from aics.core.config import DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD, get_settings
     from aics.db.engine import dispose_engine, get_sessionmaker
     from aics.modules.auth import passwords
     from aics.modules.auth.repository import AuthRepository
@@ -175,6 +175,13 @@ async def _bootstrap_admin(args: argparse.Namespace) -> int:
         print(
             "缺少管理员凭据：设置 AICS_BOOTSTRAP_ADMIN_EMAIL / AICS_BOOTSTRAP_ADMIN_PASSWORD，"
             "或用 --email / --password 传入。",
+            file=sys.stderr,
+        )
+        return 2
+    if s.env == "prod" and (email == DEFAULT_ADMIN_EMAIL or secret == DEFAULT_ADMIN_PASSWORD):
+        print(
+            "生产环境禁止使用内置默认超管口令：请通过 --password 或 AICS_BOOTSTRAP_ADMIN_PASSWORD "
+            "指定强口令（默认值仅用于本地与测试环境）。",
             file=sys.stderr,
         )
         return 2

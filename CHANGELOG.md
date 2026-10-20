@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### 调整（默认超管账号，2026-10-20）
+- `aics-cli bootstrap-admin` 无参数即可用：默认 `admin@aisc.com` / `admin123456@`（`core/config.py` 的 `DEFAULT_ADMIN_EMAIL` / `DEFAULT_ADMIN_PASSWORD`，可用 `AICS_BOOTSTRAP_ADMIN_EMAIL` / `AICS_BOOTSTRAP_ADMIN_PASSWORD` 覆盖）。
+- 生产守卫：`AICS_ENV=prod` 且凭据仍是默认值时 CLI 退出码 2，要求显式传强口令；新增 `tests/unit/test_cli_bootstrap_admin.py`（3 例）。
+- 文档：接手指南新增 §0.1「默认超管账号」、开发环境搭建与配置表同步；待解决问题清单 ISSUE-81（已接受，生产由 `AICS_ENV` 守卫）。
 ### 调整（前端按设计稿还原，2026-10-20）
 - 管理后台壳层按 `docs/05-frontend/ui/aics-admin.pen` 重写：220px 深色侧栏（`#001529`、`#1677FF` Logo 块、全局四项 + 应用内六项菜单）、56px 顶栏（应用切换器、面包屑、文档、铃铛、头像菜单）。
 - 登录页还原设计稿 01 画板：620px 品牌面（标题、副文案、三个特性胶囊）+ 400px 白卡（账号密码、记住登录占位、忘记密码提示、页脚、依赖状态）。

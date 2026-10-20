@@ -19,6 +19,10 @@ from aics.core.models import ModelRegistry
 # 写死在代码中的约定（修改需同步文档与 ADR-0003）
 CELERY_QUEUES: tuple[str, ...] = ("ingest", "context", "eval", "maintenance")
 TOKEN_ENCODING = "cl100k_base"  # noqa: S105 - 编码名，不是密码
+# 本地/开发环境的初始超管口令（bootstrap-admin 无参数时使用）；
+# env=prod 下 CLI 会拒绝用这套默认值，必须显式覆盖 AICS_BOOTSTRAP_ADMIN_PASSWORD。
+DEFAULT_ADMIN_EMAIL = "admin@aisc.com"
+DEFAULT_ADMIN_PASSWORD = "admin123456@"  # noqa: S105 - 开发默认口令，非密钥
 
 
 def _split_csv(v: Any) -> Any:
@@ -52,8 +56,8 @@ class Settings(BaseSettings):
     jwt_refresh_ttl_days: int = Field(7, gt=0)
     api_key_pepper: SecretStr
     data_encryption_key: SecretStr
-    bootstrap_admin_email: str | None = None
-    bootstrap_admin_password: SecretStr | None = None
+    bootstrap_admin_email: str | None = DEFAULT_ADMIN_EMAIL
+    bootstrap_admin_password: SecretStr | None = SecretStr(DEFAULT_ADMIN_PASSWORD)
     # 反向代理（Nginx 等）所在网段：只有请求直接来自这些地址时才采信 X-Forwarded-For，
     # 否则一律以 TCP 对端地址为准（IP 白名单，接口规范 §2）。默认空 = 不信任任何代理。
     trusted_proxies: Annotated[list[str], NoDecode] = []
