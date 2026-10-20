@@ -61,6 +61,18 @@ class FakeService:
         self._maybe_raise()
         return {"job_id": str(uuid4()), "revoked_keys": 1, "closed_conversations": 0}
 
+    async def system_settings(self) -> dict[str, Any]:
+        self.calls.append(("system_settings",))
+        self._maybe_raise()
+        return {"default_session_config": {"idle_close_minutes": 10}}
+
+    async def update_system_settings(
+        self, payload: dict[str, Any], **kwargs: Any
+    ) -> dict[str, Any]:
+        self.calls.append(("update_system_settings", payload, kwargs))
+        self._maybe_raise()
+        return {"default_session_config": payload["default_session_config"]}
+
 
 class FakeRuntime:
     def __init__(self, service: FakeService) -> None:
@@ -270,3 +282,51 @@ def test_denied_permission_is_403(
 
     assert resp.status_code == 403
     assert resp.json()["error"]["code"] == "FORBIDDEN"
+
+
+def test_system_settings_read_returns_the_platform_default(
+    client: tuple[TestClient, FakeService], headers: dict[str, str]
+) -> None:
+    http, service = client
+
+    resp = http.get("/api/v1/admin/system/settings", headers=headers)
+
+    assert resp.status_code == 200
+    assert resp.json() == {"default_session_config": {"idle_close_minutes": 10}}
+    assert service.calls == [("system_settings",)]
+
+
+def test_system_settings_patch_passes_the_body_and_the_actor(
+    client: tuple[TestClient, FakeService], headers: dict[str, str]
+) -> None:
+    http, service = client
+    payload = {"default_session_config": {"idle_close_minutes": 20}}
+
+    resp = http.patch("/api/v1/admin/system/settings", headers=headers, json=payload)
+
+    assert resp.status_code == 200
+    assert resp.json() == payload
+    name, body, kwargs = service.calls[0]
+    assert name == "update_system_settings" and body == payload
+    assert kwargs["actor_id"] is not None and kwargs["meta"].request_id
+
+
+def test_system_settings_requires_its_own_permission(
+    client: tuple[TestClient, FakeService], headers: dict[str, str]
+) -> None:
+    http, service = client
+    http.app.state.authorizer = FakeAuthorizer(deny="system.write")
+
+    denied = http.patch(
+        "/api/v1/admin/system/settings",
+        headers=headers,
+        json={"default_session_config": {"idle_close_minutes": 20}},
+    )
+    http.app.state.authorizer = FakeAuthorizer(deny="system.read")
+    read = http.get("/api/v1/admin/system/settings", headers=headers)
+
+    assert denied.status_code == 403
+    assert denied.json()["error"]["details"]["permission"] == "system.write"
+    assert read.status_code == 403
+    assert read.json()["error"]["details"]["permission"] == "system.read"
+    assert service.calls == []

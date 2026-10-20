@@ -118,6 +118,34 @@ async def list_presets(request: Request, user: CurrentUser) -> JSONResponse:
     return JSONResponse(jsonable_encoder(list_chunk_presets()))
 
 
+@router.get(
+    "/system/settings",
+    summary="平台系统设置（v1 只有默认会话配置，S）",
+    responses=errors(401, 403, 422),
+)
+async def get_system_settings(
+    request: Request,
+    user: Annotated[AuthedUser, Depends(require_perm("system.read"))],
+    service: Service,
+) -> JSONResponse:
+    return JSONResponse(jsonable_encoder(await service.system_settings()))
+
+
+@router.patch(
+    "/system/settings",
+    summary="更新平台系统设置（写审计 system.update，S）",
+    responses=errors(401, 403, 422),
+)
+async def update_system_settings(
+    request: Request,
+    user: Annotated[AuthedUser, Depends(require_perm("system.write"))],
+    service: Service,
+    body: Annotated[dict[str, Any], Body()],
+) -> JSONResponse:
+    payload = await service.update_system_settings(body, actor_id=user.id, meta=_meta(request))
+    return JSONResponse(jsonable_encoder(payload))
+
+
 @router.post(
     "/apps",
     summary="创建应用（默认配置，S）",

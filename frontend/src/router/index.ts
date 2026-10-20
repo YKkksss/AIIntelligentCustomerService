@@ -26,6 +26,18 @@ const routes: RouteRecordRaw[] = [
         meta: { menu: true, title: '概览', icon: 'HomeFilled' },
       },
       {
+        path: 'apps',
+        name: 'apps',
+        component: () => import('@/views/AppsView.vue'),
+        meta: { menu: true, title: '应用', permission: 'app.read', icon: 'Grid' },
+      },
+      {
+        path: 'apps/:appId',
+        name: 'app-config',
+        component: () => import('@/views/AppConfigView.vue'),
+        meta: { permission: 'app.read', title: '应用配置' },
+      },
+      {
         path: 'users',
         name: 'users',
         component: () => import('@/views/UsersView.vue'),
@@ -36,6 +48,12 @@ const routes: RouteRecordRaw[] = [
         name: 'audit',
         component: () => import('@/views/AuditView.vue'),
         meta: { menu: true, title: '审计日志', permission: 'audit.read', icon: 'Document' },
+      },
+      {
+        path: 'settings',
+        name: 'settings',
+        component: () => import('@/views/SystemSettingsView.vue'),
+        meta: { menu: true, title: '系统设置', permission: 'system.read', icon: 'Setting' },
       },
       {
         path: 'password',

@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+### 新增（M4.2 ④ 系统设置与前端应用管理，2026-10-20）
+- **管理接口**：`GET /api/v1/admin/system/settings`（`system.read`）与 `PATCH`（`system.write`），v1 只有 `default_session_config`（`idle_close_minutes` / `idle_notice_before_minutes` / `idle_close_notice`）；缺失时返回代码默认值，pydantic 校验失败 422 且 `details.errors[0].loc` 以 `["default_session_config", …]` 开头；写审计 `system.update`（`app_id` 为空、`target_type="system"`，`diff` 只留变化键）。
+- **前端**：应用列表页（卡片：名称 / 状态 / 文档数 / 配置版本；新建、复制、删除、进入配置）、应用配置页（基础信息 + 检索与意图 + 会话 + 转人工 + Webhook 地址 + 切块（可套用预设）+ 自定义词典；`changedFields` 深比较只提交改动字段，并带 `config_version` 触发 409；422 的 `details.errors` 逐条展示；无 `app.write` 时整表只读）、系统设置页。
+- 新增 `frontend/src/utils/diff.ts`（`changedFields`）、`views/{Apps,AppConfig,SystemSettings}View.vue`；`api/admin.ts` 扩 `AppCard` / `AppDetail` / `ModelEntry` / `ChunkPreset` / `SystemSettings` 与 `appApi`（list / detail / patch / create / copy / remove / models / chunkPresets）、`systemApi`；路由新增 `/apps`、`/apps/:appId`（`app.read`）与 `/settings`（`system.read`）。
+- 清单登记 `ISSUE-77`（系统设置没有乐观并发，后者覆盖前者）；归档 `ISSUE-03`（删除应用接口）。
+
+### 测试（M4.2 ④，2026-10-20）
+- 后端新增 `tests/unit/test_system_settings_admin.py`（5 例：缺行回代码默认、审计只记变化键、无变化不写审计、非对象 422、字段路径前缀）与 `tests/unit/test_apps_admin_api.py` 增 3 例（读取、PATCH 透传、`system.read` / `system.write` 各自 403）。
+- 前端新增 `src/utils/diff.spec.ts`（6 例）→ `npm run test:run` 共 **39 例**；`vue-tsc -b`、`eslint + prettier`、`vite build` 全过（`AppConfigView` 产物 gzip 2.7 KB）。
+- 门禁：`ruff check` / `ruff format` / `lint-imports`（13 契约）/ `prompts check` 全绿；单测 **1087 passed / 1 failed / 255 deselected**，覆盖率 **82.21%**（11527 语句 / 2051 未覆盖；唯一失败仍是 Windows 符号链接环境项 `tests/unit/test_storage.py::test_symlink_escape_rejected`）；本机 Docker 集成套件 **254 passed / 1089 deselected in 460.85s**。
+
 
 ### 新增（M4.2 ③ 应用创建、复制与删除，2026-10-20）
 - **管理接口**：`POST /api/v1/admin/apps`（201，默认配置；`name` 缺失或空白 422）、`POST /api/v1/admin/apps/{app_id}/copy`（201，只复制配置与基础信息，**不复制文档 / Key / 会话**，名称加「（副本）」）、`DELETE /api/v1/admin/apps/{app_id}`（202，`{"job_id","revoked_keys","closed_conversations"}`）。权限分别是 `app.create` / `app.copy` / `app.delete`（仅 super_admin）。

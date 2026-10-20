@@ -67,6 +67,50 @@ export interface AuditPage {
   next_cursor: string | null
 }
 
+export interface AppCard {
+  id: string
+  name: string
+  description: string | null
+  status: string
+  answer_style: string
+  language: string
+  config_version: number
+  created_at: string
+  updated_at: string
+  stats: { documents: number }
+}
+
+export interface AppDetail extends AppCard {
+  greeting: string | null
+  system_prompt: string | null
+  fallback_text: string | null
+  rag_config: Record<string, unknown>
+  handoff_config: Record<string, unknown>
+  session_config: Record<string, unknown>
+  effective_session_config: Record<string, unknown>
+  webhook_config: Record<string, unknown>
+  chunk_config: Record<string, unknown>
+  custom_dict: string[]
+  chunk_config_version: number
+}
+
+export interface ModelEntry {
+  name: string
+  kind: string
+  provider?: string
+  [key: string]: unknown
+}
+
+export interface ChunkPreset {
+  name: string
+  label: string
+  config: Record<string, unknown>
+}
+
+export interface SystemSettings {
+  default_session_config: Record<string, unknown>
+}
+
 export const authApi = {
   async login(email: string, password: string): Promise<SessionBody> {
     const { data } = await http.post<SessionBody>('/admin/auth/login', { email, password })
@@ -164,5 +208,59 @@ export const auditApi = {
   async actions(): Promise<string[]> {
     const { data } = await http.get<{ items: string[] }>('/admin/audit/actions')
     return data.items
+  },
+}
+
+export const appApi = {
+  async list(limit = 50, offset = 0): Promise<{ items: AppCard[] }> {
+    const { data } = await http.get<{ items: AppCard[] }>('/admin/apps', {
+      params: { limit, offset },
+    })
+    return data
+  },
+  async detail(appId: string): Promise<AppDetail> {
+    const { data } = await http.get<AppDetail>(`/admin/apps/${appId}`)
+    return data
+  },
+  /** 只提交改动字段；`expected_config_version` 触发后端乐观校验（409 CONFIG_VERSION_CONFLICT）。 */
+  async patch(appId: string, patch: Record<string, unknown>, expectedConfigVersion?: number) {
+    const { data } = await http.patch<AppDetail>(`/admin/apps/${appId}`, {
+      ...patch,
+      expected_config_version: expectedConfigVersion,
+    })
+    return data
+  },
+  async create(body: { name: string; description?: string }) {
+    const { data } = await http.post<AppDetail>('/admin/apps', body)
+    return data
+  },
+  async copy(appId: string) {
+    const { data } = await http.post<AppDetail>(`/admin/apps/${appId}/copy`)
+    return data
+  },
+  async remove(appId: string): Promise<{ job_id: string }> {
+    const { data } = await http.delete<{ job_id: string }>(`/admin/apps/${appId}`)
+    return data
+  },
+  async models(): Promise<ModelEntry[]> {
+    const { data } = await http.get<ModelEntry[]>('/admin/models')
+    return data
+  },
+  async chunkPresets(): Promise<ChunkPreset[]> {
+    const { data } = await http.get<ChunkPreset[]>('/admin/chunk-presets')
+    return data
+  },
+}
+
+export const systemApi = {
+  async get(): Promise<SystemSettings> {
+    const { data } = await http.get<SystemSettings>('/admin/system/settings')
+    return data
+  },
+  async patch(defaultSessionConfig: Record<string, unknown>): Promise<SystemSettings> {
+    const { data } = await http.patch<SystemSettings>('/admin/system/settings', {
+      default_session_config: defaultSessionConfig,
+    })
+    return data
   },
 }

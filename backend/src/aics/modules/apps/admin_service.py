@@ -24,6 +24,7 @@ from aics.core.audit import AuditEntry, AuditSink
 from aics.core.errors import ConfigVersionConflictError, ValidationAppError
 from aics.db.models import ApiKey, App, Chunk, Conversation, Document, Job, UserAppRole
 from aics.modules.apps.service import BASIC_FIELDS, CONFIG_FIELDS, AppConfig, AppService
+from aics.modules.apps.system_settings import DEFAULT_SESSION_CONFIG_KEY, SystemSettingsService
 
 log = structlog.get_logger()
 
@@ -384,6 +385,47 @@ class AppsAdminService:
             "revoked_keys": len(prefixes),
             "closed_conversations": closed,
         }
+
+    async def system_settings(self) -> dict[str, Any]:
+        """`GET /system/settings`：v1 只有平台默认会话配置（代码默认值兜底）。"""
+        cfg = await SystemSettingsService(self.session).get_default_session_config()
+        return {DEFAULT_SESSION_CONFIG_KEY: cfg.model_dump(mode="json")}
+
+    async def update_system_settings(
+        self, payload: Mapping[str, Any], *, actor_id: UUID, meta: ActorMeta = _NO_META
+    ) -> dict[str, Any]:
+        """`PATCH /system/settings`：校验、落库并写 `system.update` 审计。"""
+        value = payload.get(DEFAULT_SESSION_CONFIG_KEY)
+        if not isinstance(value, Mapping):
+            raise ValidationAppError(
+                details={"errors": [{"loc": [DEFAULT_SESSION_CONFIG_KEY], "msg": "必须是对象"}]}
+            )
+        service = SystemSettingsService(self.session)
+        before = (await service.get_default_session_config()).model_dump(mode="json")
+        after = (
+            await service.set_default_session_config(dict(value), updated_by=actor_id)
+        ).model_dump(mode="json")
+        changed = [k for k in after if before.get(k) != after.get(k)]
+        if changed and self.audit is not None:
+            await self.audit.write(
+                self.session,
+                AuditEntry(
+                    action="system.update",
+                    actor_id=actor_id,
+                    app_id=None,
+                    target_type="system",
+                    target_id=None,
+                    diff={
+                        "before": {k: before.get(k) for k in changed},
+                        "after": {k: after[k] for k in changed},
+                    },
+                    ip=meta.ip,
+                    user_agent=meta.user_agent,
+                    request_id=meta.request_id,
+                ),
+            )
+        await self.session.commit()
+        return {DEFAULT_SESSION_CONFIG_KEY: after}
 
     async def _record(
         self,
