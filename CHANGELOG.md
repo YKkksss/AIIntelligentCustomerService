@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### 新增（M4.3 ② 管理版知识库接口，2026-10-20）
+- 新增 `backend/src/aics/modules/knowledge/admin_router.py`：`/api/v1/admin/apps/{app_id}` 下 **13 条**路由——九条文档路由（列表 / 详情 / 切块 / 上传 / URL 导入 / 替换 / 重建 / 改名与元数据 / 删除）、两条切块预览（新上传 / 已有文档）、`GET /jobs`、`POST /hit-test`；鉴权 `require_perm("kb.read")` / `("kb.write")`，上传 / 导入 / 替换 / 重建都接受 `chunk_config` 与 `reset_chunk_config`（后台改切块配置的入口）。
+- `KnowledgeService` 增 `audit` 端口与 `preview_upload` / `preview_document` / `list_jobs`；`_audit()` 在 `kb.document.create/replace/reindex/update/delete` 与业务写在**同一条事务**里落 `audit_logs`（开放接口不传操作人，因此不产生审计行）；`update_document` 增 `created_by`。
+- `KnowledgeRuntime` 增 `reranker` / `audit` 字段，`main.build_knowledge_runtime` 注入 `get_reranker()` 与 `PgAuditSink()` 并挂载 `knowledge_admin_router`；`hit-test` 未注入重排器时回落到 `get_reranker()`。
+
+### 测试（M4.3 ②，2026-10-20）
+- 新增 `tests/unit/test_knowledge_admin_api.py`（14 例：参数透传、`created_by`、`chunk_config` 解析与 422 路径、预览、`jobs` 时间序列化、`hit-test` 校验与重排器透传、401/403）与 `tests/unit/test_knowledge_audit.py`（3 例：无操作人 / 无端口不写、字段完整）。
+- 新增 `tests/integration/test_knowledge_admin_pg.py`（9 例，真 PG）：审计与文档同事务、**审计失败整体回滚**、`chunk_config` 合并成完整快照、非法配置 422 精确到 `["chunk_config","chunk_size"]`、预览不写库、覆盖配置改变切块数、`jobs` 过滤、删除写审计、403/401。
+- 门禁：单测 **1105 passed / 1 failed / 268 deselected**，覆盖率 **82.01%**（11722 语句 / 2109 未覆盖；唯一失败仍是 Windows 符号链接环境项 `tests/unit/test_storage.py::test_symlink_escape_rejected`）；本机 Docker 全量集成 **267 passed / 1107 deselected in 434.82s**；`ruff check` / `ruff format` / `lint-imports`（13 契约）/ `prompts check`（8 个）全绿。
+
 ### 新增（M4.2 ⑤ 里程碑验收与收尾，2026-10-20）
 - 里程碑验收脚本 `backend/scripts/e2e_m4/e2e_m42_apps.py`：真 PG / Redis、不调模型，九步 **36 项判定**——建应用（`config_version=1`）、乐观并发 409 且 `details` 带 expected/current、非法字段 422 精确到 `["rag_config","fuse_top_k"]`、模型与切块预设、系统设置读写与非法值、复制不带 Key / 会话 / 文档、删除 202 + 清理后数据归零且任务行保留、重跑幂等、审计动作齐全；结果写 `results/e2e_m42_apps.json`。
 - 修 `PATCH /api/v1/admin/system/settings` 的部分字段语义：与现值合并后再整对象校验（此前只给一个字段会被另外两个必填项拒成 422）。

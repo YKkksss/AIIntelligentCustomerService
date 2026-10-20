@@ -18,9 +18,10 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from aics.core.audit import AuditSink
 from aics.ingest.parsers.url import FetchedUrl
 from aics.modules.knowledge.service import KnowledgeService
-from aics.providers.base import EmbeddingProvider
+from aics.providers.base import EmbeddingProvider, RerankProvider
 from aics.storage import Storage, get_storage
 from aics.vectorstore import QdrantVectorStore
 
@@ -36,6 +37,9 @@ class KnowledgeRuntime:
     embedder: EmbeddingProvider | None = None
     enqueue: Enqueue | None = None
     fetcher: Fetcher | None = None
+    #: 管理版接口（M4.3 ②）用：命中测试的重排器与写操作审计端口。
+    reranker: RerankProvider | None = None
+    audit: AuditSink | None = None
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator[AsyncSession]:
@@ -51,4 +55,5 @@ class KnowledgeRuntime:
             embedder=self.embedder,
             enqueue=self.enqueue,
             fetcher=self.fetcher,
+            audit=self.audit,
         )

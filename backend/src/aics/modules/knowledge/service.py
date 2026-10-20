@@ -22,6 +22,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from aics.core.audit import AuditEntry, AuditSink
 from aics.core.config import get_settings
 from aics.core.errors import (
     AppError,
@@ -32,10 +33,12 @@ from aics.core.errors import (
 )
 from aics.db.models import App, Chunk, ChunkQuestion, Document, Job
 from aics.db.models.knowledge import MAX_TAGS, QUESTION_MAX_CHARS, QUESTION_SOURCES, TAG_MAX_CHARS
+from aics.ingest.chunker import ChunkOptions, split_document
 from aics.ingest.parsers import MIME_TYPES, detect_file_type, parse_bytes
+from aics.ingest.parsers.base import ParsedDoc
 from aics.ingest.parsers.url import FetchedUrl, fetch_url
 from aics.ingest.questions import QuestionTarget, text_hash, upsert_question_points
-from aics.ingest.service import OVERRIDE_KEY
+from aics.ingest.service import OVERRIDE_KEY, PREVIEW_DEFAULT_LIMIT, preview_result
 from aics.modules.knowledge.chunk_search import PgChunkSearch
 from aics.modules.knowledge.repository import (
     ChunkQuestionRepository,
@@ -198,6 +201,7 @@ class KnowledgeService:
         enqueue: Enqueue | None = None,
         fetcher: Fetcher | None = None,
         embedder: EmbeddingProvider | None = None,
+        audit: AuditSink | None = None,
     ) -> None:
         self.session = session
         self.embedder = embedder  # needed only for supplementary questions (M2.2b)
@@ -205,6 +209,7 @@ class KnowledgeService:
         self.store = store
         self.enqueue = enqueue
         self.fetcher = fetcher or self._fetch
+        self.audit = audit
         self.docs = DocumentRepository(session)
         self.chunks = ChunkRepository(session)
         self.jobs = JobRepository(session)
@@ -234,6 +239,109 @@ class KnowledgeService:
     def _send(self, task: str, args: Sequence[Any]) -> None:
         if self.enqueue is not None:
             self.enqueue(task, list(args))
+
+    async def _audit(
+        self,
+        action: str,
+        app_id: UUID,
+        *,
+        actor_id: UUID | None,
+        target_id: UUID | None = None,
+        diff: dict[str, Any] | None = None,
+    ) -> None:
+        """写一条审计（M4.3 ②）：与业务写在同一事务里，提交点在调用方。
+
+        只有管理版接口会传 `actor_id`；开放接口的调用方不传，因而不产生审计行。
+        """
+        if self.audit is None or actor_id is None:
+            return
+        await self.audit.write(
+            self.session,
+            AuditEntry(
+                action=action,
+                actor_id=actor_id,
+                app_id=app_id,
+                target_type="document",
+                target_id=target_id,
+                diff=diff,
+            ),
+        )
+
+    async def preview_upload(
+        self,
+        app_id: UUID,
+        data: bytes,
+        filename: str,
+        *,
+        chunk_config: Mapping[str, Any] | None = None,
+        limit: int = PREVIEW_DEFAULT_LIMIT,
+    ) -> dict[str, Any]:
+        """上传前预览切块（M4.3 ②）：只解析 + 切块，不落盘、不建任务。"""
+        app = await self._app(app_id)
+        cfg = self._resolve_chunk_config(app, chunk_config or {})
+        self._check_size(data)
+        ftype = detect_file_type(filename, data)
+        name = posixpath.basename(filename.replace("\\", "/")) or f"document.{ftype}"
+        parsed = parse_bytes(data, ftype)
+        result = split_document(parsed, ChunkOptions.from_mapping(cfg))
+        return preview_result(result, title=_clean_title(None, name), chunk_config=cfg, limit=limit)
+
+    async def preview_document(
+        self,
+        app_id: UUID,
+        document_id: UUID,
+        *,
+        chunk_config: Mapping[str, Any] | None = None,
+        limit: int = PREVIEW_DEFAULT_LIMIT,
+    ) -> dict[str, Any]:
+        """已有文档按新配置预览（M4.3 ②）：缺省用文档生效配置，否则用应用配置。"""
+        app = await self._app(app_id)
+        doc = await self._doc(app_id, document_id)
+        base = doc.chunk_config if doc.chunk_config is not None else dict(app.chunk_config)
+        cfg = (
+            self._resolve_chunk_config(app, chunk_config, base)
+            if chunk_config is not None
+            else dict(base)
+        )
+        parsed = await self._load_document(doc)
+        result = split_document(parsed, ChunkOptions.from_mapping(cfg))
+        return preview_result(result, title=doc.title, chunk_config=cfg, limit=limit)
+
+    async def _load_document(self, doc: Document) -> ParsedDoc:
+        """按文档来源取原文（文件快照优先，URL 导入的文档回落抓取）。"""
+        if doc.storage_key:
+            data = await self.storage.get(doc.storage_key)
+            name = posixpath.basename(doc.storage_key) or "document"
+            return parse_bytes(data, detect_file_type(name, data))
+        if doc.source_uri:
+            fetched = await self.fetcher(doc.source_uri)
+            return parse_bytes(fetched.content, fetched.file_type)
+        raise ValidationAppError(message="文档没有可读取的来源")
+
+    async def list_jobs(
+        self,
+        app_id: UUID,
+        *,
+        type: str | None = None,
+        status: str | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[Job], int]:
+        """应用的任务列表（M4.3 ②，新→旧）：前端用来轮询入库 / 清理进度。"""
+        where = [Job.app_id == app_id]
+        if type:
+            where.append(Job.type == type)
+        if status:
+            where.append(Job.status == status)
+        total = await self.session.scalar(select(func.count()).select_from(Job).where(*where))
+        rows = await self.session.scalars(
+            select(Job)
+            .where(*where)
+            .order_by(Job.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return list(rows), int(total or 0)
 
     async def _existing(self, app_id: UUID, digest: str) -> UploadResult | None:
         doc = await self.docs.get_by_hash(app_id, digest)
@@ -343,6 +451,19 @@ class KnowledgeService:
                 app_id=app_id, type="ingest", target_id=doc.id, payload={}, created_by=created_by
             )
             await self.jobs.add(app_id, job)
+            await self._audit(
+                "kb.document.create",
+                app_id,
+                actor_id=created_by,
+                target_id=doc.id,
+                diff={
+                    "after": {
+                        "title": title,
+                        "source_type": source_type,
+                        "size_bytes": len(data),
+                    }
+                },
+            )
             await self.session.commit()
         except IntegrityError:
             # 并发上传同一内容：唯一索引 (app_id, content_hash) WHERE deleted_at IS NULL 兜底
@@ -490,6 +611,13 @@ class KnowledgeService:
                 },
             )
             await self.jobs.add(app_id, job)
+            await self._audit(
+                "kb.document.replace",
+                app_id,
+                actor_id=created_by,
+                target_id=doc.id,
+                diff={"after": {"version": version, "size_bytes": len(data)}},
+            )
             await self.session.commit()
         except BaseException:
             await self.session.rollback()
@@ -539,6 +667,13 @@ class KnowledgeService:
         doc = await self._doc(app_id, document_id, lock=True)
         override = self._override_payload(app, doc, chunk_config, reset_chunk_config)
         job = await self._rebuild_locked(app_id, doc, created_by, override)
+        await self._audit(
+            "kb.document.reindex",
+            app_id,
+            actor_id=created_by,
+            target_id=doc.id,
+            diff={"after": {"build": doc.pending_index_version}},
+        )
         await self.session.commit()
         self._send(INGEST_TASK, [str(doc.id), str(job.id)])
         return job
@@ -885,6 +1020,13 @@ class KnowledgeService:
             created_by=created_by,
         )
         await self.jobs.add(app_id, job)
+        await self._audit(
+            "kb.document.delete",
+            app_id,
+            actor_id=created_by,
+            target_id=doc.id,
+            diff={"before": {"title": doc.title, "status": doc.status}},
+        )
         await self.session.commit()
         if self.store is not None:
             # 尽力立即同步 payload；失败不影响删除（PG 已不可检索，cleanup 会删点）
@@ -978,6 +1120,7 @@ class KnowledgeService:
         *,
         title: str | None = None,
         metadata: Mapping[str, Any] | None = None,
+        created_by: UUID | None = None,
     ) -> Document:
         """改标题 / 元数据（开放接口 §4 `PATCH`）：立即生效，无需重建（标题不在向量 payload 里）。"""
         await self._app(app_id)
@@ -988,10 +1131,22 @@ class KnowledgeService:
             if len(body.encode()) > METADATA_MAX_BYTES:
                 raise ValidationAppError(message=f"metadata 超过 {METADATA_MAX_BYTES} 字节")
         doc = await self._doc(app_id, document_id, lock=True)
+        before = {"title": doc.title, "metadata": dict(doc.metadata_ or {})}
         if title is not None:
             doc.title = _clean_title(title, doc.title)
         if metadata is not None:
             doc.metadata_ = dict(metadata)
+        after = {"title": doc.title, "metadata": dict(doc.metadata_ or {})}
+        await self._audit(
+            "kb.document.update",
+            app_id,
+            actor_id=created_by,
+            target_id=doc.id,
+            diff={
+                "before": {k: before[k] for k in before if before[k] != after[k]},
+                "after": {k: after[k] for k in after if before[k] != after[k]},
+            },
+        )
         await self.session.commit()
         # updated_at 由服务端 onupdate 生成，提交后该列是 expired 的；脱离 session 再读会
         # DetachedInstanceError（PATCH 应答正好要序列化它），所以在会话内刷新一次。

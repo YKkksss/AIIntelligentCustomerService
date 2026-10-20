@@ -35,6 +35,7 @@ from aics.modules.apps.admin_router import router as apps_admin_router
 from aics.modules.apps.runtime import AppsAdminRuntime
 from aics.modules.audit.admin_router import router as audit_router
 from aics.modules.audit.runtime import AuditRuntime
+from aics.modules.audit.sink import PgAuditSink
 from aics.modules.auth.admin_router import router as auth_router
 from aics.modules.auth.runtime import AuthRuntime
 from aics.modules.chat import openai
@@ -45,6 +46,7 @@ from aics.modules.feedback.router import router as feedback_router
 from aics.modules.feedback.runtime import FeedbackRuntime
 from aics.modules.handoff.router import router as handoff_router
 from aics.modules.handoff.runtime import HandoffRuntime
+from aics.modules.knowledge.admin_router import router as knowledge_admin_router
 from aics.modules.knowledge.chunk_search import PgChunkSearch
 from aics.modules.knowledge.router import router as knowledge_router
 from aics.modules.knowledge.runtime import KnowledgeRuntime
@@ -136,6 +138,8 @@ def build_knowledge_runtime(s: Settings) -> KnowledgeRuntime:
         storage=build_storage(s),
         embedder=get_embedder(),
         vector=get_vector_store(),
+        reranker=get_reranker(),
+        audit=PgAuditSink(),
         enqueue=enqueue,
     )
 
@@ -348,6 +352,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(chat_router)
     app.include_router(knowledge_router)
+    app.include_router(knowledge_admin_router)
     app.include_router(handoff_router)
     app.include_router(feedback_router)
     app.include_router(auth_router)
