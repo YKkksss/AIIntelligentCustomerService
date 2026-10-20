@@ -206,6 +206,20 @@ class ConversationRepository(AppScopedRepository[Conversation]):
         )
         return bool((await self.session.execute(stmt)).rowcount)  # type: ignore[attr-defined]
 
+    async def close_all_active(
+        self, app_id: UUID, *, reason: str, at: datetime | None = None
+    ) -> int:
+        """Close every active conversation of one app（应用删除时）; returns the row count."""
+        stmt = (
+            update(Conversation)
+            .where(
+                Conversation.app_id == app_id,
+                Conversation.status == "active",
+            )
+            .values(status="closed", close_reason=reason, closed_at=at or func.now())
+        )
+        return int((await self.session.execute(stmt)).rowcount)  # type: ignore[attr-defined]
+
 
 class MessageRepository(AppScopedRepository[Message]):
     model = Message

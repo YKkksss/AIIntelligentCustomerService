@@ -79,10 +79,12 @@ def create_celery() -> Celery:
         "aics.tasks.maintenance",
         "aics.tasks.context",
         "aics.tasks.webhooks",
+        "aics.tasks.apps",
     ]
     app.conf.task_routes = {
         "aics.ingest_document": {"queue": "ingest", "routing_key": "ingest"},
         "aics.retokenize_app": {"queue": "ingest", "routing_key": "ingest"},
+        "aics.cleanup_app": {"queue": "maintenance", "routing_key": "maintenance"},
         "aics.cleanup_document": {"queue": "maintenance", "routing_key": "maintenance"},
         "aics.reconcile": {"queue": "maintenance", "routing_key": "maintenance"},
         "aics.sweep_knowledge": {"queue": "maintenance", "routing_key": "maintenance"},

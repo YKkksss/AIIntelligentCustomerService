@@ -178,7 +178,9 @@ def build_auth_runtime(
     return AuthRuntime(sessions=get_sessionmaker(), settings=s, redis=redis, audit=audit)
 
 
-def build_apps_admin_runtime(s: Settings, *, audit: AuditSink | None = None) -> AppsAdminRuntime:
+def build_apps_admin_runtime(
+    s: Settings, *, audit: AuditSink | None = None, redis: Any | None = None
+) -> AppsAdminRuntime:
     """Composition root of `modules.apps` 的管理接口（M4.2）。
 
     `apps` 是独立模块：审计端口由这里注入（`modules.audit`），任务投递用与
@@ -212,6 +214,7 @@ def build_apps_admin_runtime(s: Settings, *, audit: AuditSink | None = None) -> 
         enqueue=enqueue,
         storage=build_storage(s),
         vector=get_vector_store(),
+        redis=redis,
     )
 
 
@@ -249,7 +252,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.authorizer = app.state.auth_runtime.authorizer()
     if getattr(app.state, "apps_admin_runtime", None) is None:  # tests may install their own
         app.state.apps_admin_runtime = build_apps_admin_runtime(
-            s, audit=app.state.audit_runtime.sink()
+            s, audit=app.state.audit_runtime.sink(), redis=redis
         )
     log.info("app.started", env=s.env, version=__version__)
     yield

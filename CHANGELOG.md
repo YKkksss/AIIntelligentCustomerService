@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+
+### 新增（M4.2 ③ 应用创建、复制与删除，2026-10-20）
+- **管理接口**：`POST /api/v1/admin/apps`（201，默认配置；`name` 缺失或空白 422）、`POST /api/v1/admin/apps/{app_id}/copy`（201，只复制配置与基础信息，**不复制文档 / Key / 会话**，名称加「（副本）」）、`DELETE /api/v1/admin/apps/{app_id}`（202，`{"job_id","revoked_keys","closed_conversations"}`）。权限分别是 `app.create` / `app.copy` / `app.delete`（仅 super_admin）。
+- **删除流程**：置 `status='deleting'` → 吊销该应用全部 API Key（`revoked_at`，同时删 Redis 的 Key 缓存）→ 关闭全部活跃会话（`close_reason='app_deleted'`）→ 建 `jobs(cleanup_app)` 任务 → 提交后投递 `aics.cleanup_app`；此后该应用对其它接口一律 404（`get_app` 过滤 `deleting`）。
+- **清理任务** `aics.cleanup_app`（队列 `maintenance`，`modules/apps/cleanup.py`）：Qdrant 向量点 → 文件前缀 `{app_id}/` → 数据库各表 → 最后 `apps` 行；向量库或存储不可用时只记 warning、不阻断删库（孤儿点交给 reconcile）；`jobs` 行保留成平台级记录（`app_id` 置 NULL、`payload.result` 记各表删除行数），**每步幂等、可重复执行**（ISSUE-76：已 `done` 直接返回，应用不在则记 `missing`）。
+- 新增 `modules/apps/cleanup.py`、`tasks/apps.py`（Celery 任务）、`ConversationRepository.close_all_active`（供其它调用方复用）；`AppsAdminService` 增加 `create` / `copy` / `delete` 与 `ActorMeta` 审计入口；`AppsAdminRuntime` 增加 `redis` 字段（删 Key 缓存）；`tasks/celery_app.py` 的 `include` 与 `task_routes` 增加本任务。
+- 审计：`app.create` / `app.copy`（`diff` 带 `source_app_id`）/ `app.delete`（`diff` 记 `revoked_keys` 与关闭会话数）。
+
+### 测试（M4.2 ③，2026-10-20）
+- 新增 `tests/unit/test_apps_admin_lifecycle.py`（5 例：名称必填、创建透传字段并审计、复制加后缀且不带文档、删除置 deleting + 吊销 Key + 关闭会话 + 建任务并投递 + 审计、删除时清 Redis Key 缓存）与 `tests/integration/test_cleanup_app_pg.py`（2 例，真 PG：`DELETE` → 状态/吊销/关闭/任务行齐备 → 跑清理任务 → 各表归零、`apps` 行消失、任务行保留且 `app_id IS NULL` → 重跑返回 `already_done`；不带任务行时连跑两次为 `done` / `missing`）。
 ### 新增（M4.2 ② 应用读取与配置，2026-10-20）
 - **管理接口**：`GET /api/v1/admin/apps`（super_admin 看全部，其余按 `user_app_roles` 过滤；`limit` / `offset` 分页，卡片带文档数）、`GET /api/v1/admin/apps/{app_id}`（完整配置 + 文档 / 切块 / 被标记切块统计）、`PATCH /api/v1/admin/apps/{app_id}`（部分更新，复用 `AppService.update_app` 的合并与校验）、`GET /api/v1/admin/models`（模型注册表）、`GET /api/v1/admin/chunk-presets`（预设展开后的完整配置）。
 - **乐观并发**：`PATCH` 可带 `expected_config_version`，与库里 `apps.config_version` 不一致时返回 `409 CONFIG_VERSION_CONFLICT`（`details.expected` / `details.current`）；不带时保持旧行为，CLI 与脚本不受影响。
@@ -13,7 +23,7 @@
 - 清单登记 `ISSUE-75`（PATCH 原先没有乐观并发，后保存者会静默覆盖）与 `ISSUE-76`（`cleanup_app` 失败后应用停在 `deleting`）。
 
 ### 测试（M4.2 ②，2026-10-20）
-- 新增 `tests/unit/test_apps_admin_service.py`（5 例：版本冲突、只记变化字段的审计、无变化不审计、词典变更建任务并投递、详情合并配置与统计）与 `tests/unit/test_apps_admin_api.py`（7 例：列表透传调用者与分页、详情、`expected_config_version` 剥离、非整数 422、409 透传、模型与预设、403 映射）；`tests/unit/test_error_codes.py` 因为新增 `CONFIG_VERSION_CONFLICT` 同步更新接口规范 §4。\n- 后端单测 **1070 passed**、1 failed（`tests/unit/test_storage.py::test_symlink_escape_rejected`，Windows 符号链接权限环境问题）、253 deselected；覆盖率 **82.44%**（11339 语句 / 1991 未覆盖）。本机 Docker 集成套件 **252 passed, 1072 deselected in 456.18s**；`ruff check` / `ruff format` / `lint-imports`（13 kept, 0 broken）/ `prompts check`（8 个）全绿；真实模型费用 0 元。
+- 新增 `tests/unit/test_apps_admin_service.py`（5 例：版本冲突、只记变化字段的审计、无变化不审计、词典变更建任务并投递、详情合并配置与统计）与 `tests/unit/test_apps_admin_api.py`（7 例：列表透传调用者与分页、详情、`expected_config_version` 剥离、非整数 422、409 透传、模型与预设、403 映射）；`tests/unit/test_error_codes.py` 因为新增 `CONFIG_VERSION_CONFLICT` 同步更新接口规范 §4。后端单测 **1070 passed**、1 failed（`tests/unit/test_storage.py::test_symlink_escape_rejected`，Windows 符号链接权限环境问题）、253 deselected；覆盖率 **82.44%**（11339 语句 / 1991 未覆盖）。本机 Docker 集成套件 **252 passed, 1072 deselected in 456.18s**；`ruff check` / `ruff format` / `lint-imports`（13 kept, 0 broken）/ `prompts check`（8 个）全绿；真实模型费用 0 元。
 
 ### 新增（M4.1 ⑤ 里程碑验收与收尾，2026-10-19）
 - **验收脚本** `backend/scripts/e2e_m4/e2e_m41_admin.py`：真 PG / Redis + 真 uvicorn（不调模型），九步 **34 项**判定——`bootstrap-admin` 幂等、连续失败 5 次锁定 `423` 与 `Retry-After`、未知邮箱与错密码同文案、成员授权后权限立即生效、refresh 轮换与复用踢全端、审计动作与脱敏、一次性密码首登改密、第 11 次登录 `429`；结果写 `results/e2e_m41_admin.json`，非零退出码即失败。

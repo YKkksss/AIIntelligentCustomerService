@@ -28,6 +28,7 @@ class AppsAdminRuntime:
     enqueue: Any = None
     storage: Any = None
     vector: Any = None
+    redis: Any = None
     extras: dict[str, Any] = field(default_factory=dict)
 
     @asynccontextmanager
@@ -37,5 +38,10 @@ class AppsAdminRuntime:
 
     async def service(self, session: AsyncSession) -> AppsAdminService:
         return await AppsAdminService.load(
-            session, settings=self.settings, audit=self.audit, enqueue=self.enqueue
+            session,
+            settings=self.settings,
+            audit=self.audit,
+            enqueue=self.enqueue,
+            redis=self.redis,
+            redis_prefix=self.settings.redis_prefix,
         )

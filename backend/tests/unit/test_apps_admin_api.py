@@ -46,6 +46,21 @@ class FakeService:
         self._maybe_raise()
         return {"id": str(app_id), "config_version": 4, "retokenize_job_id": None}
 
+    async def create(self, payload: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("create", payload, kwargs))
+        self._maybe_raise()
+        return {"id": str(APP_ID), "name": payload.get("name", "新建")}
+
+    async def copy(self, app_id: Any, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("copy", app_id, kwargs))
+        self._maybe_raise()
+        return {"id": str(APP_ID), "name": "售后客服（副本）"}
+
+    async def delete(self, app_id: Any, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("delete", app_id, kwargs))
+        self._maybe_raise()
+        return {"job_id": str(uuid4()), "revoked_keys": 1, "closed_conversations": 0}
+
 
 class FakeRuntime:
     def __init__(self, service: FakeService) -> None:
@@ -184,6 +199,65 @@ def test_models_and_presets_come_from_the_runtime(
     assert presets.status_code == 200
     assert {"name", "label", "config"} <= set(presets.json()[0])
     assert "chunk_size" in presets.json()[0]["config"]
+
+
+def test_create_returns_201_and_passes_the_body(
+    client: tuple[TestClient, FakeService], headers: dict[str, str]
+) -> None:
+    http, service = client
+
+    resp = http.post(
+        "/api/v1/admin/apps", headers=headers, json={"name": "新应用", "greeting": "你好"}
+    )
+
+    assert resp.status_code == 201
+    assert resp.json()["name"] == "新应用"
+    kind, payload, kwargs = service.calls[0]
+    assert kind == "create"
+    assert payload == {"name": "新应用", "greeting": "你好"}
+    assert kwargs["actor_id"] is not None
+
+
+def test_copy_returns_201_with_the_suffixed_name(
+    client: tuple[TestClient, FakeService], headers: dict[str, str]
+) -> None:
+    http, service = client
+
+    resp = http.post(f"/api/v1/admin/apps/{APP_ID}/copy", headers=headers)
+
+    assert resp.status_code == 201
+    assert resp.json()["name"] == "售后客服（副本）"
+    assert service.calls[0][:2] == ("copy", APP_ID)
+
+
+def test_delete_returns_202_with_the_job(
+    client: tuple[TestClient, FakeService], headers: dict[str, str]
+) -> None:
+    http, service = client
+
+    resp = http.delete(f"/api/v1/admin/apps/{APP_ID}", headers=headers)
+
+    assert resp.status_code == 202
+    body = resp.json()
+    assert set(body) == {"job_id", "revoked_keys", "closed_conversations"}
+    assert service.calls[0][:2] == ("delete", APP_ID)
+
+
+def test_lifecycle_endpoints_require_their_own_permissions(
+    client: tuple[TestClient, FakeService], headers: dict[str, str]
+) -> None:
+    http, service = client
+    http.app.state.authorizer = FakeAuthorizer(deny="app.create")
+
+    created = http.post("/api/v1/admin/apps", headers=headers, json={"name": "新应用"})
+    copied = http.post(f"/api/v1/admin/apps/{APP_ID}/copy", headers=headers)
+    removed = http.delete(f"/api/v1/admin/apps/{APP_ID}", headers=headers)
+
+    assert created.status_code == 403
+    assert created.json()["error"]["details"]["permission"] == "app.create"
+    assert copied.status_code == 201
+    assert removed.status_code == 202
+    assert [call[0] for call in service.calls] == ["copy", "delete"]
 
 
 def test_denied_permission_is_403(

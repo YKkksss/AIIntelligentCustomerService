@@ -17,17 +17,19 @@ from typing import Any
 from uuid import UUID
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aics.core.audit import AuditEntry, AuditSink
-from aics.core.errors import ConfigVersionConflictError
-from aics.db.models import App, Chunk, Document, Job, UserAppRole
+from aics.core.errors import ConfigVersionConflictError, ValidationAppError
+from aics.db.models import ApiKey, App, Chunk, Conversation, Document, Job, UserAppRole
 from aics.modules.apps.service import BASIC_FIELDS, CONFIG_FIELDS, AppConfig, AppService
 
 log = structlog.get_logger()
 
 RETOKENIZE_TASK = "aics.retokenize_app"
+CLEANUP_TASK = "aics.cleanup_app"
+COPY_SUFFIX = "（副本）"
 AUDIT_PATCH_FIELDS = (*BASIC_FIELDS, *CONFIG_FIELDS, "custom_dict", "webhook_config")
 
 Enqueue = Any  # Callable[[str, Sequence[Any]], None]
@@ -96,6 +98,8 @@ class AppsAdminService:
         audit: AuditSink | None = None,
         enqueue: Enqueue | None = None,
         platform_session: Any = None,
+        redis: Any = None,
+        redis_prefix: str = "aics:",
     ) -> None:
         kwargs: dict[str, Any] = {"settings": settings}
         if platform_session is not None:
@@ -104,6 +108,8 @@ class AppsAdminService:
         self.apps = AppService(session, **kwargs)
         self.audit = audit
         self.enqueue = enqueue
+        self.redis = redis
+        self.redis_prefix = redis_prefix
 
     @classmethod
     async def load(
@@ -113,10 +119,19 @@ class AppsAdminService:
         settings: Any = None,
         audit: AuditSink | None = None,
         enqueue: Enqueue | None = None,
+        redis: Any = None,
+        redis_prefix: str = "aics:",
     ) -> AppsAdminService:
         """平台默认会话设置从 `system_settings` 读（与 `AppService.load` 同一来源）。"""
         loaded = await AppService.load(session, settings=settings)
-        return cls(session, settings=settings, audit=audit, enqueue=enqueue).with_apps(loaded)
+        return cls(
+            session,
+            settings=settings,
+            audit=audit,
+            enqueue=enqueue,
+            redis=redis,
+            redis_prefix=redis_prefix,
+        ).with_apps(loaded)
 
     def with_apps(self, apps: AppService) -> AppsAdminService:
         self.apps = apps
@@ -241,9 +256,166 @@ class AppsAdminService:
         return body
 
     def _enqueue_retokenize(self, app_id: UUID, job_id: UUID) -> None:
+        self._enqueue(RETOKENIZE_TASK, (str(app_id), str(job_id)), "apps.enqueue_failed")
+
+    def _enqueue(self, task: str, args: Sequence[Any], event: str) -> None:
         if self.enqueue is None:
             return
         try:
-            self.enqueue(RETOKENIZE_TASK, (str(app_id), str(job_id)))
+            self.enqueue(task, args)
         except Exception as e:  # noqa: BLE001 - 投递失败只影响即时性，任务行留待 sweep 兜底
-            log.warning("apps.enqueue_failed", task=RETOKENIZE_TASK, error_type=type(e).__name__)
+            log.warning(event, task=task, error_type=type(e).__name__)
+
+    # ------------------------------------------------------------ 创建 / 复制 / 删除
+    async def create(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        actor_id: UUID,
+        meta: ActorMeta = _NO_META,
+    ) -> dict[str, Any]:
+        """`POST /apps`：默认配置起步，字段校验全部交给 `AppService.create_app`。"""
+        name = payload.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ValidationAppError(details={"errors": [{"loc": ["name"], "msg": "名称不能为空"}]})
+        app = await self._create_from(payload, name=name.strip(), actor_id=actor_id)
+        await self._record(
+            actor_id, meta, "app.create", app.id, {"before": {}, "after": {"name": name}}
+        )
+        return await self.detail(app.id)
+
+    async def copy(
+        self, app_id: UUID, *, actor_id: UUID, meta: ActorMeta = _NO_META
+    ) -> dict[str, Any]:
+        """`POST /apps/{id}/copy`：只复制基础信息与配置，不复制文档 / Key / 会话 / 密钥。"""
+        source = await self.apps.get_app(app_id)
+        payload: dict[str, Any] = {
+            "name": f"{source.name}{COPY_SUFFIX}",
+            "description": source.description,
+            "greeting": source.greeting,
+            "system_prompt": source.system_prompt,
+            "answer_style": source.answer_style,
+            "fallback_text": source.fallback_text,
+            "language": source.language,
+            "rag_config": source.rag_config,
+            "handoff_config": source.handoff_config,
+            "session_config": source.session_config,
+            "chunk_config": source.chunk_config,
+            "custom_dict": list(source.custom_dict or []),
+        }
+        app = await self._create_from(payload, name=payload["name"], actor_id=actor_id)
+        await self._record(
+            actor_id,
+            meta,
+            "app.copy",
+            app.id,
+            {"before": {}, "after": {"name": payload["name"], "source_app_id": str(app_id)}},
+        )
+        return await self.detail(app.id)
+
+    async def _create_from(self, payload: Mapping[str, Any], *, name: str, actor_id: UUID) -> App:
+        basic = {
+            k: payload[k]
+            for k in BASIC_FIELDS
+            if k != "name" and k in payload and payload[k] is not None
+        }
+        app = await self.apps.create_app(
+            name=name,
+            created_by=actor_id,
+            rag_config=payload.get("rag_config"),
+            handoff_config=payload.get("handoff_config"),
+            session_config=payload.get("session_config"),
+            chunk_config=payload.get("chunk_config"),
+            custom_dict=list(payload.get("custom_dict") or []),
+            **basic,
+        )
+        await self.session.commit()
+        return app
+
+    async def delete(
+        self, app_id: UUID, *, actor_id: UUID, meta: ActorMeta = _NO_META
+    ) -> dict[str, Any]:
+        """`DELETE /apps/{id}`：`deleting` + 吊销 Key + 关闭会话，然后投递清理任务（202）。"""
+        app = await self.apps.get_app(app_id)
+        previous = app.status
+        app.status = "deleting"
+        prefixes = list(
+            (
+                await self.session.execute(
+                    update(ApiKey)
+                    .where(ApiKey.app_id == app_id, ApiKey.revoked_at.is_(None))
+                    .values(revoked_at=func.now())
+                    .returning(ApiKey.prefix)
+                )
+            ).scalars()
+        )
+        closed = int(
+            (
+                await self.session.execute(
+                    update(Conversation)
+                    .where(Conversation.app_id == app_id, Conversation.status == "active")
+                    .values(status="closed", close_reason="app_deleted", closed_at=func.now())
+                )
+            ).rowcount  # type: ignore[attr-defined]
+        )
+        job = Job(
+            app_id=app_id,
+            type="cleanup_app",
+            target_id=app_id,
+            payload={"reason": "admin.delete"},
+            created_by=actor_id,
+        )
+        self.session.add(job)
+        await self._record(
+            actor_id,
+            meta,
+            "app.delete",
+            app_id,
+            {
+                "before": {"status": previous},
+                "after": {"status": "deleting", "revoked_keys": len(prefixes), "closed": closed},
+            },
+        )
+        await self.session.commit()
+        self._drop_key_cache(prefixes)
+        self._enqueue(CLEANUP_TASK, (str(app_id), str(job.id)), "apps.cleanup_enqueue_failed")
+        return {
+            "job_id": str(job.id),
+            "revoked_keys": len(prefixes),
+            "closed_conversations": closed,
+        }
+
+    async def _record(
+        self,
+        actor_id: UUID,
+        meta: ActorMeta,
+        action: str,
+        app_id: UUID,
+        diff: dict[str, Any],
+    ) -> None:
+        if self.audit is None:
+            return
+        await self.audit.write(
+            self.session,
+            AuditEntry(
+                action=action,
+                actor_id=actor_id,
+                app_id=app_id,
+                target_type="app",
+                target_id=app_id,
+                diff=diff,
+                ip=meta.ip,
+                user_agent=meta.user_agent,
+                request_id=meta.request_id,
+            ),
+        )
+
+    def _drop_key_cache(self, prefixes: Sequence[str]) -> None:
+        """吊销后删掉鉴权缓存，避免最长 60 秒里旧 Key 还能用。"""
+        if self.redis is None or not prefixes:
+            return
+        try:
+            for prefix in prefixes:
+                self.redis.delete(f"{self.redis_prefix}apikey:{prefix}")
+        except Exception as e:  # noqa: BLE001 - 缓存删不掉只是延迟生效，下一次校验会回表
+            log.warning("apps.key_cache_drop_failed", error_type=type(e).__name__)

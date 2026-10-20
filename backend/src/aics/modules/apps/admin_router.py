@@ -116,3 +116,51 @@ async def list_models(request: Request, user: CurrentUser) -> JSONResponse:
 @router.get("/chunk-presets", summary="切块预设（展开后的完整配置）", responses=errors(401, 422))
 async def list_presets(request: Request, user: CurrentUser) -> JSONResponse:
     return JSONResponse(jsonable_encoder(list_chunk_presets()))
+
+
+@router.post(
+    "/apps",
+    summary="创建应用（默认配置，S）",
+    status_code=201,
+    responses=errors(401, 403, 422),
+)
+async def create_app(
+    request: Request,
+    user: Annotated[AuthedUser, Depends(require_perm("app.create"))],
+    service: Service,
+    body: Annotated[dict[str, Any], Body()],
+) -> JSONResponse:
+    payload = await service.create(body, actor_id=user.id, meta=_meta(request))
+    return JSONResponse(jsonable_encoder(payload), status_code=201)
+
+
+@router.post(
+    "/apps/{app_id}/copy",
+    summary="复制应用（只复制配置与基础信息，S）",
+    status_code=201,
+    responses=errors(*APP_SCOPE_ERRORS),
+)
+async def copy_app(
+    request: Request,
+    app_id: UUID,
+    user: Annotated[AuthedUser, Depends(require_perm("app.copy"))],
+    service: Service,
+) -> JSONResponse:
+    payload = await service.copy(app_id, actor_id=user.id, meta=_meta(request))
+    return JSONResponse(jsonable_encoder(payload), status_code=201)
+
+
+@router.delete(
+    "/apps/{app_id}",
+    summary="删除应用（置 deleting 并投递清理任务，S）",
+    status_code=202,
+    responses=errors(*APP_SCOPE_ERRORS),
+)
+async def delete_app(
+    request: Request,
+    app_id: UUID,
+    user: Annotated[AuthedUser, Depends(require_perm("app.delete"))],
+    service: Service,
+) -> JSONResponse:
+    payload = await service.delete(app_id, actor_id=user.id, meta=_meta(request))
+    return JSONResponse(jsonable_encoder(payload), status_code=202)
