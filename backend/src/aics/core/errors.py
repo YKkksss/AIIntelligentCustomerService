@@ -74,6 +74,15 @@ class HandoffStateConflictError(ConflictError):
     code, message = "HANDOFF_STATE_CONFLICT", "转人工状态已变更"
 
 
+class ConfigVersionConflictError(ConflictError):
+    """配置保存的乐观并发失败（M4.2 ②）：`details` 里带期望与实际版本。
+
+    PATCH 带 `expected_config_version` 时不匹配即抛——两个人同时改同一应用，后保存的人
+    会看到 409 而不是静默覆盖（ISSUE-75）。不带该字段时保持旧行为（CLI / 脚本兼容）。"""
+
+    code, message = "CONFIG_VERSION_CONFLICT", "配置已被其他人修改，请刷新后重试"
+
+
 class FileTooLargeError(AppError):
     """上传超过 `AICS_UPLOAD_MAX_MB`（接口规范 §4：413 `FILE_TOO_LARGE`）。"""
 

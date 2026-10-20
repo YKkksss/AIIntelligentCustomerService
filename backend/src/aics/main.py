@@ -31,6 +31,8 @@ from aics.memory.locks import RedisLock
 from aics.memory.service import COMPACT_TASK, MemoryService
 from aics.memory.units import pg_units
 from aics.modules.apikeys.service import ApiKeyAuthenticator
+from aics.modules.apps.admin_router import router as apps_admin_router
+from aics.modules.apps.runtime import AppsAdminRuntime
 from aics.modules.audit.admin_router import router as audit_router
 from aics.modules.audit.runtime import AuditRuntime
 from aics.modules.auth.admin_router import router as auth_router
@@ -176,6 +178,43 @@ def build_auth_runtime(
     return AuthRuntime(sessions=get_sessionmaker(), settings=s, redis=redis, audit=audit)
 
 
+def build_apps_admin_runtime(s: Settings, *, audit: AuditSink | None = None) -> AppsAdminRuntime:
+    """Composition root of `modules.apps` 的管理接口（M4.2）。
+
+    `apps` 是独立模块：审计端口由这里注入（`modules.audit`），任务投递用与
+    `build_knowledge_runtime` 相同的 broker 直发模式（`aics.retokenize_app` 在 ingest 队列）。
+    `storage` / `vector` 留给 ③ 的删除任务。
+    """
+    broker = Celery("aics-api", broker=s.celery_broker_url)
+
+    def send(task: str, args: Sequence[Any]) -> None:
+        queue = TASK_QUEUES.get(task, "maintenance")
+        try:
+            broker.send_task(
+                task,
+                args=list(args),
+                queue=queue,
+                routing_key=queue,
+                exchange="aics",
+                retry=True,
+                retry_policy={"max_retries": 2, "interval_start": 0.2, "interval_step": 0.5},
+            )
+        except Exception as e:  # noqa: BLE001 - 投递失败不阻断请求，任务行留待 sweep
+            log.warning("apps.enqueue_failed", task=task, error_type=type(e).__name__)
+
+    def enqueue(task: str, args: Sequence[Any]) -> None:
+        asyncio.get_running_loop().run_in_executor(None, send, task, list(args))
+
+    return AppsAdminRuntime(
+        sessions=get_sessionmaker(),
+        settings=s,
+        audit=audit,
+        enqueue=enqueue,
+        storage=build_storage(s),
+        vector=get_vector_store(),
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     s = get_settings()
@@ -208,6 +247,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
     if getattr(app.state, "authorizer", None) is None:  # core.security.Authorizer (RBAC)
         app.state.authorizer = app.state.auth_runtime.authorizer()
+    if getattr(app.state, "apps_admin_runtime", None) is None:  # tests may install their own
+        app.state.apps_admin_runtime = build_apps_admin_runtime(
+            s, audit=app.state.audit_runtime.sink()
+        )
     log.info("app.started", env=s.env, version=__version__)
     yield
     await app.state.chat_runtime.drain()
@@ -306,6 +349,7 @@ def create_app() -> FastAPI:
     app.include_router(feedback_router)
     app.include_router(auth_router)
     app.include_router(audit_router)
+    app.include_router(apps_admin_router)
     app.include_router(openai_router)
     return app
 

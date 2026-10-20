@@ -261,9 +261,16 @@ class AppService:
         return self.config_of(await self.get_app(app_id))
 
     async def list_apps(
-        self, *, ids: list[UUID] | None, include_deleting: bool = False
+        self,
+        *,
+        ids: list[UUID] | None,
+        include_deleting: bool = False,
+        limit: int = 50,
+        offset: int = 0,
     ) -> list[App]:
-        return await self.repo.list_all_apps(ids=ids, include_deleting=include_deleting)
+        return await self.repo.list_all_apps(
+            ids=ids, include_deleting=include_deleting, limit=limit, offset=offset
+        )
 
     # ------------------------------------------------------------ 更新
     async def update_app(self, app_id: UUID, patch: Mapping[str, Any]) -> UpdateResult:

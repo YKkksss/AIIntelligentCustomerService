@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+### 新增（M4.2 ② 应用读取与配置，2026-10-20）
+- **管理接口**：`GET /api/v1/admin/apps`（super_admin 看全部，其余按 `user_app_roles` 过滤；`limit` / `offset` 分页，卡片带文档数）、`GET /api/v1/admin/apps/{app_id}`（完整配置 + 文档 / 切块 / 被标记切块统计）、`PATCH /api/v1/admin/apps/{app_id}`（部分更新，复用 `AppService.update_app` 的合并与校验）、`GET /api/v1/admin/models`（模型注册表）、`GET /api/v1/admin/chunk-presets`（预设展开后的完整配置）。
+- **乐观并发**：`PATCH` 可带 `expected_config_version`，与库里 `apps.config_version` 不一致时返回 `409 CONFIG_VERSION_CONFLICT`（`details.expected` / `details.current`）；不带时保持旧行为，CLI 与脚本不受影响。
+- **词典变更重跑**：`custom_dict` 变化时建 `retokenize_app` 任务（`app_id` + `payload={"reason": "admin.custom_dict"}`），响应回 `retokenize_job_id`，提交后投递 `aics.retokenize_app`。
+- **审计**：`PATCH` 写 `app.update`，`diff` 只保留真正变化的字段（`before` / `after`），敏感键脱敏。
+- 新模块 `modules/apps/admin_service.py`（`AppsAdminService` + `app_body` / `app_card` / `ActorMeta`）、`modules/apps/runtime.py`（`AppsAdminRuntime`，含 Celery 投递的 `enqueue`）、`modules/apps/admin_router.py`；`core.errors` 新增 `ConfigVersionConflictError`；`AppService.list_apps` 支持 `ids` / `include_deleting` / 分页。
+- 清单登记 `ISSUE-75`（PATCH 原先没有乐观并发，后保存者会静默覆盖）与 `ISSUE-76`（`cleanup_app` 失败后应用停在 `deleting`）。
+
+### 测试（M4.2 ②，2026-10-20）
+- 新增 `tests/unit/test_apps_admin_service.py`（5 例：版本冲突、只记变化字段的审计、无变化不审计、词典变更建任务并投递、详情合并配置与统计）与 `tests/unit/test_apps_admin_api.py`（7 例：列表透传调用者与分页、详情、`expected_config_version` 剥离、非整数 422、409 透传、模型与预设、403 映射）；`tests/unit/test_error_codes.py` 因为新增 `CONFIG_VERSION_CONFLICT` 同步更新接口规范 §4。\n- 后端单测 **1070 passed**、1 failed（`tests/unit/test_storage.py::test_symlink_escape_rejected`，Windows 符号链接权限环境问题）、253 deselected；覆盖率 **82.44%**（11339 语句 / 1991 未覆盖）。本机 Docker 集成套件 **252 passed, 1072 deselected in 456.18s**；`ruff check` / `ruff format` / `lint-imports`（13 kept, 0 broken）/ `prompts check`（8 个）全绿；真实模型费用 0 元。
+
 ### 新增（M4.1 ⑤ 里程碑验收与收尾，2026-10-19）
 - **验收脚本** `backend/scripts/e2e_m4/e2e_m41_admin.py`：真 PG / Redis + 真 uvicorn（不调模型），九步 **34 项**判定——`bootstrap-admin` 幂等、连续失败 5 次锁定 `423` 与 `Retry-After`、未知邮箱与错密码同文案、成员授权后权限立即生效、refresh 轮换与复用踢全端、审计动作与脱敏、一次性密码首登改密、第 11 次登录 `429`；结果写 `results/e2e_m41_admin.json`，非零退出码即失败。
 - **首登改密门槛统一**：新增 `core.security.ensure_password_changed`，`require_perm` 与 `GET /admin/audit`、`/audit/actions` 共用同一口径——临时密码用户除 `GET /auth/me`、`POST /auth/password`、`POST /auth/logout` 外一律 `403`（此前 `/audit` 走 `require_user()` + 显式 `authorize` 绕过了这道门槛）。
