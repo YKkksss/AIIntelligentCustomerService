@@ -4,6 +4,23 @@
 
 ## [Unreleased]
 
+### 新增（M4.5 ④ Webhook 管理与前端三页，2026-10-20）
+
+- Webhook 管理五条（`/api/v1/admin/apps/{app_id}`）：`GET /webhook`（`url` + `secret_prefix` + `ready`，密文不出接口）、`GET /webhook-deliveries`（`status` / `limit` / `before`，每条记录不回传 `payload`）、`POST /webhook-deliveries/{id}/redeliver`（`failed`/`delivered` → `pending`、`attempts` 归零，`pending` 行 404）、`POST /webhook/test`（`ping` 事件不落投递表）、`POST /webhook/secret`（轮换密钥，明文只返回一次）；读走 `app.read`、写走 `webhook.write`，审计 `webhook.redeliver` / `webhook.test` / `webhook.secret`。
+- `modules/webhooks/{admin_service,admin_runtime,admin_router}.py`：`WebhookAdminService` 直读 `apps.webhook_config`（`webhooks` 与 `apps` 属独立性契约，不能互 import），轮换密钥用 `core.secretbox`，`response_model` 全部落地。
+- 前端三页：`views/KeysView.vue`（创建只显示一次明文、改限额与白名单、吊销、接入示例抽屉）、`views/LogsView.vue`（会话 / 待回访 / 反馈三个 Tab、详情抽屉、强制释放、标记回访与已处理）、`views/WebhooksView.vue`（配置卡、发送测试、轮换密钥、投递记录与重发）；`api/{keys,logs,webhooks}.ts`；路由 `/apps/:appId/{keys,logs,webhooks}`，应用内菜单补「API Key」「会话与反馈」「Webhook」，面包屑同步。
+
+### 修复（M4.5 ④，2026-10-20）
+
+- `webhooks/admin_service.py::redeliver` 的审计 `diff` 在复位之后才读 `before.status`，ORM 对象被刷新后前后值相同、审计丢掉这次状态迁移；改为在调用复位前先取 `before_status`。
+
+### 测试（M4.5 ④，2026-10-20）
+
+- 单测 `tests/unit/test_webhooks_admin.py` 21 例（配置/投递行序列化、重发与 404 语义、测试事件审计、轮换密钥密文、路由参数透传与 401/403/404/422）、`tests/integration/test_webhook_admin_pg.py` 7 例（真 PG：筛选、重发复位 + 审计、`pending` 行 404、测试事件不落表、密钥密文可解密、跨应用 404）。
+- 前端 `src/api/ops.spec.ts` 6 例（三组新接口的路径、参数名与空值剔除），`vitest` 共 11 文件 / 69 例。
+- `ruff check` / `ruff format` 干净，`lint-imports` 13 kept / 0 broken，`prompts check` 8 ok；单测 **1213 passed / 1 环境失败**（`tests/unit/test_storage.py::test_symlink_escape_rejected`，WinError 1314）/ 307 deselected，覆盖率 **81.57%**（12857 语句 / 2369 未覆盖）；本机 Docker 全量集成 **302 passed / 1215 deselected in 424.67 s**；前端 `vitest` 11 文件 / 69 例 / 84.13% 语句，`vue-tsc` 与 `vite build` 通过。
+
+
 ### 新增（M4.5 ③ 会话日志与运营接口，2026-10-20）
 
 - 会话日志五条（`/api/v1/admin/apps/{app_id}`，`log.read`）：`GET /conversations`（按 `(last_activity_at, id)` 游标分页；筛选 `channel` 默认 `api,openai`、`status`、`handoff_status`、`close_reason`、`needs_callback`、`intent`、`downvoted`、`since`/`until`、`q` 走 `messages.tsv` 的 `plainto_tsquery('simple', …)`）、`GET /conversations/{id}`（最近 200 条消息 + 当前摘要 + 未撤回事实，viewer 脱敏）、`POST /conversations/{id}/release`（强制释放，`HANDOFF_STATE_CONFLICT`）、`GET /callbacks`、`POST /callbacks/{id}`（标记已回访，`CALLBACK_STATE_CONFLICT`）。

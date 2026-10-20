@@ -56,6 +56,24 @@ const routes: RouteRecordRaw[] = [
         meta: { permission: 'chat.debug', title: '调试对话' },
       },
       {
+        path: 'apps/:appId/keys',
+        name: 'app-keys',
+        component: () => import('@/views/KeysView.vue'),
+        meta: { permission: 'key.read', title: 'API Key' },
+      },
+      {
+        path: 'apps/:appId/logs',
+        name: 'app-logs',
+        component: () => import('@/views/LogsView.vue'),
+        meta: { permission: 'log.read', title: '会话与反馈' },
+      },
+      {
+        path: 'apps/:appId/webhooks',
+        name: 'app-webhooks',
+        component: () => import('@/views/WebhooksView.vue'),
+        meta: { permission: 'webhook.write', title: 'Webhook' },
+      },
+      {
         path: 'users',
         name: 'users',
         component: () => import('@/views/UsersView.vue'),

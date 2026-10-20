@@ -6,6 +6,8 @@ import {
   ArrowLeft,
   Bell,
   ChatDotRound,
+  ChatLineSquare,
+  Connection,
   Collection,
   DataAnalysis,
   DataBoard,
@@ -50,7 +52,9 @@ const appMenu = computed<MenuItem[]>(() =>
     { name: 'app-knowledge', title: '知识库', icon: Collection, permission: 'kb.read' },
     { name: 'app-debug', title: '调试对话', icon: ChatDotRound, permission: 'chat.debug' },
     { name: 'app-eval', title: '评测', icon: DataAnalysis, pending: 'M5' },
-    { name: 'app-keys', title: 'API Key', icon: Key, pending: 'M4.5' },
+    { name: 'app-keys', title: 'API Key', icon: Key, permission: 'key.read' },
+    { name: 'app-logs', title: '会话与反馈', icon: ChatLineSquare, permission: 'log.read' },
+    { name: 'app-webhooks', title: 'Webhook', icon: Connection, permission: 'webhook.write' },
   ].filter((item) => !item.permission || auth.can(item.permission)),
 )
 
@@ -86,6 +90,12 @@ const breadcrumb = computed<string[]>(() => {
       return ['应用', appName, '知识库', '文档切块']
     case 'app-debug':
       return ['应用', appName, '调试对话']
+    case 'app-keys':
+      return ['应用', appName, 'API Key']
+    case 'app-logs':
+      return ['应用', appName, '会话与反馈']
+    case 'app-webhooks':
+      return ['应用', appName, 'Webhook']
     case 'users':
       return ['用户']
     case 'audit':

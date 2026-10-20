@@ -55,6 +55,8 @@ from aics.modules.knowledge.chunk_search import PgChunkSearch
 from aics.modules.knowledge.router import router as knowledge_router
 from aics.modules.knowledge.runtime import KnowledgeRuntime
 from aics.modules.knowledge.service import TASK_QUEUES
+from aics.modules.webhooks.admin_router import router as webhooks_admin_router
+from aics.modules.webhooks.admin_runtime import WebhookAdminRuntime
 from aics.providers import get_embedder, get_llm, get_reranker
 from aics.rag.retrieval import EmbeddingVectorSearch
 from aics.storage import build_storage
@@ -226,6 +228,13 @@ def build_apps_admin_runtime(
     )
 
 
+def build_webhooks_admin_runtime(
+    s: Settings, *, audit: AuditSink | None = None
+) -> WebhookAdminRuntime:
+    """Webhook 管理运行时（M4.5 ④）：会话工厂 + 设置 + 审计端口。"""
+    return WebhookAdminRuntime(sessions=get_sessionmaker(), settings=s, audit=audit)
+
+
 def build_apikeys_admin_runtime(
     s: Settings, *, audit: AuditSink | None = None, redis: Any | None = None
 ) -> ApiKeyAdminRuntime:
@@ -276,6 +285,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if getattr(app.state, "apikeys_admin_runtime", None) is None:  # tests may install their own
         app.state.apikeys_admin_runtime = build_apikeys_admin_runtime(
             s, audit=app.state.audit_runtime.sink(), redis=redis
+        )
+    if getattr(app.state, "webhooks_admin_runtime", None) is None:  # tests may install their own
+        app.state.webhooks_admin_runtime = build_webhooks_admin_runtime(
+            s, audit=app.state.audit_runtime.sink()
         )
     log.info("app.started", env=s.env, version=__version__)
     yield
@@ -380,6 +393,7 @@ def create_app() -> FastAPI:
     app.include_router(apikeys_admin_router)
     app.include_router(chat_admin_router)
     app.include_router(feedback_admin_router)
+    app.include_router(webhooks_admin_router)
     app.include_router(openai_router)
     return app
 
