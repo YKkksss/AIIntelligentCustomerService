@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### 新增（M4.3 ③ 切块复核与启停，2026-10-20）
+- 新增 `GET /api/v1/admin/apps/{app_id}/chunks`：跨文档切块查询（`document_id` / `review_status=none|flagged|approved` / `enabled` / 分页），只返回各文档**生效构建号**且未删除文档的切块，条目带文档标题、`flag_reason` 与复核时间——这就是「待复核切块」列表的数据源。
+- 新增 `PATCH /api/v1/admin/apps/{app_id}/chunks/{chunk_id}`：`{"enabled": false}` 禁用切块、`{"review_status": "approved"}` 复核通过（同时恢复 `enabled`，让它重新进入可检索集合）；先提交数据库再同步 Qdrant payload，向量库失败只记 `knowledge.chunk_payload_sync_failed`（重试接口幂等）；写审计 `kb.chunk.update`（`target_type="chunk"`，`diff` 只含变化字段），`reviewed_by` / `reviewed_at` 落库。
+- `KnowledgeService` 增 `list_app_chunks` / `update_chunk` / `_sync_chunk_payload`；`ChunkRepository.page_for_app` 追加跨文档分页（join `documents` 过滤旧构建号与已删除文档）；`_audit` 支持 `target_type`。
+- 切块不属于当前生效构建号或不属于该应用 → 404 `CHUNK_NOT_FOUND`；无可变字段/`review_status` 非 `approved` → 422；无 `kb.write` → 403。
+
+### 测试（M4.3 ③，2026-10-20）
+- 新增 `tests/unit/test_knowledge_chunk_review.py`（7 例：禁用同步 payload 与审计、复核通过恢复 `enabled` 并记复核人、无变化不提交、向量库失败不影响应答、非法复核值、列表组包与分页参数、删除中应用 404）。
+- `tests/unit/test_knowledge_admin_api.py` 增 7 例（参数透传、非法 `review_status` 422、PATCH 透传 `created_by`、复核返回 `reviewed_at`、空体 422、`flagged` 入参 422、`kb.write` 403）→ 共 21 例。
+- `tests/integration/test_knowledge_admin_pg.py` 增 4 例（待复核列表 + 复核通过后从列表消失且审计 `target_type=chunk`、禁用后从可检索集合移除、旧构建号切块 404、未知切块 404 且不写审计）→ 共 13 例。
+- 门禁：单测 **1119 passed / 1 failed / 272 deselected**，覆盖率 **82.06%**（11802 语句 / 2117 未覆盖）；本机 Docker 全量集成 **271 passed / 1121 deselected in 499.37s**；`ruff check` / `ruff format` / `lint-imports`（13）/ `prompts check`（8）全绿。
+
 ### 新增（M4.3 ② 管理版知识库接口，2026-10-20）
 - 新增 `backend/src/aics/modules/knowledge/admin_router.py`：`/api/v1/admin/apps/{app_id}` 下 **13 条**路由——九条文档路由（列表 / 详情 / 切块 / 上传 / URL 导入 / 替换 / 重建 / 改名与元数据 / 删除）、两条切块预览（新上传 / 已有文档）、`GET /jobs`、`POST /hit-test`；鉴权 `require_perm("kb.read")` / `("kb.write")`，上传 / 导入 / 替换 / 重建都接受 `chunk_config` 与 `reset_chunk_config`（后台改切块配置的入口）。
 - `KnowledgeService` 增 `audit` 端口与 `preview_upload` / `preview_document` / `list_jobs`；`_audit()` 在 `kb.document.create/replace/reindex/update/delete` 与业务写在**同一条事务**里落 `audit_logs`（开放接口不传操作人，因此不产生审计行）；`update_document` 增 `created_by`。

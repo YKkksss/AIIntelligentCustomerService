@@ -18,7 +18,7 @@ from sqlalchemy import func, select, update
 from aics.core.audit import AuditEntry
 from aics.core.errors import ForbiddenError, UnauthenticatedError
 from aics.core.security import AuthedUser
-from aics.db.models import App, AuditLog, Document
+from aics.db.models import App, AuditLog, Chunk, Document
 from aics.main import create_app
 from aics.modules.audit.sink import PgAuditSink
 from aics.modules.knowledge.runtime import KnowledgeRuntime
@@ -270,3 +270,137 @@ async def test_audit_failure_rolls_back_the_document(env: dict[str, Any]) -> Non
             select(func.count()).select_from(Document).where(Document.app_id == env["app_id"])
         )
     assert int(total or 0) == 0
+
+
+# ---------------------------------------------------------------------- ③ 切块复核与启停
+async def _seed_chunk(
+    env: dict[str, Any],
+    *,
+    review_status: str = "flagged",
+    enabled: bool = True,
+    index_version: int = 1,
+) -> dict[str, Any]:
+    """直接落一份文档 + 一个切块（生效构建号），返回两个 id。"""
+    async with env["sessions"]() as s:
+        doc = Document(
+            id=uuid.uuid4(),
+            app_id=env["app_id"],
+            title="退货政策.md",
+            source_type="file",
+            mime_type="text/markdown",
+            size_bytes=len(MD),
+            content_hash=uuid.uuid4().hex * 2,
+            status="done",
+            progress=1,
+            chunk_count=1,
+            index_version=1,
+            tags=[],
+        )
+        s.add(doc)
+        await s.flush()
+        chunk = Chunk(
+            id=uuid.uuid4(),
+            app_id=env["app_id"],
+            document_id=doc.id,
+            index_version=index_version,
+            ordinal=0,
+            heading_path="第一章",
+            text="自签收之日起 7 天内可退货。",
+            search_text="自签收之日起 7 天内可退货。",
+            tokens=12,
+            enabled=enabled,
+            review_status=review_status,
+            flag_reason="疑似恶意指令" if review_status == "flagged" else None,
+        )
+        s.add(chunk)
+        await s.commit()
+    return {"document_id": doc.id, "chunk_id": chunk.id}
+
+
+async def test_flagged_chunk_is_listed_and_can_be_approved(admin: dict[str, Any]) -> None:
+    env, client = admin["env"], admin["client"]
+    app_id = admin["app_id"]
+    seeded = await _seed_chunk(env)
+
+    listing = await client.get(
+        f"/api/v1/admin/apps/{app_id}/chunks?review_status=flagged&document_id={seeded['document_id']}",
+        headers=auth(),
+    )
+
+    assert listing.status_code == 200
+    body = listing.json()
+    assert body["total"] == 1
+    item = body["items"][0]
+    assert item["document_title"] == "退货政策.md"
+    assert item["flag_reason"] == "疑似恶意指令"
+
+    patched = await client.patch(
+        f"/api/v1/admin/apps/{app_id}/chunks/{seeded['chunk_id']}",
+        headers=auth(),
+        json={"review_status": "approved"},
+    )
+
+    assert patched.status_code == 200
+    assert patched.json()["review_status"] == "approved"
+    assert patched.json()["enabled"] is True
+    assert patched.json()["reviewed_at"] is not None
+
+    remaining = await client.get(
+        f"/api/v1/admin/apps/{app_id}/chunks?review_status=flagged", headers=auth()
+    )
+    assert remaining.json()["total"] == 0
+
+    audits = await _audit_rows(env, "kb.chunk.update")
+    assert len(audits) == 1
+    assert audits[0].target_type == "chunk" and audits[0].target_id == seeded["chunk_id"]
+
+
+async def test_disabled_chunk_leaves_the_retrievable_set(admin: dict[str, Any]) -> None:
+    env, client = admin["env"], admin["client"]
+    app_id = admin["app_id"]
+    seeded = await _seed_chunk(env, review_status="none")
+
+    async def count() -> int:
+        async with env["sessions"]() as s:
+            service = KnowledgeService(s, storage=env["storage"], store=env["store"])
+            return await service.retrievable_chunk_count(app_id)
+
+    before = await count()
+    patched = await client.patch(
+        f"/api/v1/admin/apps/{app_id}/chunks/{seeded['chunk_id']}",
+        headers=auth(),
+        json={"enabled": False},
+    )
+    after = await count()
+
+    assert patched.status_code == 200 and patched.json()["enabled"] is False
+    assert after == before - 1
+
+
+async def test_chunk_from_old_build_is_404(admin: dict[str, Any]) -> None:
+    env, client = admin["env"], admin["client"]
+    seeded = await _seed_chunk(env, index_version=0)
+
+    r = await client.patch(
+        f"/api/v1/admin/apps/{admin['app_id']}/chunks/{seeded['chunk_id']}",
+        headers=auth(),
+        json={"enabled": False},
+    )
+
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "CHUNK_NOT_FOUND"
+
+
+async def test_unknown_chunk_is_404_and_writes_no_audit(
+    admin: dict[str, Any],
+) -> None:
+    env, client = admin["env"], admin["client"]
+
+    r = await client.patch(
+        f"/api/v1/admin/apps/{admin['app_id']}/chunks/{uuid.uuid4()}",
+        headers=auth(),
+        json={"enabled": False},
+    )
+
+    assert r.status_code == 404
+    assert await _audit_rows(env, "kb.chunk.update") == []

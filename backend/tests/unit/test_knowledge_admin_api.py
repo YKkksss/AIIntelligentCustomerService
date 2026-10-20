@@ -19,10 +19,17 @@ from aics.core.errors import DocumentNotFoundError, ForbiddenError, Unauthentica
 from aics.core.security import AuthedUser
 from aics.db.models import Chunk, Document, Job
 from aics.main import create_app
-from aics.modules.knowledge.service import ChunkPage, DocumentPage, ReplaceResult, UploadResult
+from aics.modules.knowledge.service import (
+    AppChunkPage,
+    ChunkPage,
+    DocumentPage,
+    ReplaceResult,
+    UploadResult,
+)
 
 APP_ID = uuid4()
 DOC_ID = uuid4()
+CHUNK_ID = uuid4()
 
 
 def _document(**kw: Any) -> Document:
@@ -141,6 +148,41 @@ class FakeService:
     async def hit_test(self, app_id: Any, query: str, **kw: Any) -> dict:
         self.calls.append(("hit_test", app_id, query, kw))
         return {"query": query, "fused": [], "rerank_applied": True}
+
+    async def list_app_chunks(self, app_id: Any, **kw: Any) -> dict:
+        self.calls.append(("list_app_chunks", app_id, kw))
+        return AppChunkPage(
+            items=[
+                {
+                    "id": CHUNK_ID,
+                    "document_id": DOC_ID,
+                    "document_title": "退货政策.md",
+                    "ordinal": 0,
+                    "heading_path": "第一章",
+                    "text": "自签收之日起 7 天内可退货。",
+                    "tokens": 12,
+                    "enabled": True,
+                    "review_status": "flagged",
+                    "flag_reason": "疑似恶意指令",
+                    "reviewed_at": None,
+                }
+            ],
+            total=1,
+            page=kw["page"],
+            page_size=kw["page_size"],
+        )
+
+    async def update_chunk(self, app_id: Any, chunk_id: Any, **kw: Any) -> Chunk:
+        self.calls.append(("update_chunk", app_id, chunk_id, kw))
+        self._maybe_raise()
+        chunk = _chunk()
+        chunk.id = chunk_id
+        if kw.get("enabled") is not None:
+            chunk.enabled = kw["enabled"]
+        if kw.get("review_status") is not None:
+            chunk.review_status = kw["review_status"]
+            chunk.reviewed_at = datetime(2026, 10, 20, 12, 30, tzinfo=UTC)
+        return chunk
 
 
 class FakeRuntime:
@@ -407,3 +449,119 @@ def test_missing_token_is_401(
     resp = http.get(f"/api/v1/admin/apps/{APP_ID}/documents")
 
     assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------- 切块复核（M4.3 ③）
+def test_list_app_chunks_forwards_filters(
+    client: tuple[TestClient, FakeService, FakeAuthorizer], headers: dict[str, str]
+) -> None:
+    http, service, _ = client
+
+    resp = http.get(
+        f"/api/v1/admin/apps/{APP_ID}/chunks"
+        f"?review_status=flagged&document_id={DOC_ID}&enabled=true&page=2&page_size=5",
+        headers=headers,
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1 and body["page"] == 2
+    item = body["items"][0]
+    assert item["document_title"] == "退货政策.md"
+    assert item["review_status"] == "flagged" and item["flag_reason"] == "疑似恶意指令"
+    kind, app_id, kwargs = service.calls[0]
+    assert (kind, app_id) == ("list_app_chunks", APP_ID)
+    assert kwargs == {
+        "document_id": DOC_ID,
+        "review_status": "flagged",
+        "enabled": True,
+        "page": 2,
+        "page_size": 5,
+    }
+
+
+def test_list_app_chunks_rejects_bad_review_status(
+    client: tuple[TestClient, FakeService, FakeAuthorizer], headers: dict[str, str]
+) -> None:
+    http, service, _ = client
+
+    resp = http.get(f"/api/v1/admin/apps/{APP_ID}/chunks?review_status=bogus", headers=headers)
+
+    assert resp.status_code == 422
+    assert service.calls == []
+
+
+def test_patch_chunk_disable_forwards_operator(
+    client: tuple[TestClient, FakeService, FakeAuthorizer], headers: dict[str, str]
+) -> None:
+    http, service, authorizer = client
+
+    resp = http.patch(
+        f"/api/v1/admin/apps/{APP_ID}/chunks/{CHUNK_ID}", headers=headers, json={"enabled": False}
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["enabled"] is False
+    kind, app_id, chunk_id, kwargs = service.calls[0]
+    assert (kind, app_id, chunk_id) == ("update_chunk", APP_ID, CHUNK_ID)
+    assert kwargs["enabled"] is False and kwargs["review_status"] is None
+    assert kwargs["created_by"] == authorizer.user_id
+
+
+def test_patch_chunk_approve_returns_reviewed_at(
+    client: tuple[TestClient, FakeService, FakeAuthorizer], headers: dict[str, str]
+) -> None:
+    http, service, _ = client
+
+    resp = http.patch(
+        f"/api/v1/admin/apps/{APP_ID}/chunks/{CHUNK_ID}",
+        headers=headers,
+        json={"review_status": "approved"},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["review_status"] == "approved"
+    assert body["reviewed_at"].startswith("2026-10-20")
+    _kind, _app_id, _chunk_id, kwargs = service.calls[0]
+    assert kwargs["review_status"] == "approved" and kwargs["enabled"] is None
+
+
+def test_patch_chunk_requires_a_field(
+    client: tuple[TestClient, FakeService, FakeAuthorizer], headers: dict[str, str]
+) -> None:
+    http, service, _ = client
+
+    resp = http.patch(f"/api/v1/admin/apps/{APP_ID}/chunks/{CHUNK_ID}", headers=headers, json={})
+
+    assert resp.status_code == 422
+    assert service.calls == []
+
+
+def test_patch_chunk_rejects_unapproved_review_status(
+    client: tuple[TestClient, FakeService, FakeAuthorizer], headers: dict[str, str]
+) -> None:
+    http, service, _ = client
+
+    resp = http.patch(
+        f"/api/v1/admin/apps/{APP_ID}/chunks/{CHUNK_ID}",
+        headers=headers,
+        json={"review_status": "flagged"},
+    )
+
+    assert resp.status_code == 422
+    assert service.calls == []
+
+
+def test_chunk_patch_needs_write_permission(
+    client: tuple[TestClient, FakeService, FakeAuthorizer], headers: dict[str, str]
+) -> None:
+    http, _service, authorizer = client
+    authorizer.deny = "kb.write"
+
+    resp = http.patch(
+        f"/api/v1/admin/apps/{APP_ID}/chunks/{CHUNK_ID}", headers=headers, json={"enabled": False}
+    )
+
+    assert resp.status_code == 403
+    assert resp.json()["error"]["code"] == "FORBIDDEN"

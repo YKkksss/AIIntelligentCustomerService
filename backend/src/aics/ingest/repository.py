@@ -164,6 +164,49 @@ class ChunkRepository(AppScopedRepository[Chunk]):
         total = int((await self.session.execute(count_stmt)).scalar_one())
         return rows, total
 
+    async def page_for_app(
+        self,
+        app_id: UUID,
+        *,
+        document_id: UUID | None = None,
+        review_status: str | None = None,
+        enabled: bool | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[tuple[Chunk, str]], int]:
+        """跨文档切块列表（M4.3 ③）：只取各文档生效构建号、未删除文档的切块。
+
+        返回 `([(chunk, 文档标题)], total)`，按「文档 → 序号」升序。
+        """
+        conds: list[object] = [
+            Chunk.index_version == Document.index_version,
+            Document.deleted_at.is_(None),
+            Document.status != "deleting",
+        ]
+        if document_id is not None:
+            conds.append(Chunk.document_id == document_id)
+        if review_status is not None:
+            conds.append(Chunk.review_status == review_status)
+        if enabled is not None:
+            conds.append(Chunk.enabled.is_(enabled))
+        stmt = (
+            select(Chunk, Document.title)
+            .join(Document, Document.id == Chunk.document_id)
+            .where(Chunk.app_id == app_id, *conds)
+            .order_by(Chunk.document_id, Chunk.ordinal)
+            .limit(min(max(limit, 1), MAX_PAGE_SIZE))
+            .offset(max(offset, 0))
+        )
+        rows = (await self.session.execute(stmt)).all()
+        count_stmt = (
+            select(func.count())
+            .select_from(Chunk)
+            .join(Document, Document.id == Chunk.document_id)
+            .where(Chunk.app_id == app_id, *conds)
+        )
+        total = int((await self.session.execute(count_stmt)).scalar_one())
+        return [(row[0], row[1]) for row in rows], total
+
 
 class ChunkParentRepository(AppScopedRepository[ChunkParent]):
     model = ChunkParent

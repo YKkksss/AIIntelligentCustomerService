@@ -14,13 +14,13 @@
 from __future__ import annotations
 
 import json
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from aics.core.config import get_settings
 from aics.core.errors import ValidationAppError
@@ -88,6 +88,36 @@ class HitTestBody(BaseModel):
     filters: dict[str, Any] | None = None
 
 
+class ChunkPatch(BaseModel):
+    """切块启停 / 复核（M4.3 ③）：`review_status` 只接受 `approved`。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool | None = None
+    review_status: Literal["approved"] | None = None
+
+    @model_validator(mode="after")
+    def _at_least_one(self) -> ChunkPatch:
+        if self.enabled is None and self.review_status is None:
+            raise ValueError("至少给出 enabled 或 review_status")
+        return self
+
+
+def _chunk_row(chunk: Any) -> dict[str, Any]:
+    """切块应答（管理接口 §知识库）：启用态、复核态与复核时间都返回。"""
+    return {
+        "id": str(chunk.id),
+        "document_id": str(chunk.document_id),
+        "ordinal": chunk.ordinal,
+        "heading_path": chunk.heading_path,
+        "text": chunk.text,
+        "enabled": chunk.enabled,
+        "review_status": chunk.review_status,
+        "flag_reason": chunk.flag_reason,
+        "reviewed_at": chunk.reviewed_at,
+    }
+
+
 # ---------------------------------------------------------------------- 读
 @router.get("/documents", summary="管理端文档列表", responses=_READ_ERRORS)
 async def list_documents(
@@ -140,6 +170,33 @@ async def list_chunks(
     return JSONResponse(
         jsonable_encoder(_page_body(page_obj, [chunk_body(c) for c in page_obj.items]))
     )
+
+
+@router.get("/chunks", summary="管理端切块查询（待复核 / 按文档）", responses=_READ_ERRORS)
+async def list_app_chunks(
+    app_id: UUID,
+    request: Request,
+    user: Annotated[AuthedUser, Depends(Reader)],
+    document_id: UUID | None = None,
+    review_status: Annotated[str | None, Query(pattern="^(none|flagged|approved)$")] = None,
+    enabled: bool | None = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200)] = 20,
+) -> Any:
+    async with _runtime(request).session() as session:
+        page_obj = (
+            await _runtime(request)
+            .service(session)
+            .list_app_chunks(
+                app_id,
+                document_id=document_id,
+                review_status=review_status,
+                enabled=enabled,
+                page=page,
+                page_size=page_size,
+            )
+        )
+    return JSONResponse(jsonable_encoder(_page_body(page_obj, page_obj.items)))
 
 
 @router.get("/jobs", summary="管理端任务列表（入库 / 重建 / 清理）", responses=_READ_ERRORS)
@@ -350,6 +407,30 @@ async def delete_document(
             .delete_document(app_id, document_id, created_by=user.id)
         )
     return JSONResponse({"job_id": str(job.id), "status": job.status}, status_code=202)
+
+
+# ---------------------------------------------------------------------- 切块复核（M4.3 ③）
+@router.patch("/chunks/{chunk_id}", summary="管理端切块启停与复核", responses=_WRITE_ERRORS)
+async def patch_chunk(
+    app_id: UUID,
+    chunk_id: UUID,
+    body: ChunkPatch,
+    request: Request,
+    user: Annotated[AuthedUser, Depends(Writer)],
+) -> Any:
+    async with _runtime(request).session() as session:
+        chunk = (
+            await _runtime(request)
+            .service(session)
+            .update_chunk(
+                app_id,
+                chunk_id,
+                enabled=body.enabled,
+                review_status=body.review_status,
+                created_by=user.id,
+            )
+        )
+    return JSONResponse(jsonable_encoder(_chunk_row(chunk)))
 
 
 # ---------------------------------------------------------------------- 预览与命中测试

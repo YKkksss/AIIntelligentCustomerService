@@ -100,6 +100,7 @@ class QuestionNotFoundError(NotFoundError):
 MAX_QUESTIONS_PER_CHUNK = 20
 HIT_TEST_MAX_CHARS = 500
 HIT_TEST_PREVIEW_CHARS = 300
+REVIEW_APPROVED = "approved"
 
 
 def normalize_questions(questions: Sequence[str]) -> list[str]:
@@ -158,6 +159,16 @@ class DocumentPage:
 @dataclass(frozen=True)
 class ChunkPage:
     items: list[Chunk]
+    total: int
+    page: int
+    page_size: int
+
+
+@dataclass(frozen=True)
+class AppChunkPage:
+    """管理版跨文档切块分页（M4.3 ③）：条目已带文档标题，直接可序列化。"""
+
+    items: list[dict[str, Any]]
     total: int
     page: int
     page_size: int
@@ -248,6 +259,7 @@ class KnowledgeService:
         actor_id: UUID | None,
         target_id: UUID | None = None,
         diff: dict[str, Any] | None = None,
+        target_type: str = "document",
     ) -> None:
         """写一条审计（M4.3 ②）：与业务写在同一事务里，提交点在调用方。
 
@@ -261,7 +273,7 @@ class KnowledgeService:
                 action=action,
                 actor_id=actor_id,
                 app_id=app_id,
-                target_type="document",
+                target_type=target_type,
                 target_id=target_id,
                 diff=diff,
             ),
@@ -1111,6 +1123,105 @@ class KnowledgeService:
             app_id, doc.id, doc.index_version, limit=size, offset=offset
         )
         return ChunkPage(items=rows, total=total, page=p, page_size=size)
+
+    # ------------------------------------------------------------------ 管理版切块（M4.3 ③）
+    async def list_app_chunks(
+        self,
+        app_id: UUID,
+        *,
+        document_id: UUID | None = None,
+        review_status: str | None = None,
+        enabled: bool | None = None,
+        page: int = 1,
+        page_size: int = PAGE_DEFAULT,
+    ) -> AppChunkPage:
+        """跨文档切块列表（管理接口 §知识库）：待复核 = `review_status=flagged`。"""
+        await self._app(app_id)
+        p, size, offset = page_args(page, page_size)
+        rows, total = await self.chunks.page_for_app(
+            app_id,
+            document_id=document_id,
+            review_status=review_status,
+            enabled=enabled,
+            limit=size,
+            offset=offset,
+        )
+        items = [
+            {
+                "id": chunk.id,
+                "document_id": chunk.document_id,
+                "document_title": title,
+                "ordinal": chunk.ordinal,
+                "heading_path": chunk.heading_path,
+                "text": chunk.text,
+                "tokens": chunk.tokens,
+                "enabled": chunk.enabled,
+                "review_status": chunk.review_status,
+                "flag_reason": chunk.flag_reason,
+                "reviewed_at": chunk.reviewed_at,
+            }
+            for chunk, title in rows
+        ]
+        return AppChunkPage(items=items, total=total, page=p, page_size=size)
+
+    async def update_chunk(
+        self,
+        app_id: UUID,
+        chunk_id: UUID,
+        *,
+        enabled: bool | None = None,
+        review_status: str | None = None,
+        created_by: UUID | None = None,
+    ) -> Chunk:
+        """切块启停与复核（管理接口 §知识库）：复核通过同时恢复可检索。
+
+        先提交数据库、再同步 Qdrant payload；向量库失败只记日志——重试本接口幂等。
+        """
+        chunk, _doc = await self._live_chunk(app_id, chunk_id)
+        before: dict[str, Any] = {}
+        after: dict[str, Any] = {}
+        if enabled is not None and chunk.enabled != enabled:
+            before["enabled"], after["enabled"] = chunk.enabled, enabled
+            chunk.enabled = enabled
+        if review_status is not None:
+            if review_status != REVIEW_APPROVED:
+                raise ValidationAppError(message=f"review_status 只接受 {REVIEW_APPROVED}")
+            before["review_status"] = chunk.review_status
+            after["review_status"] = review_status
+            chunk.review_status = review_status
+            chunk.reviewed_by = created_by
+            chunk.reviewed_at = _now()
+            if not chunk.enabled:
+                before.setdefault("enabled", chunk.enabled)
+                after["enabled"] = True
+                chunk.enabled = True
+        if not after:
+            return chunk
+        await self._audit(
+            "kb.chunk.update",
+            app_id,
+            actor_id=created_by,
+            target_id=chunk.id,
+            diff={"before": before, "after": after},
+            target_type="chunk",
+        )
+        await self.session.commit()
+        await self.session.refresh(chunk)
+        await self._sync_chunk_payload(app_id, chunk)
+        return chunk
+
+    async def _sync_chunk_payload(self, app_id: UUID, chunk: Chunk) -> None:
+        """把 `enabled` 同步到 Qdrant payload（检索按 payload 过滤）。失败只记日志。"""
+        if self.store is None:
+            return
+        try:
+            await self.store.set_enabled(app_id, [chunk.id], chunk.enabled)
+        except Exception:
+            log.warning(
+                "knowledge.chunk_payload_sync_failed",
+                app_id=str(app_id),
+                chunk_id=str(chunk.id),
+            )
 
     # ------------------------------------------------------------------ 开放接口：写
     async def update_document(
