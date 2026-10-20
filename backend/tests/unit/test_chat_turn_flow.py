@@ -66,6 +66,7 @@ def prepared(
         req=TurnRequest(app_id=APP, question=question, **(req or {})),
         t0=time.perf_counter(),
         config=cfg,
+        rag=cfg.rag,
         profile=AppProfile(name="商城", fallback_text="暂时无法回答"),
         custom_dict=[],
         config_version=1,

@@ -49,6 +49,7 @@ from aics.memory.compactor import CompactParams
 from aics.memory.repository import ConversationFactRepository
 from aics.modules.apps.service import AppConfig, AppService
 from aics.modules.chat import events
+from aics.modules.chat.debug import merge_debug_config
 from aics.modules.chat.repository import ConversationRepository, MessageRepository
 from aics.modules.chat.runtime import ChatRuntime
 from aics.modules.chat.schemas import NewConversation, NewMessage
@@ -100,6 +101,9 @@ class TurnRequest:
     stateless: bool = False
     # 请求级覆盖（temperature / max_tokens），只作用于本轮，不改应用配置
     rag_overrides: dict[str, Any] = field(default_factory=dict)
+    # 调试页的临时 `rag_config`（M4.4 ②）：深合并进应用配置后按同一套规则校验，
+    # 只作用本轮；校验失败在开流之前抛 422（`modules.chat.debug.merge_debug_config`）。
+    debug_config: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -234,6 +238,8 @@ class _Prepared:
     req: TurnRequest
     t0: float
     config: AppConfig
+    # 本轮实际使用的 RAG 配置：应用配置 + `debug_config` 深合并（调试页临时参数）
+    rag: AppRagConfig
     profile: AppProfile
     custom_dict: list[str]
     config_version: int
@@ -326,6 +332,10 @@ class ChatService:
             apps = await AppService.load(s)
             app = await apps.get_app(req.app_id)
             cfg = apps.config_of(app)
+            # 调试页的临时参数：深合并 + 按应用配置同一套规则校验；失败在开流前 422。
+            rag = cfg.rag
+            if req.debug_config:
+                rag = merge_debug_config(rag, req.debug_config)
             convs = ConversationRepository(s)
             msgs = MessageRepository(s)
             previous: UUID | None = None
@@ -398,6 +408,7 @@ class ChatService:
                 req=req,
                 t0=t0,
                 config=cfg,
+                rag=rag,
                 profile=profile_of(app),
                 custom_dict=list(app.custom_dict),
                 config_version=app.config_version,
@@ -452,7 +463,7 @@ class ChatService:
         )
 
     def _rag_input(self, p: _Prepared) -> RagInput:
-        cfg = p.config.rag
+        cfg = p.rag  # 应用配置 + 本轮的 debug_config（M4.4 ②）
         if p.req.rag_overrides:  # 请求级参数只影响本轮
             cfg = cfg.model_copy(update=clamp_overrides(cfg, p.req.rag_overrides))
         return RagInput(
@@ -773,7 +784,7 @@ class ChatService:
         Memory problems never fail a turn that has already been answered."""
         if p.stateless:
             return  # 无状态轮次不写事实、不压缩：历史随请求来，会话本轮即关
-        cfg = p.config.rag
+        cfg = p.rag  # 压缩参数也用本轮的临时参数（调试页可能改了阈值）
         memory = self.runtime.memory
         try:
             if res is not None:

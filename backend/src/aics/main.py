@@ -39,6 +39,7 @@ from aics.modules.audit.sink import PgAuditSink
 from aics.modules.auth.admin_router import router as auth_router
 from aics.modules.auth.runtime import AuthRuntime
 from aics.modules.chat import openai
+from aics.modules.chat.admin_router import router as chat_admin_router
 from aics.modules.chat.openai_router import router as openai_router
 from aics.modules.chat.router import router as chat_router
 from aics.modules.chat.runtime import ChatRuntime
@@ -358,6 +359,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(audit_router)
     app.include_router(apps_admin_router)
+    app.include_router(chat_admin_router)
     app.include_router(openai_router)
     return app
 

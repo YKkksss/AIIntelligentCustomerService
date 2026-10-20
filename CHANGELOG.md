@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### 新增（M4.4 ② 管理版调试对话接口，2026-10-20）
+- `modules/chat/debug.py`：`merge_debug_config` 把调试页的临时 `rag_config` 深合并后按应用配置同一套 pydantic 规则校验——未知字段也报 422 并带 `loc`（`AppRagConfig` 是 `extra="ignore"`，拼错的键不能静默丢弃）；`DebugChat.history` 返回会话元信息 + 最近 50 条消息（含 `citations` 与 `retrieval_trace`）；`DebugChat.compact` 先写 `jobs(type=compact)` 再调 `memory.compact_now`，成功与失败都回写 `status`/`finished_at`；`message_dict` / `masked_trace` 对没有 `app.write` 的只读成员打码手机号与订单号。
+- `modules/chat/admin_router.py`：`POST /api/v1/admin/apps/{app_id}/debug/chat`（SSE，`channel=debug`、`run_mode=debug` 由路由写死）、`GET …/debug/conversations/{conversation_id}`、`POST …/debug/compact`，权限 `chat.debug`；`main.py` 挂载（OpenAPI 52 条路径）。
+- `ChatService`：`TurnRequest.debug_config` + `_Prepared.rag`，临时参数只影响本轮 RAG 输入（`_rag_input` 与压缩参数都读 `p.rag`），不写回应用配置。
+
+### 测试（M4.4 ②，2026-10-20）
+- 单测 15 例（`tests/unit/test_chat_debug.py`）：深合并与默认值、字段路径、未知字段、非对象、脱敏递归、消息组包、SSE 参数透传（`channel`/`run_mode`/`created_by`/`debug_config`）、422/404/403/401、compact 透传 actor。
+- 集成 6 例（`tests/integration/test_chat_debug_pg.py`，真 PG + 假模型）：debug 轮次的 `channel` 与 `messages.retrieval_trace`、调试参数不写回应用配置、非法配置 422 且不落任何行、viewer 脱敏与成员原文两种读法、compact 写 `jobs(type=compact)` 并成功回写、未知会话 404。
+- 门禁：单测 **1137 passed / 1 failed（Windows 符号链接环境项）/ 278 deselected**、覆盖率 **82%**（11967 语句 / 2153 未覆盖）、本机 Docker 全量集成 **277 passed**（460.09 s）、`ruff` / `lint-imports`（13）/ `prompts`（8）全绿、真实模型 0 元。
+
 ### 调整（默认超管账号，2026-10-20）
 - `aics-cli bootstrap-admin` 无参数即可用：默认 `admin@aisc.com` / `admin123456@`（`core/config.py` 的 `DEFAULT_ADMIN_EMAIL` / `DEFAULT_ADMIN_PASSWORD`，可用 `AICS_BOOTSTRAP_ADMIN_EMAIL` / `AICS_BOOTSTRAP_ADMIN_PASSWORD` 覆盖）。
 - 生产守卫：`AICS_ENV=prod` 且凭据仍是默认值时 CLI 退出码 2，要求显式传强口令；新增 `tests/unit/test_cli_bootstrap_admin.py`（3 例）。
