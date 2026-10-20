@@ -86,6 +86,7 @@ def test_every_app_scoped_table_has_scoped_repository() -> None:
     import aics.modules.chat.repository  # noqa: F401
     import aics.modules.feedback.repository  # noqa: F401
     import aics.modules.knowledge.repository  # noqa: F401
+    import aics.modules.stats.repository  # noqa: F401
     import aics.modules.webhooks.repository  # noqa: F401
 
     repos = [r for r in registered_repositories() if r.__module__.startswith("aics.")]
@@ -112,6 +113,7 @@ def test_every_app_scoped_table_has_scoped_repository() -> None:
         "webhook_deliveries",
         "feedback",
         "api_keys",
+        "app_daily_stats",
     }
     assert tenant_tables <= covered
     for r in repos:

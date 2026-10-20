@@ -55,6 +55,8 @@ from aics.modules.knowledge.chunk_search import PgChunkSearch
 from aics.modules.knowledge.router import router as knowledge_router
 from aics.modules.knowledge.runtime import KnowledgeRuntime
 from aics.modules.knowledge.service import TASK_QUEUES
+from aics.modules.stats.admin_router import router as stats_admin_router
+from aics.modules.stats.runtime import StatsRuntime
 from aics.modules.webhooks.admin_router import router as webhooks_admin_router
 from aics.modules.webhooks.admin_runtime import WebhookAdminRuntime
 from aics.providers import get_embedder, get_llm, get_reranker
@@ -235,6 +237,11 @@ def build_webhooks_admin_runtime(
     return WebhookAdminRuntime(sessions=get_sessionmaker(), settings=s, audit=audit)
 
 
+def build_stats_runtime(s: Settings) -> StatsRuntime:
+    """统计运行时（M4.6 ②）：只读 `app_daily_stats`，只有会话工厂。"""
+    return StatsRuntime(sessions=get_sessionmaker())
+
+
 def build_apikeys_admin_runtime(
     s: Settings, *, audit: AuditSink | None = None, redis: Any | None = None
 ) -> ApiKeyAdminRuntime:
@@ -290,6 +297,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.webhooks_admin_runtime = build_webhooks_admin_runtime(
             s, audit=app.state.audit_runtime.sink()
         )
+    if getattr(app.state, "stats_runtime", None) is None:  # tests may install their own
+        app.state.stats_runtime = build_stats_runtime(s)
     log.info("app.started", env=s.env, version=__version__)
     yield
     await app.state.chat_runtime.drain()
@@ -393,6 +402,7 @@ def create_app() -> FastAPI:
     app.include_router(apikeys_admin_router)
     app.include_router(chat_admin_router)
     app.include_router(feedback_admin_router)
+    app.include_router(stats_admin_router)
     app.include_router(webhooks_admin_router)
     app.include_router(openai_router)
     return app

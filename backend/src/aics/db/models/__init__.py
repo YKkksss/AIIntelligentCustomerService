@@ -9,10 +9,12 @@ from aics.db.models.fact import ConversationFact, ConversationFactHistory
 from aics.db.models.feedback import Feedback
 from aics.db.models.job import Job
 from aics.db.models.knowledge import Chunk, ChunkParent, ChunkQuestion, Document
+from aics.db.models.stats import AppDailyStats
 from aics.db.models.user import Role, User
 
 __all__ = [
     "ApiKey",
+    "AppDailyStats",
     "App",
     "AuditLog",
     "Chunk",

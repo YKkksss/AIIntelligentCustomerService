@@ -69,6 +69,15 @@ def create_celery() -> Celery:
                 "task": "aics.webhook_retry_sweep",
                 "schedule": WEBHOOK_RETRY_INTERVAL_S,
                 "options": {"expires": WEBHOOK_RETRY_INTERVAL_S - 2},
+            },  # M4.6：统计聚合（Asia/Shanghai）。每小时第 5 分重算「今天」，00:30 定稿「昨天」。
+            "aggregate-stats-hourly": {
+                "task": "aics.aggregate_daily_stats",
+                "schedule": crontab(minute=5),
+            },
+            "aggregate-stats-daily": {
+                "task": "aics.aggregate_daily_stats",
+                "schedule": crontab(hour=0, minute=30),
+                "kwargs": {"yesterday": True},
             },
         },
         broker_connection_retry_on_startup=True,
@@ -80,6 +89,7 @@ def create_celery() -> Celery:
         "aics.tasks.context",
         "aics.tasks.webhooks",
         "aics.tasks.apps",
+        "aics.tasks.stats",
     ]
     app.conf.task_routes = {
         "aics.ingest_document": {"queue": "ingest", "routing_key": "ingest"},
@@ -93,6 +103,7 @@ def create_celery() -> Celery:
         "aics.flush_key_usage": {"queue": "maintenance", "routing_key": "maintenance"},
         "aics.deliver_webhook": {"queue": "context", "routing_key": "context"},
         "aics.webhook_retry_sweep": {"queue": "context", "routing_key": "context"},
+        "aics.aggregate_daily_stats": {"queue": "maintenance", "routing_key": "maintenance"},
     }
     return app
 

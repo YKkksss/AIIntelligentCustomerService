@@ -4,6 +4,23 @@
 
 ## [Unreleased]
 
+### 新增（M4.6 ② 日聚合与统计接口，2026-10-20）
+
+- 迁移 `0015` 新建 `app_daily_stats`（主键 `(app_id, date)`；17 个计数列 + `intent_distribution`、tokens 与三个分位；`app_id` 外键级联删除），模型 `backend/src/aics/db/models/stats.py`。
+- `backend/src/aics/modules/stats/`：`StatsService.aggregate(app_id, day)` 按 **Asia/Shanghai** 半开日窗重算并把会话、消息、意图、tokens、转人工、待回访、反馈与四个分位数写入一行（`INSERT … ON CONFLICT DO UPDATE` 幂等）；`series` / `overview` 只读；`run_aggregate_job(day, yesterday=)` 供 Celery。
+- 两条管理接口（`stats.read`，viewer 可用）：`GET /api/v1/admin/stats/overview?days=`（逐日序列 + 逐应用合计 + 总合计 + 意图分布）、`GET /api/v1/admin/apps/{app_id}/stats?days=`（单应用逐日序列，`days` 夹在 `1..90`）。应答带 `response_model`，多余键由 FastAPI 过滤。
+- `backend/src/aics/tasks/stats.py` + beat 两条：每小时第 5 分钟重算当天（`crontab(minute=5)`）、每天 00:30 定稿前一天（`crontab(hour=0, minute=30)`，`yesterday=True`）；路由表新增 `aics.aggregate_daily_stats` → `maintenance` 队列。
+
+### 修复（M4.6 ②，2026-10-20）
+
+- `StatsRepository.upsert` 收口为「显式 `app_id` + 校验值与应用一致」，此前签名只有 `values`，触发 `AppScopedRepository` 的跨应用扫描守卫（`test_all_registered_repositories_are_scoped`）。
+- 统计两条接口改为返回 dict 交由 FastAPI 按 `response_model` 校验；此前直接 `JSONResponse(body)` 会绕过响应模型，多余键与类型漂移都拦不住。
+
+### 测试（M4.6 ②，2026-10-20）
+
+- 单测 `tests/unit/test_stats_service.py` 7 例（时区窗口、逐列映射、空样本、逐应用遍历、分页与合计）、`tests/unit/test_stats_api.py` 9 例（`response_model` 过滤、`days` 边界 422、403/401、平台级仅超管）；集成 `tests/integration/test_stats_pg.py` 7 例（真 PG：上海半开日窗、重复聚合幂等、`percentile_cont` 与手算一致、debug/eval 排除、队列超时与空闲关闭、逐应用、`series`/`overview` 形状）。
+- 门禁：单测 **1229 passed / 1 环境失败（Windows 符号链接）/ 310 deselected**、覆盖率 **82%**（13160 语句 / 2400 未覆盖）；本机 Docker 全量集成 **309 passed / 541.03 s**；`ruff check` / `ruff format` 干净、`lint-imports` 13 kept / 0 broken、`prompts check` 8 ok。
+
 ### 新增（M4.5 ⑤ 里程碑验收，2026-10-20）
 
 - 新增 `backend/scripts/e2e_m4/e2e_m45_ops.py`：真 HTTP + 真 PG/Redis/Qdrant，九步 **32 项判定** 覆盖 Key 创建与吊销的缓存失效、日志筛选与详情、强制释放、待回访、反馈标记、Webhook 签名投递 / 重发 / 密钥轮换与八个审计动作；结果写 `backend/scripts/e2e_m4/results/e2e_m45_ops.json`。
