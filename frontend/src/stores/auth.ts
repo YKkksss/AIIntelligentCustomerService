@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { authApi, type AdminUser, type AppMembership } from '@/api/admin'
+import { appApi, authApi, type AdminUser, type AppMembership } from '@/api/admin'
 import { hasPermission } from '@/utils/perm'
 
 // access / refresh token 只存内存 + sessionStorage（关闭浏览器即失效），见管理后台设计 §1
@@ -37,6 +37,26 @@ export const useAuthStore = defineStore('auth', () => {
     if (!known) switchApp(next[0]?.app_id ?? null)
   }
 
+  /**
+   * 超级管理员不是任何应用的成员，`/me` 的 apps 为空；这里用可见应用列表补齐，
+   * 否则侧栏的应用菜单与标题里的应用名都取不到。
+   */
+  async function fillSuperAdminApps() {
+    if (!isSuperAdmin.value || apps.value.length > 0) return
+    try {
+      const body = await appApi.list(100, 0)
+      const next: AppMembership[] = body.items.map((app) => ({
+        app_id: app.id,
+        app_name: app.name,
+        role_id: 'app_admin',
+        permissions: [],
+      }))
+      setApps(next)
+    } catch {
+      // 列表拉不到时保持为空，页面各自兜底
+    }
+  }
+
   function switchApp(appId: string | null) {
     currentAppId.value = appId
     if (appId) sessionStorage.setItem(APP, appId)
@@ -54,6 +74,7 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = session.user
     setApps(session.apps)
     loaded.value = true
+    await fillSuperAdminApps()
   }
 
   /** 刷新令牌；失败即清空登录态（返回 null 让调用方决定是否跳登录）。 */
@@ -65,6 +86,7 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = session.user
       setApps(session.apps)
       loaded.value = true
+      await fillSuperAdminApps()
       return session.access_token
     } catch {
       setTokens(null, null)
@@ -83,12 +105,14 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = me.user
       setApps(me.apps)
       loaded.value = true
+      await fillSuperAdminApps()
     } catch {
       if (!(await refresh())) return
       const me = await authApi.me()
       user.value = me.user
       setApps(me.apps)
       loaded.value = true
+      await fillSuperAdminApps()
     }
   }
 
@@ -97,8 +121,8 @@ export const useAuthStore = defineStore('auth', () => {
     const session = await authApi.changePassword(current, next)
     setTokens(session.access_token, session.refresh_token)
     user.value = session.user
-    setApps(session.apps)
     loaded.value = true
+    await fillSuperAdminApps()
   }
   async function logout() {
     const token = refreshToken.value

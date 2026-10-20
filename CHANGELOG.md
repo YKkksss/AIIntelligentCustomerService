@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### 调整（前端按设计稿还原，2026-10-20）
+- 管理后台壳层按 `docs/05-frontend/ui/aics-admin.pen` 重写：220px 深色侧栏（`#001529`、`#1677FF` Logo 块、全局四项 + 应用内六项菜单）、56px 顶栏（应用切换器、面包屑、文档、铃铛、头像菜单）。
+- 登录页还原设计稿 01 画板：620px 品牌面（标题、副文案、三个特性胶囊）+ 400px 白卡（账号密码、记住登录占位、忘记密码提示、页脚、依赖状态）。
+- 应用列表还原 02 画板：搜索、状态筛选胶囊（含计数）、380×196 卡片（图标 / 状态 / 三段统计 / 更新时间 / 调试·进入·更多）。
+- 应用配置还原 05 画板：`config_version` 标签、「版本历史（占位）/ 重置 / 保存并发布 vN」、两列分组卡片、字段中文化。
+- 知识库页还原 03 画板：拖拽上传卡 + 链接导入卡 + 表格卡（文档 / 待复核切块 / 任务三个 Tab）。
+- 超级管理员在 `/me` 里没有应用成员关系时，用 `/admin/apps` 补齐切换器与侧栏的应用列表；进入应用页时按路由参数切换当前应用。
+- 新增 `frontend/src/styles/theme.css`（14 个设计 token + Element Plus 变量覆盖）；页面截图存档 `docs/05-frontend/ui/preview/`。
+- `docs/05-frontend/01-管理后台设计.md` 写明「`.pen` 为视觉唯一来源」与实现状态对照。
+
 ### 新增（M4.3 ⑤ 里程碑验收脚本，2026-10-20）
 - 新增 `backend/scripts/e2e_m4/e2e_m43_knowledge.py`：真实 HTTP + 真 PG / Redis / Qdrant + 本地文件存储，嵌入器用进程内确定性假实现（**不调模型**），九步 **35 项判定**——`bootstrap-admin` 与登录、上传（multipart + `chunk_config`）与非法配置 422、进程内跑入库作业（`done`、切块数 > 0、文档级配置生效）、列表 / 详情 / 切块 / 任务、上传前预览（不落库、`chunk_size` 变小块数变多）、切块禁用与复核（`approved` 恢复启用、写回 `flagged` 与空补丁 422）、待复核队列进出、删除后 `deleting` 与跑清理作业（详情 404、文档与切块行清零）、审计含 `kb.document.create` / `kb.document.delete` / `kb.chunk.update`、跨应用 404。结果写入 `backend/scripts/e2e_m4/results/e2e_m43_knowledge.json`。
 

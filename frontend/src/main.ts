@@ -5,6 +5,7 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import 'element-plus/dist/index.css'
 
 import App from './App.vue'
+import './styles/theme.css'
 import router from './router'
 import { perm } from './directives/perm'
 

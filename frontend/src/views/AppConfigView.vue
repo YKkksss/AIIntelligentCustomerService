@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { appApi, type AppDetail, type ChunkPreset } from '@/api/admin'
 import { changedFields } from '@/utils/diff'
@@ -12,10 +12,13 @@ interface Field {
   kind: 'text' | 'textarea' | 'number' | 'switch' | 'list'
 }
 
-interface Group {
+interface GroupSpec {
   key: string
   title: string
-  fields: Field[]
+  /** 取哪个配置对象里的字段。 */
+  source: string
+  /** `intent` 只取 `intent.*`，`plain` 只取其余顶层字段。 */
+  only?: 'intent' | 'plain'
 }
 
 const BASIC_FIELDS: Field[] = [
@@ -27,12 +30,91 @@ const BASIC_FIELDS: Field[] = [
   { path: 'fallback_text', label: '兜底话术', kind: 'textarea' },
 ]
 
-const CONFIG_GROUPS: { key: string; title: string }[] = [
-  { key: 'rag_config', title: '检索与意图' },
-  { key: 'session_config', title: '会话' },
-  { key: 'handoff_config', title: '转人工' },
-  { key: 'chunk_config', title: '切块' },
+const CONFIG_GROUPS: GroupSpec[] = [
+  { key: 'rag_config', title: '检索参数', source: 'rag_config', only: 'plain' },
+  { key: 'rag_intent', title: '意图识别', source: 'rag_config', only: 'intent' },
+  { key: 'chunk_config', title: '切块参数', source: 'chunk_config' },
+  { key: 'handoff_config', title: '转人工规则', source: 'handoff_config' },
+  { key: 'session_config', title: '会话', source: 'session_config' },
 ]
+
+/** 设计稿与配置文档里的中文名；未登记的字段回落到键路径。 */
+const LABELS: Record<string, string> = {
+  llm_model: '对话模型',
+  summary_model: '摘要模型',
+  temperature: '温度',
+  max_tokens: '最大输出 tokens',
+  retrieval_mode: '检索模式',
+  fusion: '融合方式',
+  vector_weight: '向量权重',
+  vector_top_k: '向量召回数',
+  keyword_top_k: '关键词召回数',
+  fuse_top_k: '融合候选数',
+  enable_rerank: '启用重排',
+  rerank_top_n: '重排保留数',
+  rerank_threshold: '重排阈值',
+  vector_score_threshold: '向量分数下限',
+  judge_with_llm: 'LLM 判定可答性',
+  judge_gray_upper: '灰区上界',
+  default_tags: '默认标签',
+  enable_facts: '启用事实记忆',
+  llm_thinking: '深度思考',
+  keep_recent_turns: '保留最近轮数',
+  history_token_budget: '历史 token 预算',
+  compact_trigger_tokens: '压缩触发 tokens',
+  enable_history_recall: '历史回查',
+  openai_temp_summary: '临时摘要',
+  'intent.enabled': '启用意图识别',
+  'intent.min_confidence': '最低置信度',
+  'intent.classify_timeout_ms': '分类超时（毫秒）',
+  'intent.vector_fast_path': '向量快速通道',
+  'intent.vector_threshold': '向量快速阈值',
+  'intent.out_of_scope_check': '越界检查',
+  'intent.out_of_scope_override_score': '越界覆盖分',
+  'intent.clarify_threshold': '澄清阈值',
+  'intent.chitchat_max_chars': '闲聊最大字数',
+  'intent.enabled_intents': '启用意图',
+  'intent.sensitive_keywords': '敏感词',
+  'intent.chitchat_keywords': '闲聊关键词',
+  'intent.chitchat_replies': '闲聊话术',
+  'intent.sensitive_reply': '敏感话术',
+  'intent.out_of_scope_reply': '越界话术',
+  'intent.action_reply': '动作话术',
+  mode: '切块模式',
+  preset: '预设',
+  strategy: '切分策略',
+  chunk_size: '父块大小',
+  chunk_overlap: '父块重叠',
+  child_size: '子块大小',
+  child_overlap: '子块重叠',
+  parent_mode: '父块模式',
+  parent_size: '父块上限',
+  split_by_heading: '按标题切分',
+  contextual_prefix: '上下文前缀',
+  keep_tables: '保留表格',
+  normalize_whitespace: '规范化空白',
+  remove_urls_emails: '移除链接与邮箱',
+  full_doc_max_tokens: '全文最大 tokens',
+  separators: '父块分隔符',
+  child_separators: '子块分隔符',
+  enabled: '启用转人工',
+  keywords: '触发关键词',
+  max_refusals: '连续拒答次数',
+  on_unanswerable: '答不了即转人工',
+  handoff_ai_mode: '转接后 AI 模式',
+  text: '转接提示',
+  wait_text: '排队提示',
+  accepted_text: '坐席接入提示',
+  released_text: '交还提示',
+  offline_text: '非服务时间提示',
+  queue_timeout_text: '排队超时提示',
+  service_hours: '服务时间',
+  handoff_queue_timeout_minutes: '排队超时（分钟）',
+  handoff_accepted_idle_minutes: '坐席静默超时（分钟）',
+  idle_close_minutes: '空闲关闭（分钟）',
+  idle_notice_before_minutes: '关闭前提醒（分钟）',
+  idle_close_notice: '空闲关闭提示',
+}
 
 /** 把配置对象摊平成一层的字段列表（数组当叶子处理）。 */
 function flatten(value: unknown, prefix = ''): Field[] {
@@ -44,7 +126,7 @@ function flatten(value: unknown, prefix = ''): Field[] {
       fields.push(...flatten(child, path))
       continue
     }
-    fields.push({ path, label: path, kind: kindOf(child) })
+    fields.push({ path, label: LABELS[path] ?? path, kind: kindOf(child) })
   }
   return fields
 }
@@ -80,7 +162,6 @@ function writePath(target: Record<string, unknown>, path: string, value: unknown
 }
 
 const route = useRoute()
-const router = useRouter()
 const auth = useAuthStore()
 const appId = String(route.params.appId)
 const detail = ref<AppDetail | null>(null)
@@ -92,16 +173,18 @@ const saving = ref(false)
 const errors = ref<string[]>([])
 const canWrite = computed(() => auth.can('app.write'))
 
-const groups = computed<Group[]>(() => {
-  const out: Group[] = [{ key: 'basic', title: '基础信息', fields: BASIC_FIELDS }]
+const parsedGroups = computed<{ key: string; title: string; fields: Field[] }[]>(() => {
+  const out: { key: string; title: string; fields: Field[] }[] = [
+    { key: 'basic', title: '基础信息', fields: BASIC_FIELDS },
+  ]
   for (const group of CONFIG_GROUPS) {
+    let fields = flatten(form[group.source] ?? {})
+    if (group.only === 'intent') fields = fields.filter((field) => field.path.startsWith('intent.'))
+    if (group.only === 'plain') fields = fields.filter((field) => !field.path.startsWith('intent.'))
     out.push({
       key: group.key,
       title: group.title,
-      fields: flatten(form[group.key] ?? {}).map((field) => ({
-        ...field,
-        path: `${group.key}.${field.path}`,
-      })),
+      fields: fields.map((field) => ({ ...field, path: `${group.source}.${field.path}` })),
     })
   }
   out.push({
@@ -153,7 +236,9 @@ async function load() {
     for (const key of Object.keys(form)) delete form[key]
     const next: Record<string, unknown> = {}
     for (const field of BASIC_FIELDS) next[field.path] = clone(body[field.path as keyof AppDetail])
-    for (const group of CONFIG_GROUPS) next[group.key] = clone(body[group.key as keyof AppDetail])
+    for (const group of CONFIG_GROUPS) {
+      next[group.source] = clone(body[group.source as keyof AppDetail])
+    }
     next.webhook_config = { url: (body.webhook_config.url as string | null) ?? '' }
     next.custom_dict = clone(body.custom_dict)
     Object.assign(form, next)
@@ -161,6 +246,13 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+/** 丢弃未保存的改动，回到最近一次加载的状态。 */
+function resetForm() {
+  for (const key of Object.keys(form)) delete form[key]
+  Object.assign(form, clone(snapshot.value))
+  errors.value = []
 }
 
 function applyPreset(name: string) {
@@ -204,15 +296,25 @@ onMounted(load)
 
 <template>
   <div v-loading="loading" class="app-config">
-    <div class="toolbar">
-      <el-button @click="router.push({ name: 'apps' })">返回</el-button>
-      <span class="title">{{ detail?.name ?? appId }}</span>
-      <el-tag v-if="detail" size="small">v{{ detail.config_version }}</el-tag>
-      <div class="spacer" />
-      <el-button @click="router.push({ name: 'app-knowledge', params: { appId } })">
-        知识库
-      </el-button>
-      <el-button v-if="canWrite" type="primary" :loading="saving" @click="save">保存</el-button>
+    <div class="page-head">
+      <div>
+        <div class="title-row">
+          <h2 class="aics-page-title">应用配置</h2>
+          <el-tag v-if="detail" size="small" effect="plain">v{{ detail.config_version }}</el-tag>
+        </div>
+        <p class="aics-page-subtitle">
+          保存后立即生效；每次保存 config_version 递增，保存时用版本号做乐观并发校验。
+        </p>
+      </div>
+      <div class="head-actions">
+        <el-tooltip content="版本历史将在后续里程碑提供" placement="top">
+          <span><el-button disabled>版本历史</el-button></span>
+        </el-tooltip>
+        <el-button :disabled="!canWrite" @click="resetForm">重置</el-button>
+        <el-button type="primary" :loading="saving" :disabled="!canWrite" @click="save">
+          保存并发布 v{{ (detail?.config_version ?? 0) + 1 }}
+        </el-button>
+      </div>
     </div>
 
     <el-alert
@@ -225,24 +327,32 @@ onMounted(load)
       <p v-for="item in errors" :key="item">{{ item }}</p>
     </el-alert>
 
-    <el-tabs>
-      <el-tab-pane v-for="group in groups" :key="group.key" :label="group.title">
-        <el-form label-width="180px" :disabled="!canWrite">
-          <el-form-item v-if="group.key === 'chunk_config'" label="套用预设">
-            <el-select placeholder="选择预设后整组替换" @change="applyPreset">
-              <el-option
-                v-for="preset in presets"
-                :key="preset.name"
-                :label="preset.label"
-                :value="preset.name"
-              />
-            </el-select>
-          </el-form-item>
+    <div class="groups">
+      <section v-for="group in parsedGroups" :key="group.key" class="group">
+        <header class="group-head">
+          <h3>{{ group.title }}</h3>
+          <el-select
+            v-if="group.key === 'chunk_config' && canWrite"
+            class="preset"
+            placeholder="套用预设"
+            size="small"
+            @change="applyPreset"
+          >
+            <el-option
+              v-for="preset in presets"
+              :key="preset.name"
+              :label="preset.label"
+              :value="preset.name"
+            />
+          </el-select>
+        </header>
 
+        <el-form label-width="132px" label-position="left" :disabled="!canWrite">
           <el-form-item v-for="field in group.fields" :key="field.path" :label="field.label">
             <el-input-number
               v-if="field.kind === 'number'"
               :model-value="asNumber(field.path)"
+              controls-position="right"
               @update:model-value="(value: number | undefined) => setValue(field.path, value ?? 0)"
             />
             <el-switch
@@ -266,7 +376,7 @@ onMounted(load)
               v-else-if="field.kind === 'textarea'"
               :model-value="asText(field.path)"
               type="textarea"
-              :rows="3"
+              :rows="2"
               @update:model-value="(value: string) => setValue(field.path, value)"
             />
             <el-input
@@ -276,25 +386,76 @@ onMounted(load)
             />
           </el-form-item>
         </el-form>
-      </el-tab-pane>
-    </el-tabs>
+      </section>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.toolbar {
+.app-config {
+  padding-bottom: 24px;
+}
+.page-head {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 16px;
 }
-.title {
-  font-weight: 600;
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.spacer {
-  flex: 1;
+.title-row .aics-page-title {
+  margin: 0;
+}
+.aics-page-subtitle {
+  margin: 6px 0 0;
+}
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
 }
 .el-alert {
   margin-bottom: 12px;
+}
+.groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.group {
+  background: var(--aics-white);
+  border: 1px solid var(--aics-border);
+  border-radius: 8px;
+  padding: 16px 20px 4px;
+}
+.group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.group-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--aics-text);
+}
+.preset {
+  width: 180px;
+}
+.group :deep(.el-select__tags) {
+  max-height: 72px;
+  overflow-y: auto;
+}
+@media (max-width: 1200px) {
+  .groups {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>
