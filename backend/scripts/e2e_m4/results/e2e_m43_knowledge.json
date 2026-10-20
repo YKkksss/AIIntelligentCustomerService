@@ -1,0 +1,60 @@
+{
+  "passed": 35,
+  "total": 35,
+  "checks": {
+    "bootstrap-admin 退出码 0": true,
+    "管理员登录 200": true,
+    "上传 202": true,
+    "上传返回 job_id": true,
+    "上传后文档 queued": true,
+    "非法切块配置 422 且 loc 指到字段": true,
+    "入库作业成功": true,
+    "文档状态 done": true,
+    "切块数 > 0": true,
+    "改写成自定义切块配置": true,
+    "列表按标题命中": true,
+    "切块列表 200 且非空": true,
+    "切块带 heading_path 与 tokens": true,
+    "任务列表含 ingest": true,
+    "预览 200 且 total_chunks > 0": true,
+    "预览块数随 chunk_size 变小而变多": true,
+    "预览不落库": true,
+    "禁用切块 200 且 enabled=false": true,
+    "复核通过 200 且带复核人时间": true,
+    "复核通过同时恢复启用": true,
+    "不允许写回 flagged 422": true,
+    "空补丁 422": true,
+    "待复核列表可见": true,
+    "复核通过 200": true,
+    "复核后离开待复核队列": true,
+    "删除 202": true,
+    "删除后状态 deleting": true,
+    "清理后详情 404": true,
+    "文档行清零": true,
+    "切块行清零": true,
+    "审计含 kb.document.create": true,
+    "审计含 kb.document.delete": true,
+    "审计含 kb.chunk.update": true,
+    "跨应用访问文档 404": true,
+    "跨应用 404 带 document_id": true
+  },
+  "steps": [
+    {
+      "step": "upload",
+      "body": {
+        "status": 202,
+        "body": {
+          "id": "01a157b7-bca7-70b4-95fc-6907f5d11dda",
+          "title": "M4.3 验收文档",
+          "status": "queued",
+          "progress": 0,
+          "duplicate": false,
+          "unchanged": false,
+          "job_id": "01a157b7-bcad-77e7-92ed-933e8cad5cf8"
+        }
+      }
+    }
+  ],
+  "mode": "stub-embedding",
+  "started_at": "1020051019"
+}

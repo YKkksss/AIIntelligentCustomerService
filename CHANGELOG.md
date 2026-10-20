@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### 新增（M4.3 ⑤ 里程碑验收脚本，2026-10-20）
+- 新增 `backend/scripts/e2e_m4/e2e_m43_knowledge.py`：真实 HTTP + 真 PG / Redis / Qdrant + 本地文件存储，嵌入器用进程内确定性假实现（**不调模型**），九步 **35 项判定**——`bootstrap-admin` 与登录、上传（multipart + `chunk_config`）与非法配置 422、进程内跑入库作业（`done`、切块数 > 0、文档级配置生效）、列表 / 详情 / 切块 / 任务、上传前预览（不落库、`chunk_size` 变小块数变多）、切块禁用与复核（`approved` 恢复启用、写回 `flagged` 与空补丁 422）、待复核队列进出、删除后 `deleting` 与跑清理作业（详情 404、文档与切块行清零）、审计含 `kb.document.create` / `kb.document.delete` / `kb.chunk.update`、跨应用 404。结果写入 `backend/scripts/e2e_m4/results/e2e_m43_knowledge.json`。
+
+### 修复（M4.3 ⑤，2026-10-20）
+- 知识库 404 的 `details` 补对象标识：`DocumentNotFoundError` 带 `{"document_id": …}`、`ChunkNotFoundError` 带 `{"chunk_id": …}`（`backend/src/aics/modules/knowledge/service.py`）。此前是空对象，接入方只能靠路径参数回推是哪一个；与反馈接口 `NOT_FOUND` 带 `message_id`（M3.6）的既有做法对齐。
+
+### 测试（M4.3 ⑤，2026-10-20）
+- 门禁：单测 **1119 passed / 1 failed（Windows 符号链接环境项） / 272 deselected**，覆盖率 **82.06%**（11802 语句 / 2117 未覆盖）；本机 Docker 全量集成 **271 passed / 1121 deselected in 467.76s**；`ruff check` / `ruff format` / `lint-imports`（13 契约）/ `prompts check`（8 个）全绿；真实模型 0 元。
 ### 新增（M4.3 ④ 管理后台知识库页面，2026-10-20）
 - 新页面 `/apps/:appId/knowledge`（`frontend/src/views/KnowledgeView.vue`）：Tab「文档」= 单文件拖拽上传（标题、切块预设或自定义 JSON、**上传前切块预览**）+ 状态 / 标题筛选 + 分页表格（状态标签、切块数、大小、更新时间）与行操作「切块 / 重建 / 替换 / 删除」；Tab「待复核切块」=`GET /chunks?review_status=flagged` 列表（文档、序号、命中短语、正文摘要）与「复核通过 / 禁用」；Tab「任务」= 入库 / 重建 / 删除任务与错误；写操作只对 `kb.write` 显示。
 - 新页面 `/apps/:appId/knowledge/:documentId`（`KnowledgeDocumentView.vue`）：文档元信息（切块数、生效构建号、大小、来源、错误）、分页切块表（展开看正文、`enabled` 开关、复核状态、复核通过）、重建入口。

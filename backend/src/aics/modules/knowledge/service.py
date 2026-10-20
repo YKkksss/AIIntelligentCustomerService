@@ -244,7 +244,7 @@ class KnowledgeService:
             else self.docs.get(app_id, document_id)
         )
         if doc is None:  # deleting 中的文档仍返回，由调用方报 409 DOCUMENT_BUSY
-            raise DocumentNotFoundError()
+            raise DocumentNotFoundError(details={"document_id": str(document_id)})
         return doc
 
     def _send(self, task: str, args: Sequence[Any]) -> None:
@@ -800,7 +800,7 @@ class KnowledgeService:
             )
         ).first()
         if row is None:
-            raise ChunkNotFoundError()
+            raise ChunkNotFoundError(details={"chunk_id": str(chunk_id)})
         chunk, doc = row
         if doc.status == "deleting":
             raise DocumentBusyError(message="文档正在删除")
