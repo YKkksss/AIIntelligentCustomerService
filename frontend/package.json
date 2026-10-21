@@ -14,6 +14,7 @@
     "lint": "eslint . && prettier --check \"src/**/*.{ts,vue,css}\"",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:e2e": "playwright test",
     "gen:api": "node scripts/gen-api.mjs",
     "format": "prettier --write \"src/**/*.{ts,vue,css}\""
   },
@@ -39,6 +40,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
     "@types/node": "^26.6.5",
     "@vitejs/plugin-vue": "^6.0.10",
     "@vitest/coverage-v8": "^5.0.5",

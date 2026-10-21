@@ -1,0 +1,115 @@
+{
+  "passed": 20,
+  "total": 20,
+  "checks": {
+    "admin login 200": true,
+    "create app 201": true,
+    "aggregate ran": true,
+    "aggregate row written": true,
+    "aggregate idempotent": true,
+    "app stats 200": true,
+    "app series has today": true,
+    "debug/eval excluded (1 conversation)": true,
+    "message counters (messages 计用户轮次)": true,
+    "negative feedback counted": true,
+    "latency percentiles present": true,
+    "intent distribution": true,
+    "overview 200": true,
+    "overview has series": true,
+    "overview totals cover app": true,
+    "overview apps include created app": true,
+    "overview has no latency keys": true,
+    "days=0 -> 422": true,
+    "viewer can read stats": true,
+    "non-member 403": true
+  },
+  "steps": [
+    {
+      "step": "① 超管登录",
+      "body": {
+        "status": 200,
+        "is_super_admin": null
+      }
+    },
+    {
+      "step": "② 造数据（api / debug / eval 各一条会话）",
+      "body": {
+        "app_id": "01a15c52-949a-73f6-8a3c-8c9ff0ab216b",
+        "owner": "01a158a3-88d9-7c1e-9507-56abb5bf0ed5",
+        "api_conversation": "01a15c52-94d8-7012-8b7e-e03cfe84def9",
+        "debug_conversation": "01a15c52-94d9-74ae-813e-666b66f6c780",
+        "eval_conversation": "01a15c52-94da-7afe-bd67-a75f4e3ed4ac"
+      }
+    },
+    {
+      "step": "③ 聚合与单应用统计",
+      "body": {
+        "day": "2026-10-21",
+        "today_row": {
+          "date": "2026-10-21",
+          "conversations": 1,
+          "messages": 1,
+          "answered": 1,
+          "refused": 1,
+          "handoff": 0,
+          "errors": 0,
+          "handoff_requested": 0,
+          "handoff_accepted": 0,
+          "handoff_released": 0,
+          "handoff_queue_timeout": 0,
+          "handoff_offline": 0,
+          "handoff_accepted_idle_closed": 0,
+          "human_agent_messages": 0,
+          "idle_closed": 1,
+          "negative_feedback": 1,
+          "tokens_in": 210,
+          "tokens_out": 40,
+          "handoff_accept_p50_s": null,
+          "latency_p50_ms": 650,
+          "latency_p95_ms": 875,
+          "first_token_p95_ms": 216,
+          "intent_distribution": {
+            "kb_qa": 1,
+            "out_of_scope": 1
+          }
+        }
+      }
+    },
+    {
+      "step": "④ 全局概览",
+      "body": {
+        "totals": {
+          "conversations": 6,
+          "messages": 8,
+          "answered": 2,
+          "refused": 1,
+          "handoff": 4,
+          "errors": 0,
+          "handoff_requested": 5,
+          "handoff_accepted": 3,
+          "handoff_released": 4,
+          "handoff_queue_timeout": 1,
+          "handoff_offline": 1,
+          "handoff_accepted_idle_closed": 0,
+          "human_agent_messages": 3,
+          "idle_closed": 1,
+          "negative_feedback": 1,
+          "tokens_in": 3786,
+          "tokens_out": 193
+        },
+        "apps": 3
+      }
+    },
+    {
+      "step": "⑤ 权限",
+      "body": {
+        "viewer": "200",
+        "outsider": 403,
+        "viewer_created": true
+      }
+    }
+  ],
+  "day": "2026-10-21",
+  "mode": "stub-llm",
+  "at": "2026-10-21T02:37:59.447310+00:00"
+}

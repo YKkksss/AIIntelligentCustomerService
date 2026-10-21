@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### 新增（M4.6 ⑤ M4 里程碑验收，2026-10-21）
+
+- `backend/scripts/e2e_m4/e2e_m46_stats.py`：真 HTTP + 真 PG/Redis、不调模型，八步 **20 项判定**——建应用、直插 api/debug/eval 三条会话与一条点踩、聚合两次验幂等、单应用序列（会话 / 用户轮次 / 应答 / 拒答 / 点踩 / 分位数 / 意图分布）、全局概览（序列、合计、应用在列、无分位数键）、`days=0` 422、viewer 200 与无成员 403、删除清理；结果写 `backend/scripts/e2e_m4/results/e2e_m46_stats.json`。
+- `frontend/playwright.config.ts` + `frontend/e2e/smoke.spec.ts`：ADR-0018 的里程碑级冒烟（真浏览器 + 真后端，登录 → 仪表盘 KPI → 应用 → 用户 → 审计），`AICS_E2E=1 npm run test:e2e` 通过 **1/1**；`@playwright/test` 与 Chromium 已落地，默认 skip 不拖慢常规 CI。
+
+### 测试（M4.6 ⑤，2026-10-21）
+
+- 里程碑验收 20/20 + Playwright 1/1；④ 回归复跑：单测 **1229 passed / 1 环境失败（Windows 符号链接）/ 310 deselected**、覆盖率 **82%**（13160 语句 / 2400 未覆盖）；本机 Docker 全量集成 **309 passed（453.34 s）**；前端 `vitest` 13 文件 / 85 例 / 85.30% 语句，`vue-tsc`、`eslint + prettier`、`vite build` 全绿；真实模型 0 元。
+- 文档：M3 测试报告新增 §24（提交表、统计口径、接口与页面、验收、门禁、**M4 里程碑总结**），`docs/00-planning/03-开发计划.md` 置 M4.6 ✅ 并标注 M4 里程碑完成，代码地图与 README 状态同步到 M4 完成。
+
 ### 新增（M4.6 ③ 仪表盘与应用概览，2026-10-21）
 
 - `frontend/src/api/stats.ts`：`statsApi.overview(days)` / `statsApi.app(appId, days)` 与响应类型（`StatsTotals`、`DailyRow`、`AppTotals`、`StatsOverview`、`DailyPoint`）。
