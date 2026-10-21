@@ -67,6 +67,12 @@ export interface AuditPage {
   next_cursor: string | null
 }
 
+export interface AppAvatar {
+  style: string
+  seed: string
+  url: string | null
+}
+
 export interface AppCard {
   id: string
   name: string
@@ -74,6 +80,7 @@ export interface AppCard {
   status: string
   answer_style: string
   language: string
+  avatar: AppAvatar
   config_version: number
   created_at: string
   updated_at: string

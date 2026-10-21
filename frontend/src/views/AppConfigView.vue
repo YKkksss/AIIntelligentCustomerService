@@ -3,6 +3,15 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { appApi, type AppDetail, type ChunkPreset } from '@/api/admin'
+import AssistantAvatar from '@/components/AssistantAvatar.vue'
+import {
+  AVATAR_STYLES,
+  STYLE_LABELS,
+  normalizeAvatar,
+  randomSeed,
+  type AvatarInput,
+  type AvatarStyle,
+} from '@/utils/avatar'
 import { changedFields } from '@/utils/diff'
 import { useAuthStore } from '@/stores/auth'
 
@@ -173,6 +182,20 @@ const saving = ref(false)
 const errors = ref<string[]>([])
 const canWrite = computed(() => auth.can('app.write'))
 
+/** 头像不是配置字典的一部分：整体对象提交，只有真改了才进 patch。 */
+const avatarStyle = computed<AvatarStyle>({
+  get: () => normalizeAvatar(form.avatar as AvatarInput, appId).style,
+  set: (style) => {
+    const current = normalizeAvatar(form.avatar as AvatarInput, appId)
+    form.avatar = { ...current, style }
+  },
+})
+
+function rerollAvatar() {
+  const current = normalizeAvatar(form.avatar as AvatarInput, appId)
+  form.avatar = { ...current, seed: randomSeed() }
+}
+
 const parsedGroups = computed<{ key: string; title: string; fields: Field[] }[]>(() => {
   const out: { key: string; title: string; fields: Field[] }[] = [
     { key: 'basic', title: '基础信息', fields: BASIC_FIELDS },
@@ -241,6 +264,7 @@ async function load() {
     }
     next.webhook_config = { url: (body.webhook_config.url as string | null) ?? '' }
     next.custom_dict = clone(body.custom_dict)
+    next.avatar = normalizeAvatar(body.avatar, body.id)
     Object.assign(form, next)
     snapshot.value = clone(next)
   } finally {
@@ -326,6 +350,33 @@ onMounted(load)
     <el-alert v-if="errors.length > 0" type="error" :closable="false" title="保存被拒绝">
       <p v-for="item in errors" :key="item">{{ item }}</p>
     </el-alert>
+
+    <section class="group avatar-group">
+      <header class="group-head">
+        <h3>头像</h3>
+        <span class="group-hint">只影响后台里的展示；不产生图片文件，换一个就是换一组画法参数</span>
+      </header>
+      <div class="avatar-body">
+        <AssistantAvatar
+          :avatar="form.avatar as AvatarInput"
+          :name="detail?.name"
+          :size="72"
+          :radius="18"
+        />
+        <div class="avatar-controls">
+          <el-select v-model="avatarStyle" :disabled="!canWrite" size="default">
+            <el-option
+              v-for="style in AVATAR_STYLES"
+              :key="style"
+              :label="STYLE_LABELS[style]"
+              :value="style"
+            />
+          </el-select>
+          <el-button :disabled="!canWrite" @click="rerollAvatar">换一个</el-button>
+          <span class="avatar-seed">seed：{{ (form.avatar as AvatarInput)?.seed }}</span>
+        </div>
+      </div>
+    </section>
 
     <div class="groups">
       <section v-for="group in parsedGroups" :key="group.key" class="group">
@@ -448,6 +499,33 @@ onMounted(load)
 }
 .preset {
   width: 180px;
+}
+.avatar-group {
+  padding-bottom: 16px;
+}
+.group-hint {
+  font-size: 12px;
+  color: var(--aics-text3);
+}
+.avatar-body {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding-bottom: 8px;
+}
+.avatar-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.avatar-seed {
+  font-size: 12px;
+  color: var(--aics-text3);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .group :deep(.el-select__tags) {
   max-height: 72px;

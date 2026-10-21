@@ -163,3 +163,55 @@ async def test_deleted_app_disappears_from_list_and_detail(pg, created) -> None:
             await service.detail(app_id)
 
     assert getattr(err.value, "code", "") == "APP_NOT_FOUND"
+
+
+async def test_patch_avatar_bumps_config_version_and_persists(pg, created) -> None:
+    app_id = await _app(pg, created)
+    async with pg["sessions"]() as s:
+        service = await _service(pg, s)
+        before = await service.detail(app_id)
+        body = await service.update(
+            app_id,
+            {"avatar": {"style": "pixelArt", "seed": "seed-1"}},
+            expected_version=before["config_version"],
+            actor_id=pg["user_id"],
+            meta=META,
+        )
+        cards = await service.list_apps(user_id=pg["user_id"], is_super_admin=True)
+    assert body["avatar"] == {"style": "pixelArt", "seed": "seed-1", "url": None}
+    assert body["config_version"] == before["config_version"] + 1
+    card = next(c for c in cards if c["id"] == str(app_id))
+    assert card["avatar"] == {"style": "pixelArt", "seed": "seed-1", "url": None}
+
+
+async def test_partial_avatar_patch_keeps_style_and_rejects_bad_values(pg, created) -> None:
+    app_id = await _app(pg, created)
+    async with pg["sessions"]() as s:
+        service = await _service(pg, s)
+        await service.update(
+            app_id,
+            {"avatar": {"style": "thumbs", "seed": "s1"}},
+            expected_version=None,
+            actor_id=pg["user_id"],
+            meta=META,
+        )
+        body = await service.update(
+            app_id,
+            {"avatar": {"seed": "s2"}},
+            expected_version=None,
+            actor_id=pg["user_id"],
+            meta=META,
+        )
+        assert body["avatar"] == {"style": "thumbs", "seed": "s2", "url": None}
+        with pytest.raises(ValidationAppError) as err:
+            await service.update(
+                app_id,
+                {"avatar": {"style": "shapes"}},
+                expected_version=None,
+                actor_id=pg["user_id"],
+                meta=META,
+            )
+        assert [list(e["loc"]) for e in err.value.details["errors"]] == [["avatar", "style"]]
+        after = await service.detail(app_id)
+    assert after["avatar"]["style"] == "thumbs"
+    assert after["config_version"] == body["config_version"]

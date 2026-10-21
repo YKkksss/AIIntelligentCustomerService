@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from aics.core.audit import AuditEntry, AuditSink
 from aics.core.errors import ConfigVersionConflictError, ValidationAppError
 from aics.db.models import ApiKey, App, Chunk, Conversation, Document, Job, UserAppRole
+from aics.modules.apps.avatar import avatar_of, normalize_avatar  # noqa: F401 - 校验在 service 层
 from aics.modules.apps.service import BASIC_FIELDS, CONFIG_FIELDS, AppConfig, AppService
 from aics.modules.apps.system_settings import DEFAULT_SESSION_CONFIG_KEY, SystemSettingsService
 
@@ -31,7 +32,7 @@ log = structlog.get_logger()
 RETOKENIZE_TASK = "aics.retokenize_app"
 CLEANUP_TASK = "aics.cleanup_app"
 COPY_SUFFIX = "（副本）"
-AUDIT_PATCH_FIELDS = (*BASIC_FIELDS, *CONFIG_FIELDS, "custom_dict", "webhook_config")
+AUDIT_PATCH_FIELDS = (*BASIC_FIELDS, *CONFIG_FIELDS, "custom_dict", "webhook_config", "avatar")
 
 Enqueue = Any  # Callable[[str, Sequence[Any]], None]
 
@@ -66,6 +67,7 @@ def app_body(app: App, cfg: AppConfig) -> dict[str, Any]:
         "effective_session_config": cfg.effective_session.model_dump(mode="json"),
         "webhook_config": cfg.webhook.public(),
         "chunk_config": app.chunk_config,
+        "avatar": avatar_of(app),
         "custom_dict": list(app.custom_dict or []),
         "config_version": app.config_version,
         "chunk_config_version": app.chunk_config_version,
@@ -83,6 +85,7 @@ def app_card(app: App, *, documents: int) -> dict[str, Any]:
         "status": app.status,
         "answer_style": app.answer_style,
         "language": app.language,
+        "avatar": avatar_of(app),
         "config_version": app.config_version,
         "created_at": app.created_at,
         "updated_at": app.updated_at,
@@ -303,6 +306,7 @@ class AppsAdminService:
             "handoff_config": source.handoff_config,
             "session_config": source.session_config,
             "chunk_config": source.chunk_config,
+            "avatar": avatar_of(source),
             "custom_dict": list(source.custom_dict or []),
         }
         app = await self._create_from(payload, name=payload["name"], actor_id=actor_id)

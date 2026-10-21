@@ -12,6 +12,7 @@ import {
   Setting,
 } from '@element-plus/icons-vue'
 import { appApi, type AppCard } from '@/api/admin'
+import AssistantAvatar from '@/components/AssistantAvatar.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
@@ -86,10 +87,6 @@ function formatDay(value: string): string {
   if (Number.isNaN(date.getTime())) return '—'
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${date.getMonth() + 1}-${pad(date.getDate())}`
-}
-
-function initialOf(name: string): string {
-  return (name || '?').trim().slice(0, 1).toUpperCase()
 }
 
 async function load() {
@@ -212,7 +209,13 @@ onMounted(load)
       <div v-else class="grid">
         <article v-for="row in visible" :key="row.id" class="app-card" @click="open(row)">
           <header class="app-head">
-            <span class="app-avatar">{{ initialOf(row.name) }}</span>
+            <AssistantAvatar
+              :avatar="row.avatar"
+              :stable-seed="row.id"
+              :name="row.name"
+              :size="44"
+              :radius="12"
+            />
             <div class="app-title">
               <div class="app-name-row">
                 <h2 :title="row.name">{{ row.name }}</h2>

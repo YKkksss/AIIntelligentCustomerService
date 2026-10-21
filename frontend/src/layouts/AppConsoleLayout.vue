@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -14,6 +14,8 @@ import {
   Setting,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
+import { appApi, type AppAvatar } from '@/api/admin'
+import AssistantAvatar from '@/components/AssistantAvatar.vue'
 import AppsView from '@/views/AppsView.vue'
 
 interface NavItem {
@@ -78,7 +80,20 @@ const open = ref(true)
 
 const appId = computed(() => String(route.params.appId ?? ''))
 const appName = computed(() => auth.currentApp?.app_name ?? '智能客服')
-const initial = computed(() => appName.value.trim().slice(0, 1).toUpperCase() || '?')
+const avatar = ref<AppAvatar | null>(null)
+
+/** 头像只在详情接口里，成员关系里没有；控制台打开时取一次，切换客服再取。 */
+async function loadAvatar() {
+  if (!appId.value) return
+  try {
+    avatar.value = (await appApi.detail(appId.value)).avatar
+  } catch {
+    avatar.value = null
+  }
+}
+
+onMounted(loadAvatar)
+watch(appId, loadAvatar)
 
 const groups = computed(() => {
   const out: { title: string; items: NavItem[] }[] = []
@@ -122,7 +137,7 @@ function onClosed() {
     >
       <template #header>
         <div class="console-head">
-          <span class="console-avatar">{{ initial }}</span>
+          <AssistantAvatar :avatar="avatar" :stable-seed="appId" :name="appName" :size="40" />
           <div class="console-head-text">
             <div class="console-name-row">
               <span class="console-name">{{ appName }}</span>

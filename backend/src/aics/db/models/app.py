@@ -48,6 +48,10 @@ class App(TimestampMixin, SoftDeleteMixin, Base):
         JSONB, nullable=False, server_default=text("'{}'")
     )
     chunk_config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    # 头像只存画法（style / seed / url），不存图片；结构由 `modules/apps/avatar.py` 定义
+    avatar: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'")
+    )
     custom_dict: Mapped[list[str]] = mapped_column(
         ARRAY(Text), nullable=False, server_default=text("'{}'")
     )

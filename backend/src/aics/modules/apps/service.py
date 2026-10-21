@@ -19,6 +19,7 @@ from aics.core import netguard, secretbox
 from aics.core.config import Settings, get_settings
 from aics.core.errors import AppNotFoundError, ValidationAppError
 from aics.db.models import App, Document
+from aics.modules.apps.avatar import avatar_of, normalize_avatar
 from aics.modules.apps.repository import AppRepository
 from aics.modules.apps.system_settings import SystemSettingsService
 from aics.rag.config import (
@@ -221,6 +222,7 @@ class AppService:
         session_config: Mapping[str, Any] | None = None,
         chunk_config: Mapping[str, Any] | None = None,
         custom_dict: list[str] | None = None,
+        avatar: Mapping[str, Any] | None = None,
         **basic: Any,
     ) -> App:
         unknown = set(basic) - set(BASIC_FIELDS)
@@ -243,6 +245,7 @@ class AppService:
             session_config=_dump(cfg.session),
             chunk_config=_dump(cfg.chunk),
             webhook_config=_dump(cfg.webhook),
+            avatar=normalize_avatar(avatar),
             custom_dict=list(dict.fromkeys(custom_dict or [])),
             **{k: v for k, v in basic.items() if v is not None},
         )
@@ -275,7 +278,15 @@ class AppService:
     # ------------------------------------------------------------ 更新
     async def update_app(self, app_id: UUID, patch: Mapping[str, Any]) -> UpdateResult:
         """部分更新（PATCH /apps/{id}）。配置合并后整体校验；有变化时 config_version +1。"""
-        allowed = set(BASIC_FIELDS) | set(CONFIG_FIELDS) | {"custom_dict", "webhook_config"}
+        allowed = (
+            set(BASIC_FIELDS)
+            | set(CONFIG_FIELDS)
+            | {
+                "custom_dict",
+                "webhook_config",
+                "avatar",
+            }
+        )
         unknown = set(patch) - allowed
         if unknown:
             raise ValidationAppError(
@@ -330,6 +341,16 @@ class AppService:
         }
         if "custom_dict" in patch:
             new_values["custom_dict"] = list(dict.fromkeys(patch["custom_dict"] or []))
+        if "avatar" in patch:
+            raw_avatar = patch["avatar"]
+            if raw_avatar is not None and not isinstance(raw_avatar, Mapping):
+                raise ValidationAppError(
+                    details={
+                        "errors": [{"loc": ["avatar"], "msg": "应为对象，形如 {style, seed, url}"}]
+                    }
+                )
+            # 头像整体替换，但只提交部分键时保留其余键（如只换 seed 不动 style）
+            new_values["avatar"] = normalize_avatar({**avatar_of(app), **(raw_avatar or {})})
 
         old_chunk = ChunkConfig.model_validate(app.chunk_config)
         changes = {k: v for k, v in new_values.items() if getattr(app, k) != v}

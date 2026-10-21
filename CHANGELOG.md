@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+### 新增（智能客服头像，2026-10-22）
+
+- 每个智能客服可以有自己的头像：迁移 `0017` 给 `apps` 加 `avatar JSONB NOT NULL DEFAULT '{}'`，存的是画法而不是图片——`{"style","seed","url"}`。
+- 默认 `notionists`（DiceBear，MIT），另给 `lorelei / openPeeps / thumbs / pixelArt` 四种可切换；换头像就是换 `seed`，服务端零文件、零带宽。`{}` 表示用默认，读取时按应用 id 派生稳定 seed，历史行无需回填。
+- 接口：`GET /admin/apps`、`GET /admin/apps/{id}` 的卡片与详情都带 `avatar`（`style` / `seed` / `url`）；`PATCH /admin/apps/{id}` 收 `avatar`，提交部分键时与现值合并（只换 seed 不会把风格打回默认），非法值 422 且 `details.errors` 的 `loc` 是 `["avatar","style"]`；头像变化照常 `config_version + 1` 并进审计 `app.update` 的 diff；复制应用会带上同一张脸。
+- 前端：`utils/avatar.ts` + `components/AssistantAvatar.vue`（DiceBear 只在用到时动态加载，`toDataUri` 输出 `<img>` 以避开 SVG `mask id` 冲突，加载失败回落首字母）；用在智能客服列表卡片、单应用控制台头部与配置页新增的「头像」卡（风格下拉 + 「换一个」）。
+- 决策记录见 `docs/09-design-discussions/0011-智能客服头像（DiceBear前端生成）.md`：不做上传裁剪与表情包，`avatar.url` 预留给「上传自己的图」；风格只放 MIT 的五个，避开 CC BY 的署名债。
+
+### 测试（智能客服头像，2026-10-22）
+
+- 单测 `backend/tests/unit/test_apps_avatar.py` 10 例（默认值、白名单、`loc` 路径、seed 长度、`url` 规则、`avatar_of` 的稳定性与脏值回落）；集成 `backend/tests/integration/test_apps_admin_pg.py` 新增 2 例（`PATCH` 头像后 `config_version` 递增且卡片可见、部分键合并与非法风格 422）。
+- 前端 `frontend/src/utils/avatar.spec.ts` 8 例（归一、白名单、随机 seed、同参数只生成一次、换 seed 换脸）；前端 **14 文件 / 99 例**通过。
+- 门禁：单测 1267 passed（1 个 Windows 符号链接环境用例仍失败）/ 318 deselected；`ruff`、`lint-imports`（13）、`prompts`（8）、`vitest`、`vue-tsc`、`eslint`、`prettier`、`vite build` 全绿。
+
 ### 调整（会话有效期与「保持登录」，2026-10-21）
 
 - 登录页的「保持登录」从灰掉的勾选框改成 **1 天 / 7 天二选一**（默认 1 天），随登录请求的 `remember_days` 传给后端；refresh 令牌有效期由它决定（`AICS_JWT_REFRESH_TTL_DAYS` 默认 1，上限 `AICS_JWT_REFRESH_MAX_DAYS` 默认 7），轮换时沿用令牌里的 `rmb`，选 7 天的不会因为刷新被降回 1 天。
