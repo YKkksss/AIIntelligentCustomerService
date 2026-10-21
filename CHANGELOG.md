@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### 新增（M4.3b ⑤ 里程碑验收脚本，2026-10-21）
+
+- 新增 `backend/scripts/e2e_m4/e2e_m43b_chunks.py`（九步 **42 项**判定，真 HTTP + 真 PG / Qdrant + 假嵌入，0 元）：
+  上传两篇文档并入库 → 编辑切块（`source=edited`、`tokens` 重算、命中测试召回新正文）→ 手工新增切块并重建
+  （`manual` 迁到新构建号、改过的块失配降级 `manual`）→ 近重复提示 → 文档有效期（过期 / 未生效退出可检索集）→
+  补充问题增删与 reattach → 删除切块 → 四个审计动作 → 跨应用 404。结果写
+  `backend/scripts/e2e_m4/results/e2e_m43b_chunks.json`。
+
+### 测试（M4.3b ⑤，2026-10-21）
+
+- 验收脚本 42/42 通过；后端单测 1254 passed（1 项 Windows 符号链接环境用例失败）、覆盖率 82%；
+  本机 Docker 全量集成 315 项；前端 `vitest` 14 spec / 89 例 / 85.56% 语句；真实模型 0 元。
 ### 新增（M4.3b ④ 知识库切块级运营页面，2026-10-21）
 
 - `views/KnowledgeDocumentView.vue` 扩成切块运营台：展开看正文、**正文编辑**（弹窗，保存后只重算该块并置 `edited`）、

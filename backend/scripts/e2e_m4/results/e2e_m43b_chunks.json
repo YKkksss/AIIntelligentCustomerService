@@ -1,0 +1,58 @@
+{
+  "passed": 42,
+  "total": 42,
+  "mode": "stub-embedding",
+  "checks": {
+    "bootstrap-admin 退出码 0": true,
+    "管理员登录 200": true,
+    "文档 A 入库 done": true,
+    "文档 B 入库 done": true,
+    "文档 A 有切块": true,
+    "默认切块来源都是 parsed": true,
+    "编辑切块 200": true,
+    "来源变 edited": true,
+    "正文与标题路径已更新": true,
+    "tokens 重算": true,
+    "命中测试 200": true,
+    "命中测试召回编辑后的切块": true,
+    "非法 overrides 422": true,
+    "手工新增 201": true,
+    "来源 manual": true,
+    "重建任务 202": true,
+    "重建 done": true,
+    "重建后手工切块仍在": true,
+    "手工新增的正文保留": true,
+    "手工切块换了 id（迁到新构建号）": true,
+    "改过的块失配后降级 manual": true,
+    "命中测试召回手工切块": true,
+    "近重复命中同内容文档": true,
+    "有效期前 B 可被召回": true,
+    "设置过期 200": true,
+    "过期后不再召回": true,
+    "设置未生效 200": true,
+    "未生效同样不召回": true,
+    "清空有效期 200": true,
+    "清空后恢复召回": true,
+    "新增补充问题 201": true,
+    "补充问题列表 2 条": true,
+    "reattach 到另一个切块": true,
+    "删除补充问题 204": true,
+    "删除切块 204": true,
+    "删除后列表少一块": true,
+    "审计含 kb.chunk.update": true,
+    "审计含 kb.chunk.create": true,
+    "审计含 kb.chunk.delete": true,
+    "审计含 kb.document.update": true,
+    "跨应用读切块 404": true,
+    "跨应用改切块 404": true
+  },
+  "steps": [
+    {
+      "step": "summary",
+      "body": {
+        "app_id": "01a15cd1-ad04-72f1-b590-355cb3f974d3",
+        "checks": 42
+      }
+    }
+  ]
+}
