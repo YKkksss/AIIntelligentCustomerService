@@ -449,8 +449,8 @@ onBeforeUnmount(() => stop())
   display: grid;
   grid-template-columns: minmax(0, 692fr) minmax(360px, 464fr);
   gap: 16px;
-  height: calc(100vh - 56px - 48px);
-  min-height: 560px;
+  height: 100%;
+  min-height: 480px;
 }
 @media (max-width: 1180px) {
   .debug-page {

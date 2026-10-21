@@ -1,23 +1,8 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
+import type { Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import {
-  ArrowDown,
-  ArrowLeft,
-  Bell,
-  ChatDotRound,
-  ChatLineSquare,
-  Collection,
-  Connection,
-  DataAnalysis,
-  DataBoard,
-  Document,
-  Key,
-  Odometer,
-  Service,
-  Setting,
-  User,
-} from '@element-plus/icons-vue'
+import { ArrowDown, Bell, Document, Odometer, Service, User } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -27,13 +12,11 @@ const route = useRoute()
 interface MenuItem {
   name: string
   title: string
-  icon: unknown
+  icon: Component
   permission?: string
-  /** 未实现的页面只占位（设计稿 6 个应用菜单项，逐里程碑补齐）。 */
-  pending?: string
 }
 
-/** 全局菜单：仪表盘 / 智能客服 / 用户 / 审计（应用级入口收进工作台，见下）。 */
+/** 侧栏只放全局菜单：单个智能客服的 8 项设置收进「配置弹窗」（见 AppConsoleLayout）。 */
 const globalMenu = computed<MenuItem[]>(() =>
   [
     { name: 'home', title: '仪表盘', icon: Odometer },
@@ -43,29 +26,16 @@ const globalMenu = computed<MenuItem[]>(() =>
   ].filter((item) => !item.permission || auth.can(item.permission)),
 )
 
-/** 工作台导航：进入某个智能客服后才出现的一组页签（替代原先塞在侧栏里的 8 项）。 */
-const workspaceMenu = computed<MenuItem[]>(() =>
-  [
-    { name: 'app-overview', title: '概览', icon: DataBoard },
-    { name: 'app-config', title: '配置', icon: Setting },
-    { name: 'app-knowledge', title: '知识库', icon: Collection, permission: 'kb.read' },
-    { name: 'app-debug', title: '调试对话', icon: ChatDotRound, permission: 'chat.debug' },
-    { name: 'app-eval', title: '评测', icon: DataAnalysis, pending: 'M5' },
-    { name: 'app-keys', title: 'API Key', icon: Key, permission: 'key.read' },
-    { name: 'app-logs', title: '会话与反馈', icon: ChatLineSquare, permission: 'log.read' },
-    { name: 'app-webhooks', title: 'Webhook', icon: Connection, permission: 'webhook.write' },
-  ].filter((item) => !item.permission || auth.can(item.permission)),
-)
-
 const active = computed(() => String(route.name ?? 'home'))
 
+/** 是否正停在某个智能客服的设置页（弹窗打开时 URL 里带 appId）。 */
 const inWorkspace = computed(
   () => typeof route.params.appId === 'string' && route.params.appId !== '',
 )
 
 const appName = computed(() => auth.currentApp?.app_name ?? '智能客服')
 
-/** 进入某个应用的页面时，侧栏与标题跟着路由切换当前应用（刷新后也能恢复）。 */
+/** 进入某个应用的页面时，切换器跟着路由切换当前应用（刷新后也能恢复）。 */
 watch(
   () => route.params.appId,
   (appId) => {
@@ -79,31 +49,22 @@ const appPath = computed(() => {
   return { name: 'app-config', params: { appId: auth.currentAppId } }
 })
 
-/** 面包屑：与设计稿 Top Bar 的「智能客服 / 全部智能客服」一致。 */
+/** 面包屑：智能客服 / 应用名 / 弹窗内当前页。 */
 const breadcrumb = computed<string[]>(() => {
-  switch (String(route.name ?? '')) {
+  const name = String(route.name ?? '')
+  if (inWorkspace.value) {
+    const title = String(route.meta.title ?? '')
+    const underKnowledge = name === 'app-knowledge-document' || name === 'app-hit-test'
+    const trail = ['智能客服', appName.value]
+    if (underKnowledge) trail.push('知识库')
+    if (title) trail.push(title)
+    return trail
+  }
+  switch (name) {
     case 'home':
       return ['仪表盘']
     case 'apps':
       return ['智能客服', '全部智能客服']
-    case 'app-config':
-      return ['智能客服', appName.value, '配置']
-    case 'app-overview':
-      return ['智能客服', appName.value, '概览']
-    case 'app-knowledge':
-      return ['智能客服', appName.value, '知识库']
-    case 'app-knowledge-document':
-      return ['智能客服', appName.value, '知识库', '文档切块']
-    case 'app-hit-test':
-      return ['智能客服', appName.value, '知识库', '命中测试']
-    case 'app-debug':
-      return ['智能客服', appName.value, '调试对话']
-    case 'app-keys':
-      return ['智能客服', appName.value, 'API Key']
-    case 'app-logs':
-      return ['智能客服', appName.value, '会话与反馈']
-    case 'app-webhooks':
-      return ['智能客服', appName.value, 'Webhook']
     case 'users':
       return ['用户']
     case 'audit':
@@ -133,11 +94,6 @@ async function onSwitch(target: string) {
     return
   }
   if (!auth.can('app.read')) await router.replace({ name: 'home' })
-}
-
-async function onWorkspace(item: MenuItem) {
-  if (item.pending) return
-  await router.push({ name: item.name, params: { appId: auth.currentAppId } })
 }
 
 async function onCommand(command: string) {
@@ -230,44 +186,7 @@ async function onCommand(command: string) {
         </el-dropdown>
       </header>
 
-      <!-- 工作台：进入某个智能客服后出现，承载原先「应用内菜单」的 8 个入口，侧栏保持干净 -->
-      <div v-if="inWorkspace" class="workspace">
-        <button class="workspace-back" type="button" @click="router.push({ name: 'apps' })">
-          <el-icon><ArrowLeft /></el-icon>
-          <span>全部智能客服</span>
-        </button>
-        <span class="workspace-sep" />
-        <div class="workspace-title">
-          <span class="workspace-name">{{ appName }}</span>
-          <span class="workspace-tag">智能客服</span>
-        </div>
-        <nav class="workspace-tabs">
-          <template v-for="item in workspaceMenu" :key="item.name">
-            <el-tooltip
-              v-if="item.pending"
-              :content="`${item.pending} 完成后开放`"
-              placement="bottom"
-            >
-              <span class="ws-tab pending">
-                <el-icon><component :is="item.icon" /></el-icon>
-                <span>{{ item.title }}</span>
-              </span>
-            </el-tooltip>
-            <button
-              v-else
-              type="button"
-              class="ws-tab"
-              :class="{ active: active === item.name }"
-              @click="onWorkspace(item)"
-            >
-              <el-icon><component :is="item.icon" /></el-icon>
-              <span>{{ item.title }}</span>
-            </button>
-          </template>
-        </nav>
-      </div>
-
-      <main class="content" :class="{ 'with-workspace': inWorkspace }">
+      <main class="content">
         <router-view />
       </main>
     </div>
@@ -474,120 +393,10 @@ async function onCommand(command: string) {
   font-size: 12px;
 }
 
-.workspace {
-  flex: 0 0 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 24px;
-  background: var(--aics-white);
-  border-bottom: 1px solid var(--aics-split);
-  min-width: 0;
-}
-.workspace-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 0;
-  background: transparent;
-  color: var(--aics-text-3);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 6px;
-  white-space: nowrap;
-}
-.workspace-back:hover {
-  color: var(--aics-primary);
-  background: var(--aics-primary-bg);
-}
-.workspace-sep {
-  width: 1px;
-  height: 16px;
-  background: var(--aics-border);
-  flex: 0 0 1px;
-}
-.workspace-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.workspace-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--aics-text);
-  max-width: 200px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.workspace-tag {
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 4px;
-  background: var(--aics-primary-bg);
-  color: var(--aics-primary);
-  font-size: 12px;
-  line-height: 20px;
-  white-space: nowrap;
-}
-.workspace-tabs {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: 12px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.workspace-tabs::-webkit-scrollbar {
-  display: none;
-}
-.ws-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--aics-text-2);
-  font: inherit;
-  font-size: 13px;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease;
-}
-.ws-tab:hover {
-  color: var(--aics-primary);
-  background: var(--aics-primary-bg);
-}
-.ws-tab.active {
-  color: var(--aics-primary);
-  background: var(--aics-primary-bg);
-  font-weight: 600;
-}
-.ws-tab.pending {
-  color: var(--aics-text-3);
-  cursor: not-allowed;
-}
-.ws-tab.pending:hover {
-  color: var(--aics-text-3);
-  background: transparent;
-}
-
 .content {
   flex: 1;
   min-height: 0;
   padding: 24px;
   box-sizing: border-box;
-}
-.content.with-workspace {
-  padding-top: 20px;
 }
 </style>

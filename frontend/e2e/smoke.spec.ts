@@ -23,8 +23,15 @@ test('登录后关键页面可达', async ({ page }) => {
   }
 
   // 应用列表
-  await page.getByRole('link', { name: '应用', exact: true }).click()
-  await expect(page.getByText('新建应用')).toBeVisible()
+  await page.getByRole('link', { name: '智能客服', exact: true }).click()
+  await expect(page.getByText('新建智能客服')).toBeVisible()
+
+  // 配置弹窗：卡片上的「配置」打开单应用设置，左侧带页内菜单
+  await page.locator('.app-card').first().getByRole('button', { name: '配置' }).click()
+  await expect(page.locator('.app-console-dialog')).toBeVisible()
+  await expect(page.locator('.console-nav')).toContainText('API Key')
+  await page.locator('.app-console-dialog .el-dialog__headerbtn').click()
+  await expect(page).toHaveURL(/\/apps$/)
 
   // 用户与审计
   await page.getByRole('link', { name: '用户', exact: true }).click()

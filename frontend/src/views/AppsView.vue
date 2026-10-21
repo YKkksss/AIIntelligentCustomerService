@@ -9,6 +9,7 @@ import {
   Plus,
   Search,
   Service,
+  Setting,
 } from '@element-plus/icons-vue'
 import { appApi, type AppCard } from '@/api/admin'
 import { useAuthStore } from '@/stores/auth'
@@ -136,6 +137,7 @@ function open(row: AppCard) {
 }
 
 async function onCommand(row: AppCard, command: string) {
+  if (command === 'config') await router.push({ name: 'app-config', params: { appId: row.id } })
   if (command === 'knowledge')
     await router.push({ name: 'app-knowledge', params: { appId: row.id } })
   if (command === 'debug') await router.push({ name: 'app-debug', params: { appId: row.id } })
@@ -228,6 +230,7 @@ onMounted(load)
               ></span>
               <template #dropdown>
                 <el-dropdown-menu>
+                  <el-dropdown-item command="config">配置</el-dropdown-item>
                   <el-dropdown-item command="knowledge">知识库</el-dropdown-item>
                   <el-dropdown-item v-if="auth.can('chat.debug')" command="debug">
                     调试对话
@@ -283,8 +286,14 @@ onMounted(load)
                   <el-icon><ChatDotRound /></el-icon>
                 </button>
               </el-tooltip>
-              <el-button type="primary" plain size="small" @click.stop="open(row)">
-                进入
+              <el-button size="small" @click.stop="open(row)">进入</el-button>
+              <el-button
+                type="primary"
+                size="small"
+                :icon="Setting"
+                @click.stop="onCommand(row, 'config')"
+              >
+                配置
               </el-button>
             </div>
           </footer>
