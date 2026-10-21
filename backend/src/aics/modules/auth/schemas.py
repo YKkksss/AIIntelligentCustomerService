@@ -21,6 +21,9 @@ class _Body(BaseModel):
 class LoginBody(_Body):
     email: Email
     password: Password
+    # 「保持登录」天数：不传 = 用服务端默认（`jwt_refresh_ttl_days`，1 天）。
+    # 上限在 service 里按 `jwt_refresh_max_days`（默认 7 天）校验。
+    remember_days: int | None = Field(None, ge=1, le=365)
 
 
 class RefreshBody(_Body):

@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### 调整（会话有效期与「保持登录」，2026-10-21）
+
+- 登录页的「保持登录」从灰掉的勾选框改成 **1 天 / 7 天二选一**（默认 1 天），随登录请求的 `remember_days` 传给后端；refresh 令牌有效期由它决定（`AICS_JWT_REFRESH_TTL_DAYS` 默认 1，上限 `AICS_JWT_REFRESH_MAX_DAYS` 默认 7），轮换时沿用令牌里的 `rmb`，选 7 天的不会因为刷新被降回 1 天。
+- 令牌从 `sessionStorage` 改存 `localStorage`：关浏览器再打开、换标签页都还是登录态，只有令牌过期或被踢才回登录页。
+- 修 `/auth/refresh` 的返回形状（`TokenBody` → `SessionBody`，与登录同形状）：它此前只回 token，而前端 `store.refresh()` 要读 `user` / `apps`，`setApps(undefined)` 抛错走进 catch 把登录态清空 —— **access 每 30 分钟一过期就掉登录，「放着不动也要重新登录」的根因就在这里**。现在 401 `TOKEN_EXPIRED` 会静默续期，用户无感；前端也补了容错，老后端只回 token 时保留内存里的身份。
+
+### 测试（会话有效期，2026-10-21）
+
+- 后端 `pytest tests/unit/test_auth_service.py tests/unit/test_auth_api.py` 23 例全绿（新增「刷新必须回 user / apps」断言）。
+- 前端 `vitest` 13 文件 / 91 例全绿（新增「刷新只回 token 时不清登录态」回归用例）；`vue-tsc -b`、eslint + prettier、`vite build` 通过。
+- Playwright 对真实后端：默认登录得 1 天 TTL、选 7 天得 7 天 TTL 且 JWT `rmb=7`；新浏览器会话带 storageState 直接进 `/apps`；把 access 换成签名合法但已过期的令牌后刷新页面，自动续期并停在 `/apps`，控制台 0 错误。
+
 ### 调整（单应用设置的配置弹窗，2026-10-21）
 
 - 单个智能客服的 8 项设置不再占用壳层：删掉顶栏下方的 48px **工作台条**，改为在列表卡片点「配置」（主操作）打开**配置弹窗**（`layouts/AppConsoleLayout.vue`）。

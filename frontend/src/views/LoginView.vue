@@ -12,6 +12,8 @@ const route = useRoute()
 const form = reactive({ email: '', password: '' })
 const pending = ref(false)
 const message = ref('')
+// 「保持登录」时长：1 天（默认）/ 7 天；后端据此决定 refresh token 的有效期
+const rememberDays = ref<number>(auth.rememberDays)
 
 const redirect = computed(() =>
   typeof route.query.redirect === 'string' ? route.query.redirect : '/',
@@ -22,7 +24,7 @@ async function onSubmit() {
   pending.value = true
   message.value = ''
   try {
-    await auth.login(form.email, form.password)
+    await auth.login(form.email, form.password, rememberDays.value)
     ElMessage.success('登录成功')
     await router.replace(redirect.value)
   } catch (err) {
@@ -89,8 +91,14 @@ async function onSubmit() {
           />
 
           <div class="card-row">
-            <el-tooltip content="令牌只保存在当前会话，关闭浏览器即失效" placement="top">
-              <span class="remember"><el-checkbox disabled size="small" />7 天内自动登录</span>
+            <el-tooltip content="选的时长内关闭浏览器也不用重新登录" placement="top">
+              <span class="remember">
+                <span class="remember-label">保持登录</span>
+                <el-radio-group v-model="rememberDays" size="small" data-test="remember-days">
+                  <el-radio-button :value="1">1 天</el-radio-button>
+                  <el-radio-button :value="7">7 天</el-radio-button>
+                </el-radio-group>
+              </span>
             </el-tooltip>
             <el-tooltip content="请联系管理员重置密码" placement="top">
               <span class="forgot">忘记密码？</span>
@@ -246,8 +254,12 @@ async function onSubmit() {
 .remember {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   cursor: default;
+}
+.remember-label {
+  color: var(--aics-text-3);
+  font-size: 13px;
 }
 .forgot {
   color: var(--aics-primary);

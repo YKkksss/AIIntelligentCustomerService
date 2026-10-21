@@ -35,6 +35,7 @@ const EXPIRED = { error: { code: 'TOKEN_EXPIRED', message: '登录已过期，�
 
 beforeEach(() => {
   setActivePinia(createPinia())
+  localStorage.clear()
   sessionStorage.clear()
   vi.mocked(authApi.refresh).mockReset()
   vi.mocked(ElMessage.error).mockClear()

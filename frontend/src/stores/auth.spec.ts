@@ -36,6 +36,7 @@ const session = {
 
 beforeEach(() => {
   setActivePinia(createPinia())
+  localStorage.clear()
   sessionStorage.clear()
   vi.mocked(authApi.login).mockReset()
   vi.mocked(authApi.refresh).mockReset()
@@ -51,8 +52,8 @@ describe('登录', () => {
 
     expect(auth.isLoggedIn).toBe(true)
     expect(auth.currentAppId).toBe('a')
-    expect(sessionStorage.getItem('aics.access_token')).toBe('access-1')
-    expect(sessionStorage.getItem('aics.refresh_token')).toBe('refresh-1')
+    expect(localStorage.getItem('aics.access_token')).toBe('access-1')
+    expect(localStorage.getItem('aics.refresh_token')).toBe('refresh-1')
     expect(auth.can('app.read')).toBe(true)
     expect(auth.can('kb.write')).toBe(false)
   })
@@ -65,7 +66,18 @@ describe('登录', () => {
     auth.switchApp('b')
 
     expect(auth.can('kb.write')).toBe(true)
-    expect(sessionStorage.getItem('aics.app_id')).toBe('b')
+    expect(localStorage.getItem('aics.app_id')).toBe('b')
+  })
+
+  it('把「保持登录」天数传给登录接口并记住选择', async () => {
+    vi.mocked(authApi.login).mockResolvedValue(session)
+    const auth = useAuthStore()
+
+    await auth.login('admin@example.com', 'secret', 7)
+
+    expect(authApi.login).toHaveBeenCalledWith('admin@example.com', 'secret', 7)
+    expect(auth.rememberDays).toBe(7)
+    expect(localStorage.getItem('aics.remember_days')).toBe('7')
   })
 
   it('超级管理员在任何应用里都放行', async () => {
@@ -93,6 +105,28 @@ describe('刷新令牌', () => {
     expect(auth.accessToken).toBe('access-2')
   })
 
+  it('后端只回令牌时保留内存里的身份，不清登录态', async () => {
+    const auth = useAuthStore()
+    vi.mocked(authApi.login).mockResolvedValue(session)
+    await auth.login('admin@example.com', 'secret')
+
+    // 老形状的刷新回包：只有 token，没有 user / apps
+    const tokenOnly = {
+      access_token: 'access-2',
+      refresh_token: 'refresh-2',
+      token_type: 'bearer' as const,
+      expires_in: 1800,
+    }
+    vi.mocked(authApi.refresh).mockResolvedValue(tokenOnly as unknown as typeof session)
+
+    const token = await auth.refresh()
+
+    expect(token).toBe('access-2')
+    expect(auth.isLoggedIn).toBe(true)
+    expect(auth.user?.email).toBe('admin@example.com')
+    expect(auth.currentAppId).toBe('a')
+  })
+
   it('失败时清空登录态并返回 null', async () => {
     vi.mocked(authApi.refresh).mockRejectedValue(new Error('401'))
     const auth = useAuthStore()
@@ -102,7 +136,7 @@ describe('刷新令牌', () => {
 
     expect(token).toBeNull()
     expect(auth.isLoggedIn).toBe(false)
-    expect(sessionStorage.getItem('aics.access_token')).toBeNull()
+    expect(localStorage.getItem('aics.access_token')).toBeNull()
   })
 
   it('没有 refresh token 时不发请求', async () => {

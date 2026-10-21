@@ -53,7 +53,9 @@ class Settings(BaseSettings):
     # ---- 安全 ----
     jwt_secret: SecretStr
     jwt_access_ttl_min: int = Field(30, gt=0)
-    jwt_refresh_ttl_days: int = Field(7, gt=0)
+    # 登录时可选的「保持登录」时长：默认 1 天，最长 max 天（登录页提供 1 天 / 7 天二选一）
+    jwt_refresh_ttl_days: int = Field(1, gt=0)
+    jwt_refresh_max_days: int = Field(7, gt=0)
     api_key_pepper: SecretStr
     data_encryption_key: SecretStr
     bootstrap_admin_email: str | None = DEFAULT_ADMIN_EMAIL

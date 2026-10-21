@@ -59,14 +59,14 @@ async def login(body: LoginBody, request: Request) -> JSONResponse:
     runtime = _runtime(request)
     async with runtime.sessions() as session:
         result = await runtime.service(session).login(
-            body.email, body.password, meta=_meta(request)
+            body.email, body.password, remember_days=body.remember_days, meta=_meta(request)
         )
     return JSONResponse(result.model_dump(mode="json"))
 
 
 @router.post(
     "/auth/refresh",
-    summary="用 refresh token 换新的一对 token（旧的立即失效）",
+    summary="用 refresh token 换新的一对 token（旧的立即失效；同时返回最新用户与可见应用）",
     responses=errors(401, 422, 429),
 )
 async def refresh(body: RefreshBody, request: Request) -> JSONResponse:

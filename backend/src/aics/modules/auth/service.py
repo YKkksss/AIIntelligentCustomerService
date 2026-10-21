@@ -113,12 +113,24 @@ class AuthService:
     def _access_ttl(self) -> timedelta:
         return timedelta(minutes=self.settings.jwt_access_ttl_min)
 
-    @property
-    def _refresh_ttl(self) -> timedelta:
-        return timedelta(days=self.settings.jwt_refresh_ttl_days)
+    def _refresh_ttl(self, remember_days: int | None = None) -> timedelta:
+        """refresh 有效期：没指定就用默认（1 天），指定了就用用户选的天数。"""
+        days = remember_days or self.settings.jwt_refresh_ttl_days
+        return timedelta(days=days)
 
-    def _issue(self, user: User, kind: str) -> tokens.Issued:
-        ttl = self._access_ttl if kind == tokens.ACCESS else self._refresh_ttl
+    def _check_remember_days(self, days: int | None) -> int | None:
+        """登录时用户选的「保持登录」天数：不超过配置上限，否则 422。"""
+        if days is None:
+            return None
+        if days > self.settings.jwt_refresh_max_days:
+            raise ValidationAppError(
+                message=f"保持登录最多 {self.settings.jwt_refresh_max_days} 天",
+                details={"remember_days_max": self.settings.jwt_refresh_max_days},
+            )
+        return days
+
+    def _issue(self, user: User, kind: str, *, remember_days: int | None = None) -> tokens.Issued:
+        ttl = self._access_ttl if kind == tokens.ACCESS else self._refresh_ttl(remember_days)
         return tokens.issue(
             secret=self.settings.jwt_secret.get_secret_value(),
             user_id=user.id,
@@ -126,12 +138,14 @@ class AuthService:
             kind=kind,
             ttl=ttl,
             now=self.now(),
+            remember_days=remember_days if kind == tokens.REFRESH else None,
         )
 
     async def _remember_refresh(self, issued: tokens.Issued) -> None:
         if self.redis is None:
             return
-        ttl = int(self._refresh_ttl.total_seconds())
+        # 用令牌自己的过期时间，Redis 记录与 JWT 不会错位（选了 7 天的不会被按 1 天清掉）
+        ttl = max(int((issued.payload.expires_at - self.now()).total_seconds()), 1)
         await self.redis.set(
             self._refresh_key(issued.payload.jti), str(issued.payload.user_id), ex=ttl
         )
@@ -156,8 +170,13 @@ class AuthService:
         except RedisError as exc:  # pragma: no cover - Redis outage, cache expires anyway
             log.warning("auth.cache_drop_failed", error_type=type(exc).__name__)
 
-    def _pair(self, user: User) -> tuple[tokens.Issued, tokens.Issued]:
-        return self._issue(user, tokens.ACCESS), self._issue(user, tokens.REFRESH)
+    def _pair(
+        self, user: User, *, remember_days: int | None = None
+    ) -> tuple[tokens.Issued, tokens.Issued]:
+        return (
+            self._issue(user, tokens.ACCESS),
+            self._issue(user, tokens.REFRESH, remember_days=remember_days),
+        )
 
     def _token_body(self, access: tokens.Issued, refresh: tokens.Issued) -> TokenBody:
         return TokenBody(
@@ -173,7 +192,15 @@ class AuthService:
         await self.audit.write(self.session, entry)
 
     # ----------------------------------------------------------------- login
-    async def login(self, email: str, password: str, *, meta: RequestMeta) -> SessionBody:
+    async def login(
+        self,
+        email: str,
+        password: str,
+        *,
+        remember_days: int | None = None,
+        meta: RequestMeta,
+    ) -> SessionBody:
+        days = self._check_remember_days(remember_days)
         if self.limiter is not None:
             await self.limiter.hit(
                 Limits(key=f"login:{meta.ip or 'unknown'}", limit=LOGIN_RPM, window_s=60)
@@ -213,7 +240,7 @@ class AuthService:
         user.last_login_at = now
         if passwords.needs_rehash(user.password_hash):
             user.password_hash = passwords.hash_password(password)
-        access, refresh = self._pair(user)
+        access, refresh = self._pair(user, remember_days=days)
         await self._remember_refresh(refresh)
         rows = await self.repo.memberships(user.id)
         body = SessionBody(
@@ -245,7 +272,7 @@ class AuthService:
         )
 
     # --------------------------------------------------------------- refresh
-    async def refresh(self, refresh_token: str) -> TokenBody:
+    async def refresh(self, refresh_token: str) -> SessionBody:
         payload = tokens.decode(
             secret=self.settings.jwt_secret.get_secret_value(),
             token=refresh_token,
@@ -276,9 +303,17 @@ class AuthService:
                 raise UnauthenticatedError(details={"reason": "refresh_reused"})
             await self.redis.delete(key)
 
-        access, refresh = self._pair(user)
+        # 轮换时沿用令牌里记录的保持登录天数：选了 7 天的不会因为刷新被降成 1 天
+        access, refresh = self._pair(user, remember_days=payload.remember_days)
         await self._remember_refresh(refresh)
-        return self._token_body(access, refresh)
+        # 与登录回同一个形状：前端刷新后直接用这里的 user / apps 恢复身份。
+        # 只回 TokenBody 会让前端在 access 过期时清掉登录态（管理后台设计 §1）。
+        rows = await self.repo.memberships(user.id)
+        return SessionBody(
+            **self._token_body(access, refresh).model_dump(),
+            user=_user_body(user),
+            apps=_roles(rows, super_admin=user.is_super_admin),
+        )
 
     # ---------------------------------------------------------------- logout
     async def logout(self, refresh_token: str | None) -> None:

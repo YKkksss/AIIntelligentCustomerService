@@ -58,7 +58,9 @@ class FakeService:
         if self.error is not None:
             raise self.error
 
-    async def login(self, email: str, password: str, *, meta: Any) -> SessionBody:
+    async def login(
+        self, email: str, password: str, *, remember_days: int | None = None, meta: Any
+    ) -> SessionBody:
         self.calls.append(("login", email, password, meta.ip))
         self._maybe_raise()
         return SessionBody(
@@ -74,10 +76,21 @@ class FakeService:
             apps=[],
         )
 
-    async def refresh(self, token: str) -> TokenBody:
+    async def refresh(self, token: str) -> SessionBody:
         self.calls.append(("refresh", token))
         self._maybe_raise()
-        return TokenBody(access_token="a2" * 16, refresh_token="r2" * 16, expires_in=1800)
+        return SessionBody(
+            access_token="a2" * 16,
+            refresh_token="r2" * 16,
+            expires_in=1800,
+            user=UserBody(
+                id=uuid4(),
+                email="admin@example.com",
+                display_name="管理员",
+                is_super_admin=True,
+            ),
+            apps=[],
+        )
 
     async def logout(self, token: str | None) -> None:
         self.calls.append(("logout", token))
@@ -174,6 +187,9 @@ def test_refresh_and_logout(client: tuple[TestClient, FakeService]) -> None:
     resp = http.post("/api/v1/admin/auth/refresh", json={"refresh_token": "r" * 32})
     assert resp.status_code == 200
     assert resp.json()["access_token"].startswith("a2")
+    # 刷新回包要能直接恢复身份，否则前端只能掉登录
+    assert resp.json()["user"]["email"] == "admin@example.com"
+    assert resp.json()["apps"] == []
     out = http.post("/api/v1/admin/auth/logout", json={"refresh_token": "r" * 32})
     assert out.status_code == 204
     assert service.calls[-1][0] == "logout"

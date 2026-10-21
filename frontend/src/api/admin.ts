@@ -112,8 +112,13 @@ export interface SystemSettings {
 }
 
 export const authApi = {
-  async login(email: string, password: string): Promise<SessionBody> {
-    const { data } = await http.post<SessionBody>('/admin/auth/login', { email, password })
+  /** `rememberDays`：保持登录天数（1 或 7）；不传则用服务端默认值。 */
+  async login(email: string, password: string, rememberDays?: number): Promise<SessionBody> {
+    const { data } = await http.post<SessionBody>('/admin/auth/login', {
+      email,
+      password,
+      ...(rememberDays ? { remember_days: rememberDays } : {}),
+    })
     return data
   },
   async refresh(refreshToken: string): Promise<SessionBody> {

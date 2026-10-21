@@ -204,6 +204,10 @@ async def test_refresh_rotates_the_token(monkeypatch: pytest.MonkeyPatch) -> Non
     body = await svc.login("admin@example.com", "correct horse battery", meta=META)
     rotated = await svc.refresh(body.refresh_token)
     assert rotated.refresh_token != body.refresh_token
+    # 刷新必须把身份一起带回来：前端 store.refresh() 靠它恢复 user / apps，
+    # 只回 token 会让 access 过期时把登录态清掉（管理后台设计 §1）
+    assert rotated.user.id == user.id
+    assert rotated.apps == []
     old = tokens.decode(
         secret=get_settings().jwt_secret.get_secret_value(),
         token=body.refresh_token,
@@ -295,3 +299,41 @@ async def test_logout_is_forgiving(monkeypatch: pytest.MonkeyPatch) -> None:
     assert not [k for k in cache.data if "auth:refresh:" in k]
     await svc.logout("garbage")  # 过期 / 伪造的 token 不抛
     await svc.logout(None)
+
+
+async def test_login_defaults_to_one_day_refresh(monkeypatch: pytest.MonkeyPatch) -> None:
+    user = _user()
+    svc, _repo, _session, _cache = _svc(monkeypatch, user)
+    body = await svc.login("admin@example.com", "correct horse battery", meta=META)
+    refresh = tokens.decode(
+        secret=get_settings().jwt_secret.get_secret_value(),
+        token=body.refresh_token,
+        kind=tokens.REFRESH,
+    )
+    assert refresh.remember_days is None  # 没选就用默认值，令牌里不带 rmb
+    assert refresh.expires_at - refresh.issued_at == timedelta(days=1)
+
+
+async def test_remember_days_keeps_seven_days_across_rotation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = _user()
+    svc, _repo, _session, _cache = _svc(monkeypatch, user)
+    body = await svc.login("admin@example.com", "correct horse battery", remember_days=7, meta=META)
+    secret = get_settings().jwt_secret.get_secret_value()
+    refresh = tokens.decode(secret=secret, token=body.refresh_token, kind=tokens.REFRESH)
+    assert refresh.remember_days == 7
+    assert refresh.expires_at - refresh.issued_at == timedelta(days=7)
+
+    rotated = await svc.refresh(body.refresh_token)
+    again = tokens.decode(secret=secret, token=rotated.refresh_token, kind=tokens.REFRESH)
+    assert again.remember_days == 7  # 轮换不会把 7 天悄悄降成 1 天
+    assert again.expires_at - again.issued_at == timedelta(days=7)
+
+
+async def test_remember_days_above_max_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    user = _user()
+    svc, _repo, _session, _cache = _svc(monkeypatch, user)
+    with pytest.raises(ValidationAppError) as err:
+        await svc.login("admin@example.com", "correct horse battery", remember_days=30, meta=META)
+    assert err.value.details["remember_days_max"] == get_settings().jwt_refresh_max_days

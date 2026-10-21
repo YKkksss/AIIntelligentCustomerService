@@ -3,17 +3,32 @@ import { computed, ref } from 'vue'
 import { appApi, authApi, type AdminUser, type AppMembership } from '@/api/admin'
 import { hasPermission } from '@/utils/perm'
 
-// access / refresh token 只存内存 + sessionStorage（关闭浏览器即失效），见管理后台设计 §1
+// access / refresh token 存内存 + localStorage：有效期由登录时选的「保持登录」天数决定
+// （1 天 / 7 天，后端按 JWT exp 与 Redis TTL 双重把关），见管理后台设计 §1
 const ACCESS = 'aics.access_token'
 const REFRESH = 'aics.refresh_token'
 const APP = 'aics.app_id'
+const REMEMBER = 'aics.remember_days'
+
+/** 记住登录：先读 localStorage，同时兼容旧版本留在 sessionStorage 里的令牌。 */
+function read(key: string): string | null {
+  return localStorage.getItem(key) ?? sessionStorage.getItem(key)
+}
+
+function write(key: string, value: string | null) {
+  if (value) localStorage.setItem(key, value)
+  else localStorage.removeItem(key)
+  sessionStorage.removeItem(key)
+}
 
 export const useAuthStore = defineStore('auth', () => {
-  const accessToken = ref<string | null>(sessionStorage.getItem(ACCESS))
-  const refreshToken = ref<string | null>(sessionStorage.getItem(REFRESH))
+  const accessToken = ref<string | null>(read(ACCESS))
+  const refreshToken = ref<string | null>(read(REFRESH))
   const user = ref<AdminUser | null>(null)
   const apps = ref<AppMembership[]>([])
-  const currentAppId = ref<string | null>(sessionStorage.getItem(APP))
+  const currentAppId = ref<string | null>(read(APP))
+  /** 登录时选的「保持登录」天数（1 / 7），只用来给下次登录预选。 */
+  const rememberDays = ref<number>(Number(read(REMEMBER)) || 1)
   const loaded = ref(false)
 
   const isLoggedIn = computed(() => !!accessToken.value)
@@ -25,10 +40,8 @@ export const useAuthStore = defineStore('auth', () => {
   function setTokens(access: string | null, refresh: string | null) {
     accessToken.value = access
     refreshToken.value = refresh
-    if (access) sessionStorage.setItem(ACCESS, access)
-    else sessionStorage.removeItem(ACCESS)
-    if (refresh) sessionStorage.setItem(REFRESH, refresh)
-    else sessionStorage.removeItem(REFRESH)
+    write(ACCESS, access)
+    write(REFRESH, refresh)
   }
 
   function setApps(next: AppMembership[]) {
@@ -59,8 +72,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   function switchApp(appId: string | null) {
     currentAppId.value = appId
-    if (appId) sessionStorage.setItem(APP, appId)
-    else sessionStorage.removeItem(APP)
+    write(APP, appId)
   }
 
   /** 应用作用域权限；不传 appId 时用当前应用。 */
@@ -68,8 +80,10 @@ export const useAuthStore = defineStore('auth', () => {
     return hasPermission(apps.value, appId, permission, isSuperAdmin.value)
   }
 
-  async function login(email: string, password: string) {
-    const session = await authApi.login(email, password)
+  async function login(email: string, password: string, days = 1) {
+    const session = await authApi.login(email, password, days)
+    rememberDays.value = days
+    write(REMEMBER, String(days))
     setTokens(session.access_token, session.refresh_token)
     user.value = session.user
     setApps(session.apps)
@@ -83,9 +97,13 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const session = await authApi.refresh(refreshToken.value)
       setTokens(session.access_token, session.refresh_token)
-      user.value = session.user
-      setApps(session.apps)
-      loaded.value = true
+      // 后端正常会把 user / apps 一起回；万一只回令牌（老形状），就保留内存里的身份，
+      // 绝不能因为 setApps(undefined) 抛错把登录态清掉 —— 那会让 access 一过期就掉登录
+      if (session.user) {
+        user.value = session.user
+        loaded.value = true
+      }
+      if (session.apps) setApps(session.apps)
       await fillSuperAdminApps()
       return session.access_token
     } catch {
@@ -140,6 +158,7 @@ export const useAuthStore = defineStore('auth', () => {
     apps,
     currentAppId,
     currentApp,
+    rememberDays,
     loaded,
     isLoggedIn,
     isSuperAdmin,
