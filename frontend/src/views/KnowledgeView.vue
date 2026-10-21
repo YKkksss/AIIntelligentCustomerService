@@ -271,13 +271,16 @@ onMounted(async () => {
       <div>
         <h2 class="aics-page-title">知识库</h2>
         <p class="aics-page-subtitle">
-          上传文档后自动解析、切块并建立索引；命中测试与文档有效期在后续里程碑提供。
+          上传文档后自动解析、切块并建立索引；切块可编辑正文、手工新增、补充问题，文档支持有效期与近重复提示。
         </p>
       </div>
       <div class="head-actions">
         <el-tooltip content="批量重建索引将在 M4.3b 提供" placement="top">
           <span><el-button disabled>全量重建索引</el-button></span>
         </el-tooltip>
+        <el-button @click="router.push({ name: 'app-hit-test', params: { appId } })"
+          >命中测试</el-button
+        >
         <el-button v-if="canWrite" type="primary" @click="uploadVisible = true">上传文档</el-button>
       </div>
     </div>

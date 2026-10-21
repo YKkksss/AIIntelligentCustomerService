@@ -61,6 +61,8 @@ def document_body(doc: Document) -> dict[str, Any]:
         "chunk_count": doc.chunk_count,
         "index_version": doc.index_version,
         "tags": list(doc.tags or []),
+        "effective_at": doc.effective_at,
+        "expires_at": doc.expires_at,
         "created_at": doc.created_at,
         "updated_at": doc.updated_at,
     }
@@ -78,6 +80,7 @@ def chunk_body(chunk: Chunk) -> dict[str, Any]:
         "enabled": chunk.enabled,
         "review_status": chunk.review_status,
         "flag_reason": chunk.flag_reason,
+        "source": chunk.source,
     }
 
 

@@ -120,3 +120,58 @@ describe('knowledge api 与后端管理接口一一对应', () => {
     ])
   })
 })
+
+describe('切块级运营（M4.3b ③）', () => {
+  it('手工新增与删除切块', async () => {
+    await knowledgeApi.createChunk(appId, 'doc-1', { text: '手工正文', heading_path: '补充' })
+    expect(post.mock.calls[0]).toEqual([
+      `${base}/documents/doc-1/chunks`,
+      { text: '手工正文', heading_path: '补充' },
+    ])
+
+    await knowledgeApi.deleteChunk(appId, 'chunk-9')
+    expect(del.mock.calls[0]?.[0]).toBe(`${base}/chunks/chunk-9`)
+  })
+
+  it('正文编辑走 PATCH，并可同时改标题路径', async () => {
+    await knowledgeApi.patchChunk(appId, 'chunk-1', { text: '新正文', heading_path: '新标题' })
+    expect(patch.mock.calls[0]).toEqual([
+      `${base}/chunks/chunk-1`,
+      { text: '新正文', heading_path: '新标题' },
+    ])
+  })
+
+  it('近重复、补充问题与 reattach 的路径', async () => {
+    await knowledgeApi.duplicates(appId, 'doc-1')
+    expect(get.mock.calls[0]?.[0]).toBe(`${base}/documents/doc-1/duplicates`)
+
+    await knowledgeApi.questions(appId, 'chunk-1')
+    expect(get.mock.calls[1]?.[0]).toBe(`${base}/chunks/chunk-1/questions`)
+
+    await knowledgeApi.addQuestions(appId, 'chunk-1', ['a?', 'b?'])
+    expect(post.mock.calls[0]).toEqual([
+      `${base}/chunks/chunk-1/questions`,
+      { questions: ['a?', 'b?'] },
+    ])
+
+    await knowledgeApi.deleteQuestion(appId, 'q-1')
+    expect(del.mock.calls[0]?.[0]).toBe(`${base}/questions/q-1`)
+
+    await knowledgeApi.reattachQuestion(appId, 'q-1', 'chunk-2')
+    expect(post.mock.calls[1]).toEqual([`${base}/questions/q-1/reattach`, { chunk_id: 'chunk-2' }])
+  })
+
+  it('文档有效期与命中测试', async () => {
+    await knowledgeApi.patchDocument(appId, 'doc-1', { expires_at: '2027-01-01T00:00:00.000Z' })
+    expect(patch.mock.calls[0]).toEqual([
+      `${base}/documents/doc-1`,
+      { expires_at: '2027-01-01T00:00:00.000Z' },
+    ])
+
+    await knowledgeApi.hitTest(appId, { query: '退款', filters: { tags: ['售后'] } })
+    expect(post.mock.calls[0]).toEqual([
+      `${base}/hit-test`,
+      { query: '退款', filters: { tags: ['售后'] } },
+    ])
+  })
+})

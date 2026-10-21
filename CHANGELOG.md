@@ -4,6 +4,23 @@
 
 ## [Unreleased]
 
+### 新增（M4.3b ④ 知识库切块级运营页面，2026-10-21）
+
+- `views/KnowledgeDocumentView.vue` 扩成切块运营台：展开看正文、**正文编辑**（弹窗，保存后只重算该块并置 `edited`）、
+  **手工新增切块**（`source=manual`，重建保留）、删除切块、**补充问题抽屉**（批量新增/删除）、
+  文档**有效期**对话框（生效/失效时间，留空为立即生效 / 长期有效）；顶部对近重复文档给黄色提示（只提示不阻止）。
+- 新增 `views/HitTestView.vue`（`/apps/:appId/hit-test`，`kb.read`）：查询 + 标签过滤 + 覆盖参数 JSON，
+  结果分四组展示（融合 / 重排 / 向量 / 关键词），并展示本次使用的 `retrieval_mode` / `fusion` 与是否启用重排。
+- `api/knowledge.ts` 扩 8 个方法（`createChunk`、`deleteChunk`、`duplicates`、`questions`、`addQuestions`、
+  `deleteQuestion`、`reattachQuestion`、`hitTest`）与 `ChunkQuestion` / `DuplicateRow` / `HitTestResult` 等类型；
+  `patchChunk` 支持 `text`/`heading_path`，`patchDocument` 支持 `effective_at`/`expires_at`。
+- 知识库列表页工具栏加「命中测试」入口，提示文案改为切块运营口径。
+
+### 测试（M4.3b ④，2026-10-21）
+
+- 前端 `vitest`：新增 `api/knowledge.spec.ts` 4 例（手工新增与删除、正文编辑、近重复与补充问题五条路径、有效期与命中测试），
+  共 **14 个 spec / 89 例**、覆盖率 **85.56% 语句 / 85.53% 行**；`vue-tsc -b`、`eslint`、`prettier`、`vite build` 全绿。
+
 ### 新增（M4.3b ③ 切块级运营接口，2026-10-21）
 
 - `modules/knowledge/admin_router.py` 新增 7 条：`POST /documents/{document_id}/chunks`（手工新增，201）、

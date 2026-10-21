@@ -28,6 +28,8 @@ export interface DocumentRow {
   chunk_count: number
   index_version: number
   tags: string[]
+  effective_at: string | null
+  expires_at: string | null
   created_at: string
   updated_at: string
 }
@@ -44,6 +46,56 @@ export interface DocumentChunk {
   enabled: boolean
   review_status: ReviewStatus
   flag_reason: string | null
+  source: 'parsed' | 'manual' | 'edited'
+}
+
+/** 切块补充问题（`GET /chunks/{chunk_id}/questions`）。 */
+export interface ChunkQuestion {
+  id: string
+  chunk_id: string
+  question: string
+  source: string
+  status: string | null
+  created_at: string
+}
+
+/** 近重复提示（`GET /documents/{id}/duplicates`）：海明距离 ≤ 3 才返回。 */
+export interface DuplicateRow {
+  document_id: string
+  title: string
+  distance: number
+}
+
+export interface HitTestRanked {
+  chunk_id: string
+  score: number
+  rank: number
+}
+
+export interface HitTestUnit {
+  chunk_id: string
+  document_id: string
+  document_title: string
+  heading_path: string | null
+  text: string
+  score: number
+  rank: number
+  vector_score?: number | null
+  keyword_score?: number | null
+  fused_score?: number | null
+  rerank_score?: number | null
+}
+
+/** `POST /hit-test`：检索 → 融合 → 重排，不调模型、不写库。 */
+export interface HitTestResult {
+  query: string
+  rag_config: Record<string, unknown>
+  tags: string[]
+  vector: HitTestRanked[]
+  keyword: HitTestRanked[]
+  fused: HitTestUnit[]
+  reranked: HitTestUnit[]
+  rerank_applied: boolean
 }
 
 /** 管理端跨文档切块（`GET /chunks`，带文档归属与复核时间）。 */
@@ -221,7 +273,12 @@ export const knowledgeApi = {
   async patchDocument(
     appId: string,
     documentId: string,
-    patch: { title?: string; metadata?: Record<string, unknown> },
+    patch: {
+      title?: string
+      metadata?: Record<string, unknown>
+      effective_at?: string | null
+      expires_at?: string | null
+    },
   ): Promise<DocumentRow> {
     const { data } = await http.patch<DocumentRow>(
       `${endpoint(appId)}/documents/${documentId}`,
@@ -256,13 +313,74 @@ export const knowledgeApi = {
     )
     return data
   },
-  /** 切块启停与复核：`review_status` 只接受 `approved`（M4.3 ③）。 */
+  /** 切块启停、复核（只接受 `approved`）与正文编辑（M4.3 ③，M4.3b ③）。 */
   async patchChunk(
     appId: string,
     chunkId: string,
-    patch: { enabled?: boolean; review_status?: 'approved' },
+    patch: { enabled?: boolean; review_status?: 'approved'; text?: string; heading_path?: string },
   ): Promise<ChunkRow> {
     const { data } = await http.patch<ChunkRow>(`${endpoint(appId)}/chunks/${chunkId}`, patch)
+    return data
+  },
+  /** 手工新增切块（`POST /documents/{id}/chunks`，`source=manual`，201）。 */
+  async createChunk(
+    appId: string,
+    documentId: string,
+    body: { text: string; heading_path?: string },
+  ): Promise<ChunkRow> {
+    const { data } = await http.post<ChunkRow>(
+      `${endpoint(appId)}/documents/${documentId}/chunks`,
+      body,
+    )
+    return data
+  },
+  async deleteChunk(appId: string, chunkId: string): Promise<void> {
+    await http.delete(`${endpoint(appId)}/chunks/${chunkId}`)
+  },
+  /** 近重复提示：同应用其他文档中海明距离 ≤ 3 的（只提示，不阻止入库）。 */
+  async duplicates(appId: string, documentId: string): Promise<{ items: DuplicateRow[] }> {
+    const { data } = await http.get<{ items: DuplicateRow[] }>(
+      `${endpoint(appId)}/documents/${documentId}/duplicates`,
+    )
+    return data
+  },
+  async questions(appId: string, chunkId: string): Promise<{ items: ChunkQuestion[] }> {
+    const { data } = await http.get<{ items: ChunkQuestion[] }>(
+      `${endpoint(appId)}/chunks/${chunkId}/questions`,
+    )
+    return data
+  },
+  async addQuestions(
+    appId: string,
+    chunkId: string,
+    questions: string[],
+  ): Promise<{ items: ChunkQuestion[] }> {
+    const { data } = await http.post<{ items: ChunkQuestion[] }>(
+      `${endpoint(appId)}/chunks/${chunkId}/questions`,
+      { questions },
+    )
+    return data
+  },
+  async deleteQuestion(appId: string, questionId: string): Promise<void> {
+    await http.delete(`${endpoint(appId)}/questions/${questionId}`)
+  },
+  async reattachQuestion(
+    appId: string,
+    questionId: string,
+    chunkId: string,
+  ): Promise<ChunkQuestion> {
+    const { data } = await http.post<ChunkQuestion>(
+      `${endpoint(appId)}/questions/${questionId}/reattach`,
+      { chunk_id: chunkId },
+    )
+    return data
+  },
+  /** 检索冒烟：只跑检索 → 融合 → 重排（不调模型、不写库，M4.3 ②）。 */
+  async hitTest(
+    appId: string,
+    body: { query: string; overrides?: Record<string, unknown>; filters?: Record<string, unknown> },
+  ): Promise<HitTestResult> {
+    const { data } = await http.post<HitTestResult>(`${endpoint(appId)}/hit-test`, body)
     return data
   },
 }
