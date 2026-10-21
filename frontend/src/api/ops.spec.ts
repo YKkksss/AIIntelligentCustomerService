@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 
-const get = vi.fn((..._args: unknown[]) => Promise.resolve({ data: {} }))
-const post = vi.fn((..._args: unknown[]) => Promise.resolve({ data: {} }))
-const patch = vi.fn((..._args: unknown[]) => Promise.resolve({ data: {} }))
-const remove = vi.fn((..._args: unknown[]) => Promise.resolve({ data: {} }))
+type MockFn = (...args: unknown[]) => Promise<{ data: Record<string, unknown> }>
+
+const respond = async (...args: unknown[]): Promise<{ data: Record<string, unknown> }> => {
+  void args
+  return { data: {} }
+}
+const get = vi.fn<MockFn>(respond)
+const post = vi.fn<MockFn>(respond)
+const patch = vi.fn<MockFn>(respond)
+const remove = vi.fn<MockFn>(respond)
 
 vi.mock('@/api/http', () => ({
   http: {
@@ -73,7 +79,9 @@ describe('logApi', () => {
     expect(get).toHaveBeenCalledWith(`/admin/apps/${APP}/conversations/c1`)
 
     await logApi.release(APP, 'c1', '备注')
-    expect(post).toHaveBeenCalledWith(`/admin/apps/${APP}/conversations/c1/release`, { note: '备注' })
+    expect(post).toHaveBeenCalledWith(`/admin/apps/${APP}/conversations/c1/release`, {
+      note: '备注',
+    })
 
     await logApi.callbacks(APP, true)
     expect(get).toHaveBeenCalledWith(`/admin/apps/${APP}/callbacks`, {

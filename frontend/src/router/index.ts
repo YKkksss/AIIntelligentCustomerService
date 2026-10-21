@@ -22,8 +22,8 @@ const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'home',
-        component: () => import('@/views/HomeView.vue'),
-        meta: { menu: true, title: '概览', icon: 'HomeFilled' },
+        component: () => import('@/views/DashboardView.vue'),
+        meta: { menu: true, title: '仪表盘', icon: 'Odometer' },
       },
       {
         path: 'apps',
@@ -36,6 +36,12 @@ const routes: RouteRecordRaw[] = [
         name: 'app-config',
         component: () => import('@/views/AppConfigView.vue'),
         meta: { permission: 'app.read', title: '应用配置' },
+      },
+      {
+        path: 'apps/:appId/overview',
+        name: 'app-overview',
+        component: () => import('@/views/AppOverviewView.vue'),
+        meta: { permission: 'app.read', title: '概览' },
       },
       {
         path: 'apps/:appId/knowledge',

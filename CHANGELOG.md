@@ -4,6 +4,26 @@
 
 ## [Unreleased]
 
+### 新增（M4.6 ③ 仪表盘与应用概览，2026-10-21）
+
+- `frontend/src/api/stats.ts`：`statsApi.overview(days)` / `statsApi.app(appId, days)` 与响应类型（`StatsTotals`、`DailyRow`、`AppTotals`、`StatsOverview`、`DailyPoint`）。
+- `frontend/src/utils/stats.ts`：比率与千分位格式化、KPI 四卡口径（对话量、拒答率、转人工率、点踩率）、`DayTrend`/`DayLatency` 时间序列、意图分布排序与中文标签、`sumTotals` / `mergeIntents`。
+- `frontend/src/components/ChartPanel.vue`：ECharts 按需注册（Bar/Line + Grid/Tooltip/Legend/Title + Canvas），随容器尺寸自适应、卸载销毁。
+- 全局仪表盘 `frontend/src/views/DashboardView.vue`（路由 `/`，侧栏「仪表盘」）：KPI 四卡带迷你柱、对话量趋势、拒答率趋势、应用对比、意图分布，时间范围 7/14/30 天，支持导出当前区间 CSV。
+- 单应用概览 `frontend/src/views/AppOverviewView.vue`（路由 `/apps/:appId/overview`）：同一套 KPI + 对话量/拒答率/延迟（P50、P95）趋势与意图分布；应用内菜单「概览」不再是 pending。
+- 前端依赖新增 `echarts@^6.1.0`。
+
+### 修复（M4.6 ③，2026-10-21）
+
+- 仪表盘的逐日序列按后端 `overview.series`（已跨应用相加）消费，不再按「应用 → 日期」二次聚合；平台级延迟趋势没有数据源，改为「应用对比」，延迟趋势只在单应用概览给出（ISSUE-94）。
+- `frontend/src/api/ops.spec.ts` 的 HTTP 假实现改成「有参函数 + `vi.fn<MockFn>`」，修掉 `--strict` 下 `TS2556`（spread argument）并满足 `@typescript-eslint/no-unused-vars`。
+
+### 测试（M4.6 ③，2026-10-21）
+
+- 新增 `frontend/src/api/stats.spec.ts`（3 例：`days` 透传、默认 7 天、单应用路径）与 `frontend/src/utils/stats.spec.ts`（13 例：比率与格式化、KPI 口径、趋势序列、意图排序与标签、`sumTotals`、`mergeIntents`）。
+- 前端 `vitest` **13 文件 / 85 例** 全绿，覆盖率 **85.30% 语句 / 85.24% 行**（门槛 80）；`vue-tsc -b`、`npm run lint`（eslint + prettier）、`npm run build` 全过（`stats` chunk 539 kB，仅仪表盘路由按需加载）。
+- 截图核对：`docs/05-frontend/ui/preview/07-dashboard.png`、`08-app-overview.png`（1440×900，真实数据来自本机聚合）。
+
 ### 新增（M4.6 ② 日聚合与统计接口，2026-10-20）
 
 - 迁移 `0015` 新建 `app_daily_stats`（主键 `(app_id, date)`；17 个计数列 + `intent_distribution`、tokens 与三个分位；`app_id` 外键级联删除），模型 `backend/src/aics/db/models/stats.py`。

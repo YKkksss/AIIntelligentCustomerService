@@ -47,7 +47,7 @@ const globalMenu = computed<MenuItem[]>(() =>
 /** 应用内菜单：设计稿 03–06 画板（概览 / 配置 / 知识库 / 调试对话 / 评测 / API Key）。 */
 const appMenu = computed<MenuItem[]>(() =>
   [
-    { name: 'app-overview', title: '概览', icon: DataBoard, pending: 'M4.6' },
+    { name: 'app-overview', title: '概览', icon: DataBoard },
     { name: 'app-config', title: '配置', icon: Setting },
     { name: 'app-knowledge', title: '知识库', icon: Collection, permission: 'kb.read' },
     { name: 'app-debug', title: '调试对话', icon: ChatDotRound, permission: 'chat.debug' },
@@ -84,6 +84,8 @@ const breadcrumb = computed<string[]>(() => {
       return ['应用', '应用列表']
     case 'app-config':
       return ['应用', appName, '配置']
+    case 'app-overview':
+      return ['应用', appName, '概览']
     case 'app-knowledge':
       return ['应用', appName, '知识库']
     case 'app-knowledge-document':
