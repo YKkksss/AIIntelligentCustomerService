@@ -137,7 +137,7 @@ watch([appId, days], load)
       <div>
         <h1 class="aics-page-title">概览</h1>
         <p class="aics-page-subtitle">
-          {{ appName || '本应用' }} · 近 {{ days }} 天 {{ rangeText ? `(${rangeText})` : '' }}
+          {{ appName || '本智能客服' }} · 近 {{ days }} 天 {{ rangeText ? `(${rangeText})` : '' }}
         </p>
       </div>
       <el-select v-model="days" class="range-select" aria-label="时间范围">

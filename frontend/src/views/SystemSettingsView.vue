@@ -49,7 +49,7 @@ onMounted(load)
     <el-alert
       type="info"
       :closable="false"
-      title="平台默认会话配置只对新应用与未单独设置的应用生效；应用自己的会话配置优先。"
+      title="平台默认会话配置只对新建智能客服与未单独设置的智能客服生效；智能客服自己的会话配置优先。"
     />
     <el-form label-width="200px" :disabled="!canWrite" class="form">
       <el-form-item label="空闲关闭（分钟）">

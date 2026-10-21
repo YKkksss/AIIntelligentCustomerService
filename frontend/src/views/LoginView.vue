@@ -48,7 +48,7 @@ async function onSubmit() {
       <div class="brand-mark">
         <el-icon><Service /></el-icon>
       </div>
-      <h1 class="brand-title">让每一个应用，<br />都有自己的 AI 客服</h1>
+      <h1 class="brand-title">让每个业务场景，<br />都有自己的智能客服</h1>
       <p class="brand-sub">上传知识库，只按资料回答并给出引用；答不了就拒答或转人工。</p>
       <div class="brand-tags">
         <span>混合检索</span>

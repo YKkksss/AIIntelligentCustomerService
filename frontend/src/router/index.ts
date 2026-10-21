@@ -29,7 +29,7 @@ const routes: RouteRecordRaw[] = [
         path: 'apps',
         name: 'apps',
         component: () => import('@/views/AppsView.vue'),
-        meta: { menu: true, title: '应用', permission: 'app.read', icon: 'Grid' },
+        meta: { menu: true, title: '智能客服', permission: 'app.read', icon: 'Grid' },
       },
       {
         path: 'apps/:appId',

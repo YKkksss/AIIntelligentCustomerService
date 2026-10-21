@@ -155,7 +155,7 @@ watch(days, load)
       <div>
         <h1 class="aics-page-title">仪表盘</h1>
         <p class="aics-page-subtitle">
-          全部应用 · 近 {{ days }} 天 {{ rangeText ? `(${rangeText})` : '' }}
+          全部智能客服 · 近 {{ days }} 天 {{ rangeText ? `(${rangeText})` : '' }}
         </p>
       </div>
       <div class="head-actions">
@@ -203,7 +203,7 @@ watch(days, load)
     <section class="chart-row">
       <article class="aics-card chart-card">
         <header class="card-head">
-          <h2>应用对比</h2>
+          <h2>智能客服对比</h2>
           <span class="hint">区间内对话量</span>
         </header>
         <ChartPanel :option="appsOption" :height="220" />

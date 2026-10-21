@@ -299,7 +299,7 @@ onMounted(load)
     <div class="page-head">
       <div>
         <div class="title-row">
-          <h2 class="aics-page-title">应用配置</h2>
+          <h2 class="aics-page-title">智能客服配置</h2>
           <el-tag v-if="detail" size="small" effect="plain">v{{ detail.config_version }}</el-tag>
         </div>
         <p class="aics-page-subtitle">

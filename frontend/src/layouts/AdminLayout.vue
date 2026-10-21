@@ -7,12 +7,11 @@ import {
   Bell,
   ChatDotRound,
   ChatLineSquare,
-  Connection,
   Collection,
+  Connection,
   DataAnalysis,
   DataBoard,
   Document,
-  Grid,
   Key,
   Odometer,
   Service,
@@ -34,18 +33,18 @@ interface MenuItem {
   pending?: string
 }
 
-/** 全局菜单：设计稿 02 画板的四项（仪表盘 / 应用 / 用户 / 审计）。 */
+/** 全局菜单：仪表盘 / 智能客服 / 用户 / 审计（应用级入口收进工作台，见下）。 */
 const globalMenu = computed<MenuItem[]>(() =>
   [
     { name: 'home', title: '仪表盘', icon: Odometer },
-    { name: 'apps', title: '应用', icon: Grid, permission: 'app.read' },
+    { name: 'apps', title: '智能客服', icon: Service, permission: 'app.read' },
     { name: 'users', title: '用户', icon: User, permission: 'user.admin' },
     { name: 'audit', title: '审计', icon: Document, permission: 'audit.read' },
   ].filter((item) => !item.permission || auth.can(item.permission)),
 )
 
-/** 应用内菜单：设计稿 03–06 画板（概览 / 配置 / 知识库 / 调试对话 / 评测 / API Key）。 */
-const appMenu = computed<MenuItem[]>(() =>
+/** 工作台导航：进入某个智能客服后才出现的一组页签（替代原先塞在侧栏里的 8 项）。 */
+const workspaceMenu = computed<MenuItem[]>(() =>
   [
     { name: 'app-overview', title: '概览', icon: DataBoard },
     { name: 'app-config', title: '配置', icon: Setting },
@@ -59,6 +58,12 @@ const appMenu = computed<MenuItem[]>(() =>
 )
 
 const active = computed(() => String(route.name ?? 'home'))
+
+const inWorkspace = computed(
+  () => typeof route.params.appId === 'string' && route.params.appId !== '',
+)
+
+const appName = computed(() => auth.currentApp?.app_name ?? '智能客服')
 
 /** 进入某个应用的页面时，侧栏与标题跟着路由切换当前应用（刷新后也能恢复）。 */
 watch(
@@ -74,30 +79,31 @@ const appPath = computed(() => {
   return { name: 'app-config', params: { appId: auth.currentAppId } }
 })
 
-/** 面包屑：与设计稿 Top Bar 的「应用 / 应用列表」一致。 */
+/** 面包屑：与设计稿 Top Bar 的「智能客服 / 全部智能客服」一致。 */
 const breadcrumb = computed<string[]>(() => {
-  const appName = auth.currentApp?.app_name ?? '应用'
   switch (String(route.name ?? '')) {
     case 'home':
       return ['仪表盘']
     case 'apps':
-      return ['应用', '应用列表']
+      return ['智能客服', '全部智能客服']
     case 'app-config':
-      return ['应用', appName, '配置']
+      return ['智能客服', appName.value, '配置']
     case 'app-overview':
-      return ['应用', appName, '概览']
+      return ['智能客服', appName.value, '概览']
     case 'app-knowledge':
-      return ['应用', appName, '知识库']
+      return ['智能客服', appName.value, '知识库']
     case 'app-knowledge-document':
-      return ['应用', appName, '知识库', '文档切块']
+      return ['智能客服', appName.value, '知识库', '文档切块']
+    case 'app-hit-test':
+      return ['智能客服', appName.value, '知识库', '命中测试']
     case 'app-debug':
-      return ['应用', appName, '调试对话']
+      return ['智能客服', appName.value, '调试对话']
     case 'app-keys':
-      return ['应用', appName, 'API Key']
+      return ['智能客服', appName.value, 'API Key']
     case 'app-logs':
-      return ['应用', appName, '会话与反馈']
+      return ['智能客服', appName.value, '会话与反馈']
     case 'app-webhooks':
-      return ['应用', appName, 'Webhook']
+      return ['智能客服', appName.value, 'Webhook']
     case 'users':
       return ['用户']
     case 'audit':
@@ -129,6 +135,11 @@ async function onSwitch(target: string) {
   if (!auth.can('app.read')) await router.replace({ name: 'home' })
 }
 
+async function onWorkspace(item: MenuItem) {
+  if (item.pending) return
+  await router.push({ name: item.name, params: { appId: auth.currentAppId } })
+}
+
 async function onCommand(command: string) {
   if (command === 'logout') {
     await auth.logout()
@@ -156,39 +167,17 @@ async function onCommand(command: string) {
           v-for="item in globalMenu"
           :key="item.name"
           class="menu-item"
-          :class="{ active: active === item.name }"
+          :class="{ active: active === item.name || (item.name === 'apps' && inWorkspace) }"
           :to="{ name: item.name }"
         >
           <el-icon class="menu-icon"><component :is="item.icon" /></el-icon>
           <span>{{ item.title }}</span>
         </router-link>
-
-        <template v-if="auth.currentApp">
-          <router-link class="menu-back" :to="{ name: 'apps' }">
-            <el-icon><ArrowLeft /></el-icon>
-            <span>{{ auth.currentApp.app_name }}</span>
-          </router-link>
-          <template v-for="item in appMenu" :key="item.name">
-            <span
-              v-if="item.pending"
-              class="menu-item pending"
-              :title="`${item.pending} 完成后开放`"
-            >
-              <el-icon class="menu-icon"><component :is="item.icon" /></el-icon>
-              <span>{{ item.title }}</span>
-            </span>
-            <router-link
-              v-else
-              class="menu-item"
-              :class="{ active: active === item.name }"
-              :to="{ name: item.name, params: { appId: auth.currentAppId } }"
-            >
-              <el-icon class="menu-icon"><component :is="item.icon" /></el-icon>
-              <span>{{ item.title }}</span>
-            </router-link>
-          </template>
-        </template>
       </nav>
+
+      <div class="sider-foot">
+        <span class="sider-hint">AICS · 企业内部智能客服平台</span>
+      </div>
     </aside>
 
     <div class="main">
@@ -196,14 +185,14 @@ async function onCommand(command: string) {
         <el-dropdown trigger="click" @command="onSwitch">
           <button class="switcher" type="button">
             <span class="switcher-tile"
-              ><el-icon><Grid /></el-icon
+              ><el-icon><Service /></el-icon
             ></span>
-            <span class="switcher-label">{{ auth.currentApp?.app_name ?? '全部应用' }}</span>
+            <span class="switcher-label">{{ inWorkspace ? appName : '全部智能客服' }}</span>
             <el-icon class="switcher-caret"><ArrowDown /></el-icon>
           </button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="all">全部应用</el-dropdown-item>
+              <el-dropdown-item command="all">全部智能客服</el-dropdown-item>
               <el-dropdown-item v-for="app in auth.apps" :key="app.app_id" :command="app.app_id">
                 {{ app.app_name }}
               </el-dropdown-item>
@@ -241,7 +230,44 @@ async function onCommand(command: string) {
         </el-dropdown>
       </header>
 
-      <main class="content">
+      <!-- 工作台：进入某个智能客服后出现，承载原先「应用内菜单」的 8 个入口，侧栏保持干净 -->
+      <div v-if="inWorkspace" class="workspace">
+        <button class="workspace-back" type="button" @click="router.push({ name: 'apps' })">
+          <el-icon><ArrowLeft /></el-icon>
+          <span>全部智能客服</span>
+        </button>
+        <span class="workspace-sep" />
+        <div class="workspace-title">
+          <span class="workspace-name">{{ appName }}</span>
+          <span class="workspace-tag">智能客服</span>
+        </div>
+        <nav class="workspace-tabs">
+          <template v-for="item in workspaceMenu" :key="item.name">
+            <el-tooltip
+              v-if="item.pending"
+              :content="`${item.pending} 完成后开放`"
+              placement="bottom"
+            >
+              <span class="ws-tab pending">
+                <el-icon><component :is="item.icon" /></el-icon>
+                <span>{{ item.title }}</span>
+              </span>
+            </el-tooltip>
+            <button
+              v-else
+              type="button"
+              class="ws-tab"
+              :class="{ active: active === item.name }"
+              @click="onWorkspace(item)"
+            >
+              <el-icon><component :is="item.icon" /></el-icon>
+              <span>{{ item.title }}</span>
+            </button>
+          </template>
+        </nav>
+      </div>
+
+      <main class="content" :class="{ 'with-workspace': inWorkspace }">
         <router-view />
       </main>
     </div>
@@ -298,8 +324,7 @@ async function onCommand(command: string) {
   gap: 4px;
   padding: 8px 10px;
 }
-.menu-item,
-.menu-back {
+.menu-item {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -313,8 +338,7 @@ async function onCommand(command: string) {
     background-color 0.15s ease,
     color 0.15s ease;
 }
-.menu-item:hover,
-.menu-back:hover {
+.menu-item:hover {
   color: #fff;
   background: rgb(255 255 255 / 8%);
 }
@@ -322,21 +346,17 @@ async function onCommand(command: string) {
   color: #fff;
   background: var(--aics-primary);
 }
-.menu-item.pending {
-  color: rgb(255 255 255 / 30%);
-  cursor: not-allowed;
-}
-.menu-item.pending:hover {
-  background: transparent;
-  color: rgb(255 255 255 / 30%);
-}
-.menu-back {
-  margin-top: 12px;
-  color: rgb(255 255 255 / 45%);
-  font-size: 13px;
-}
 .menu-icon {
   font-size: 16px;
+}
+
+.sider-foot {
+  margin-top: auto;
+  padding: 16px 20px 20px;
+}
+.sider-hint {
+  color: rgb(255 255 255 / 30%);
+  font-size: 12px;
 }
 
 .main {
@@ -454,10 +474,120 @@ async function onCommand(command: string) {
   font-size: 12px;
 }
 
+.workspace {
+  flex: 0 0 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 24px;
+  background: var(--aics-white);
+  border-bottom: 1px solid var(--aics-split);
+  min-width: 0;
+}
+.workspace-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--aics-text-3);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.workspace-back:hover {
+  color: var(--aics-primary);
+  background: var(--aics-primary-bg);
+}
+.workspace-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--aics-border);
+  flex: 0 0 1px;
+}
+.workspace-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.workspace-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--aics-text);
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.workspace-tag {
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--aics-primary-bg);
+  color: var(--aics-primary);
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.workspace-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.workspace-tabs::-webkit-scrollbar {
+  display: none;
+}
+.ws-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--aics-text-2);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+.ws-tab:hover {
+  color: var(--aics-primary);
+  background: var(--aics-primary-bg);
+}
+.ws-tab.active {
+  color: var(--aics-primary);
+  background: var(--aics-primary-bg);
+  font-weight: 600;
+}
+.ws-tab.pending {
+  color: var(--aics-text-3);
+  cursor: not-allowed;
+}
+.ws-tab.pending:hover {
+  color: var(--aics-text-3);
+  background: transparent;
+}
+
 .content {
   flex: 1;
   min-height: 0;
   padding: 24px;
   box-sizing: border-box;
+}
+.content.with-workspace {
+  padding-top: 20px;
 }
 </style>

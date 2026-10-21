@@ -260,7 +260,7 @@ onMounted(async () => {
   try {
     presets.value = await appApi.chunkPresets()
   } catch {
-    // 预设只是便利项，取不到时继续用空文本（跟随应用配置）
+    // 预设只是便利项，取不到时继续用空文本（跟随智能客服配置）
   }
 })
 </script>
@@ -465,7 +465,7 @@ onMounted(async () => {
         <el-form-item label="切块预设">
           <el-select
             v-model="uploadForm.preset"
-            placeholder="跟随应用配置"
+            placeholder="跟随智能客服配置"
             clearable
             style="width: 100%"
             @change="onPresetChange"
@@ -483,7 +483,7 @@ onMounted(async () => {
             v-model="uploadForm.configText"
             type="textarea"
             :rows="5"
-            placeholder='留空跟随应用配置；否则填 JSON，如 {"chunk_size": 500}'
+            placeholder='留空跟随智能客服配置；否则填 JSON，如 {"chunk_size": 500}'
           />
         </el-form-item>
       </el-form>

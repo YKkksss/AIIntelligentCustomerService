@@ -102,7 +102,7 @@ async function send(): Promise<void> {
   const text = question.value.trim()
   if (!text || running.value) return
   if (!appId.value) {
-    ElMessage.error('缺少应用 ID')
+    ElMessage.error('缺少智能客服 ID')
     return
   }
   question.value = ''
@@ -254,7 +254,7 @@ onBeforeUnmount(() => stop())
           <ConversationContent class="thread-body">
             <div v-if="!turns.length" class="empty">
               <el-icon class="empty-icon"><ChatDotRound /></el-icon>
-              <p class="empty-title">向这个应用提问，看看检索与生成的过程</p>
+              <p class="empty-title">向这个智能客服提问，看看检索与生成的过程</p>
               <p class="empty-hint">
                 调试轮次记为 channel=debug，不影响对外统计；右侧面板显示本轮意图、检索命中与耗时。
               </p>
@@ -305,7 +305,7 @@ onBeforeUnmount(() => stop())
           @keydown="onKeydown"
         />
         <div class="composer-actions">
-          <span class="hint">临时参数可在「应用配置」调整后对比；调试会话不计入对外统计</span>
+          <span class="hint">临时参数可在「配置」调整后对比；调试会话不计入对外统计</span>
           <el-button v-if="running" type="danger" plain @click="halt">
             <el-icon><VideoPause /></el-icon>
             停止
