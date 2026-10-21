@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### 新增（M4.3b ② 数据层，2026-10-21）
+
+- 迁移 `0016`：`chunks.source`（`parsed` / `manual` / `edited`，CHECK + 默认 `parsed`）、`documents.effective_at` / `expires_at` / `simhash bigint`、部分索引 `ix_documents_expires_at`。
+- `retrievable()` 加有效期时间窗：`(effective_at IS NULL OR effective_at <= now()) AND (expires_at IS NULL OR expires_at > now())`；关键词检索、向量命中 PG 回查、`retrievable_chunk_count` 对账三处共用同一份条件（后者改为复用 `retrievable()`，不再手写 SQL）。
+- 新增 `backend/src/aics/core/simhash.py`：64 位 SimHash（中文按字 3-gram、ASCII 小写单词，`blake2b` 8 字节指纹），`hamming` / `near_duplicate`（阈值 3 位）。
+
+### 测试（M4.3b ②，2026-10-21）
+
+- 新增 `backend/tests/unit/test_simhash.py`（6 例）：分词口径、空文本、确定性、改几句话距离 ≤ 3、不同文档距离 > 10、零指纹不参与近重复。
+- 门禁：单测 1235 passed / 1 环境失败（`tests/unit/test_storage.py::test_symlink_escape_rejected`，`WinError 1314`）；`ruff check` / `ruff format` / `lint-imports`（13）/ `prompts check`（8）全绿；本机 `alembic upgrade head` 到 `0016`。
+
+
 ### 新增（M4.6 ⑤ M4 里程碑验收，2026-10-21）
 
 - `backend/scripts/e2e_m4/e2e_m46_stats.py`：真 HTTP + 真 PG/Redis、不调模型，八步 **20 项判定**——建应用、直插 api/debug/eval 三条会话与一条点踩、聚合两次验幂等、单应用序列（会话 / 用户轮次 / 应答 / 拒答 / 点踩 / 分位数 / 意图分布）、全局概览（序列、合计、应用在列、无分位数键）、`days=0` 422、viewer 200 与无成员 403、删除清理；结果写 `backend/scripts/e2e_m4/results/e2e_m46_stats.json`。
@@ -700,4 +712,3 @@
 - 服务器侧 Qdrant 编排文件 deploy/server/docker-compose.yml。
 - 对话上下文管理设计（docs/02-architecture/07-对话上下文管理.md）与 ADR-0006：按 token 预算组装历史、异步滚动摘要、关键事实槽、按需回查；同步更新 RAG 流程、数据库、功能需求、管理接口、管理后台、开发计划、评测指南。
 - 意图识别设计（docs/02-architecture/08-意图识别.md）与 ADR-0007：规则层 + condense 合并分类 + 向量快速通道（M5+），6 类意图（kb_qa、chitchat、human、out_of_scope、action、clarify）与路由，寒暄不再计入连续拒答；同步更新 RAG 流程、数据库、功能需求、管理接口、开放接口、管理后台、开发计划、评测指南、安全设计、文档索引。
-

@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from uuid import UUID
 
-from sqlalchemy import and_, func, literal_column, select
+from sqlalchemy import and_, func, literal_column, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from aics.core.textsearch import build_tsquery
@@ -22,13 +22,20 @@ MAX_FETCH_IDS = 500
 
 def retrievable(tags: Sequence[str] | None = None) -> list[object]:
     """The single definition of "retrievable chunk" (数据库设计 §3.7); `tags` adds the
-    request's any-match tag filter (M2.2b)."""
+    request's any-match tag filter (M2.2b).
+
+    M4.3b adds the validity window: a document outside `effective_at` / `expires_at` is not
+    retrievable. Time lives only in PG — Qdrant keeps no timestamps, so vector hits are
+    dropped when their rows are fetched back (ISSUE-96).
+    """
     cond: list[object] = [
         Chunk.enabled,
         Chunk.review_status != "flagged",
         Chunk.index_version == Document.index_version,
         Document.status != "deleting",
         Document.deleted_at.is_(None),
+        or_(Document.effective_at.is_(None), Document.effective_at <= func.now()),
+        or_(Document.expires_at.is_(None), Document.expires_at > func.now()),
     ]
     if tags:
         cond.append(Document.tags.overlap(list(tags)))

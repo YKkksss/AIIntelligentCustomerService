@@ -39,7 +39,7 @@ from aics.ingest.parsers.base import ParsedDoc
 from aics.ingest.parsers.url import FetchedUrl, fetch_url
 from aics.ingest.questions import QuestionTarget, text_hash, upsert_question_points
 from aics.ingest.service import OVERRIDE_KEY, PREVIEW_DEFAULT_LIMIT, preview_result
-from aics.modules.knowledge.chunk_search import PgChunkSearch
+from aics.modules.knowledge.chunk_search import PgChunkSearch, retrievable
 from aics.modules.knowledge.repository import (
     ChunkQuestionRepository,
     ChunkRepository,
@@ -1266,19 +1266,13 @@ class KnowledgeService:
 
     # ------------------------------------------------------------------ 查询
     async def retrievable_chunk_count(self, app_id: UUID) -> int:
-        """数据库设计“可检索条件”的唯一 SQL 实现（对账与测试使用）。"""
+        """对账与测试用的可检索切块数：复用 `chunk_search.retrievable()`，不另写一份条件。"""
         from aics.db.models import Chunk
 
         stmt = (
             select(func.count())
             .select_from(Chunk)
             .join(Document, Document.id == Chunk.document_id)
-            .where(
-                Chunk.app_id == app_id,
-                Chunk.enabled,
-                Chunk.review_status != "flagged",
-                Chunk.index_version == Document.index_version,
-                Document.status != "deleting",
-            )
+            .where(Chunk.app_id == app_id, *retrievable())
         )
         return int((await self.session.execute(stmt)).scalar_one())

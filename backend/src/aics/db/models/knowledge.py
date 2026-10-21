@@ -55,6 +55,11 @@ class Document(TimestampMixin, SoftDeleteMixin, Base):
         Index("ix_documents_app_status", "app_id", "status"),
         Index("ix_documents_app_created", "app_id", sa_text("created_at DESC")),
         Index("ix_documents_tags", "tags", postgresql_using="gin"),
+        Index(
+            "ix_documents_expires_at",
+            "expires_at",
+            postgresql_where=sa_text("expires_at IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_id)
@@ -82,6 +87,11 @@ class Document(TimestampMixin, SoftDeleteMixin, Base):
     embed_model: Mapped[str | None] = mapped_column(Text)
     # 生效版本向量化时使用的标题（上下文增强前缀）；≠ title 时后台提示重建
     indexed_title: Mapped[str | None] = mapped_column(Text)
+    # 有效期（M4.3b）：进 retrievable() 的时间窗；NULL 表示不限
+    effective_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 64 位 SimHash：入库近重复提示（只提示不阻止）
+    simhash: Mapped[int | None] = mapped_column(BigInteger)
     # Metadata tags for filtered retrieval (M2.2b); mirrored into Qdrant payload `tags`
     tags: Mapped[list[str]] = mapped_column(
         ARRAY(Text), nullable=False, server_default=sa_text("'{}'")
@@ -116,6 +126,7 @@ class Chunk(CreatedAtMixin, Base):
     __tablename__ = "chunks"
     __table_args__ = (
         CheckConstraint("review_status IN ('none', 'flagged', 'approved')", name="review_status"),
+        CheckConstraint("source IN ('parsed', 'manual', 'edited')", name="source"),
         UniqueConstraint("document_id", "index_version", "ordinal"),
         Index("ix_chunks_tsv", "tsv", postgresql_using="gin"),
         Index("ix_chunks_app_enabled", "app_id", postgresql_where=sa_text("enabled")),
@@ -157,6 +168,8 @@ class Chunk(CreatedAtMixin, Base):
     flag_reason: Mapped[str | None] = mapped_column(Text)
     reviewed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 切块来源（M4.3b）：重建只替换 parsed；manual 迁移；edited 按正文哈希匹配，失配降级 manual
+    source: Mapped[str] = mapped_column(Text, nullable=False, server_default=sa_text("'parsed'"))
 
 
 class ChunkQuestion(CreatedAtMixin, Base):
