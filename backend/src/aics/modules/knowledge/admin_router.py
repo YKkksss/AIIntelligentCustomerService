@@ -19,8 +19,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, model_validator
+from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from aics.core.config import get_settings
 from aics.core.errors import ValidationAppError
@@ -39,7 +39,14 @@ from aics.modules.knowledge.router import (
     write_body,
 )
 from aics.modules.knowledge.runtime import KnowledgeRuntime
-from aics.modules.knowledge.service import HIT_TEST_MAX_CHARS, TITLE_MAX_CHARS
+from aics.modules.knowledge.service import (
+    CHUNK_TEXT_MAX_CHARS,
+    HEADING_MAX_CHARS,
+    HIT_TEST_MAX_CHARS,
+    KEEP,
+    MAX_QUESTIONS_PER_CHUNK,
+    TITLE_MAX_CHARS,
+)
 
 router = APIRouter(prefix="/api/v1/admin/apps/{app_id}", tags=["admin-knowledge"])
 
@@ -89,18 +96,56 @@ class HitTestBody(BaseModel):
 
 
 class ChunkPatch(BaseModel):
-    """切块启停 / 复核（M4.3 ③）：`review_status` 只接受 `approved`。"""
+    """切块启停 / 复核 / 正文编辑（M4.3 ③、M4.3b ③）。
+
+    `review_status` 只接受 `approved`；给 `text` 或 `heading_path` 即视为人工编辑
+    （`source` 置 `edited`，只重算该切块的向量）。
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool | None = None
     review_status: Literal["approved"] | None = None
+    text: str | None = Field(default=None, max_length=CHUNK_TEXT_MAX_CHARS)
+    heading_path: str | None = Field(default=None, max_length=HEADING_MAX_CHARS)
 
     @model_validator(mode="after")
     def _at_least_one(self) -> ChunkPatch:
-        if self.enabled is None and self.review_status is None:
-            raise ValueError("至少给出 enabled 或 review_status")
+        if (
+            self.enabled is None
+            and self.review_status is None
+            and self.text is None
+            and self.heading_path is None
+        ):
+            raise ValueError("至少给出 enabled、review_status、text 或 heading_path")
+        if self.text is not None and not self.text.strip():
+            raise ValueError("text 不能为空")
         return self
+
+
+class ChunkCreate(BaseModel):
+    """手工新增切块（M4.3b ③）：`source` 固定 `manual`，重建时迁移到新构建号。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=1, max_length=CHUNK_TEXT_MAX_CHARS)
+    heading_path: str | None = Field(default=None, max_length=HEADING_MAX_CHARS)
+
+
+class QuestionsBody(BaseModel):
+    """给切块补一批问法（M4.3b ③）：每个问题各自一个向量点。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    questions: list[str] = Field(min_length=1, max_length=MAX_QUESTIONS_PER_CHUNK)
+
+
+class ReattachBody(BaseModel):
+    """把补充问题挂到另一个切块（M4.3b ③）。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    chunk_id: UUID
 
 
 def _chunk_row(chunk: Any) -> dict[str, Any]:
@@ -112,6 +157,8 @@ def _chunk_row(chunk: Any) -> dict[str, Any]:
         "heading_path": chunk.heading_path,
         "text": chunk.text,
         "enabled": chunk.enabled,
+        "source": chunk.source,
+        "tokens": chunk.tokens,
         "review_status": chunk.review_status,
         "flag_reason": chunk.flag_reason,
         "reviewed_at": chunk.reviewed_at,
@@ -119,6 +166,18 @@ def _chunk_row(chunk: Any) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------- 读
+def _question_row(row: Any) -> dict[str, Any]:
+    """补充问题应答（M4.3b ③）：挂在哪个切块、来源与创建时间。"""
+    return {
+        "id": str(row.id),
+        "chunk_id": str(row.chunk_id) if row.chunk_id else None,
+        "question": row.question,
+        "source": row.source,
+        "status": row.status,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
 @router.get("/documents", summary="管理端文档列表", responses=_READ_ERRORS)
 async def list_documents(
     app_id: UUID,
@@ -368,7 +427,9 @@ async def reindex_document(
 
 
 @router.patch(
-    "/documents/{document_id}", summary="管理端修改文档标题与元数据", responses=_WRITE_ERRORS
+    "/documents/{document_id}",
+    summary="管理端修改文档标题、元数据与有效期",
+    responses=_WRITE_ERRORS,
 )
 async def patch_document(
     app_id: UUID,
@@ -377,12 +438,24 @@ async def patch_document(
     request: Request,
     user: Annotated[AuthedUser, Depends(Writer)],
 ) -> Any:
+    given = body.model_fields_set & {"title", "metadata", "effective_at", "expires_at"}
+    if not given:
+        raise ValidationAppError(
+            message="至少要提供 title、metadata、effective_at 或 expires_at",
+            details={"errors": [{"loc": ["body"], "msg": "没有任何可更新的字段"}]},
+        )
     async with _runtime(request).session() as session:
         doc = (
             await _runtime(request)
             .service(session)
             .update_document(
-                app_id, document_id, title=body.title, metadata=body.metadata, created_by=user.id
+                app_id,
+                document_id,
+                title=body.title,
+                metadata=body.metadata,
+                effective_at=body.effective_at if "effective_at" in given else KEEP,
+                expires_at=body.expires_at if "expires_at" in given else KEEP,
+                created_by=user.id,
             )
         )
     return JSONResponse(jsonable_encoder(document_body(doc)))
@@ -410,7 +483,9 @@ async def delete_document(
 
 
 # ---------------------------------------------------------------------- 切块复核（M4.3 ③）
-@router.patch("/chunks/{chunk_id}", summary="管理端切块启停与复核", responses=_WRITE_ERRORS)
+@router.patch(
+    "/chunks/{chunk_id}", summary="管理端切块启停、复核与正文编辑", responses=_WRITE_ERRORS
+)
 async def patch_chunk(
     app_id: UUID,
     chunk_id: UUID,
@@ -427,6 +502,8 @@ async def patch_chunk(
                 chunk_id,
                 enabled=body.enabled,
                 review_status=body.review_status,
+                text=body.text,
+                heading_path=body.heading_path,
                 created_by=user.id,
             )
         )
@@ -514,3 +591,135 @@ def _replayed_guard(guard: Any) -> JSONResponse | None:
     if guard.replay is None:
         return None
     return JSONResponse(guard.replay.body, status_code=guard.replay.status)
+
+
+# ---------------------------------------------------------------------- 切块级运营（M4.3b）
+@router.post(
+    "/documents/{document_id}/chunks",
+    summary="管理端手工新增切块",
+    status_code=201,
+    responses=_WRITE_ERRORS,
+)
+async def create_chunk(
+    app_id: UUID,
+    document_id: UUID,
+    body: ChunkCreate,
+    request: Request,
+    user: Annotated[AuthedUser, Depends(Writer)],
+) -> Any:
+    async with _runtime(request).session() as session:
+        chunk = (
+            await _runtime(request)
+            .service(session)
+            .add_chunk(
+                app_id,
+                document_id,
+                text=body.text,
+                heading_path=body.heading_path,
+                created_by=user.id,
+            )
+        )
+    return JSONResponse(jsonable_encoder(_chunk_row(chunk)), status_code=201)
+
+
+@router.delete(
+    "/chunks/{chunk_id}", status_code=204, summary="管理端删除切块", responses=_WRITE_ERRORS
+)
+async def delete_chunk(
+    app_id: UUID,
+    chunk_id: UUID,
+    request: Request,
+    user: Annotated[AuthedUser, Depends(Writer)],
+) -> Response:
+    async with _runtime(request).session() as session:
+        await _runtime(request).service(session).delete_chunk(app_id, chunk_id, created_by=user.id)
+    return Response(status_code=204)
+
+
+@router.get(
+    "/documents/{document_id}/duplicates",
+    summary="近重复文档提示（SimHash ≤ 3，只提示不阻止）",
+    responses=_READ_ERRORS,
+)
+async def list_duplicates(
+    app_id: UUID,
+    document_id: UUID,
+    request: Request,
+    user: Annotated[AuthedUser, Depends(Reader)],
+) -> Any:
+    async with _runtime(request).session() as session:
+        items = await _runtime(request).service(session).duplicates(app_id, document_id)
+    return JSONResponse(jsonable_encoder({"items": items}))
+
+
+@router.get("/chunks/{chunk_id}/questions", summary="切块的补充问题列表", responses=_READ_ERRORS)
+async def list_questions(
+    app_id: UUID,
+    chunk_id: UUID,
+    request: Request,
+    user: Annotated[AuthedUser, Depends(Reader)],
+) -> Any:
+    async with _runtime(request).session() as session:
+        rows = await _runtime(request).service(session).list_chunk_questions(app_id, chunk_id)
+    return JSONResponse(jsonable_encoder({"items": [_question_row(r) for r in rows]}))
+
+
+@router.post(
+    "/chunks/{chunk_id}/questions",
+    summary="给切块补一批补充问题",
+    status_code=201,
+    responses=_WRITE_ERRORS,
+)
+async def add_questions(
+    app_id: UUID,
+    chunk_id: UUID,
+    body: QuestionsBody,
+    request: Request,
+    user: Annotated[AuthedUser, Depends(Writer)],
+) -> Any:
+    async with _runtime(request).session() as session:
+        rows = (
+            await _runtime(request)
+            .service(session)
+            .add_chunk_questions(
+                app_id, chunk_id, body.questions, source="manual", created_by=user.id
+            )
+        )
+    return JSONResponse(
+        jsonable_encoder({"items": [_question_row(r) for r in rows]}), status_code=201
+    )
+
+
+@router.delete(
+    "/questions/{question_id}", status_code=204, summary="删除补充问题", responses=_WRITE_ERRORS
+)
+async def delete_question(
+    app_id: UUID,
+    question_id: UUID,
+    request: Request,
+    user: Annotated[AuthedUser, Depends(Writer)],
+) -> Response:
+    async with _runtime(request).session() as session:
+        await _runtime(request).service(session).delete_chunk_question(app_id, question_id)
+    return Response(status_code=204)
+
+
+@router.post(
+    "/questions/{question_id}/reattach",
+    summary="把补充问题挂到另一个切块",
+    responses=_WRITE_ERRORS,
+)
+async def reattach_question(
+    app_id: UUID,
+    question_id: UUID,
+    body: ReattachBody,
+    request: Request,
+    user: Annotated[AuthedUser, Depends(Writer)],
+) -> Any:
+    async with _runtime(request).session() as session:
+        row = (
+            await _runtime(request)
+            .service(session)
+            .reattach_chunk_question(app_id, question_id, body.chunk_id)
+        )
+    return JSONResponse(jsonable_encoder(_question_row(row)))

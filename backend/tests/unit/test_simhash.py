@@ -7,6 +7,8 @@ from aics.core.simhash import (
     hamming,
     near_duplicate,
     simhash,
+    to_signed,
+    to_unsigned,
     tokens_of,
 )
 
@@ -62,3 +64,10 @@ def test_near_duplicate_ignores_zero_fingerprint() -> None:
     assert not near_duplicate(0, simhash(LONG))
     assert not near_duplicate(simhash(LONG), 0)
     assert hamming(0, 0) == 0
+
+
+def test_signed_roundtrip_for_pg_bigint() -> None:
+    for value in (0, 1, (1 << 63) - 1, 1 << 63, (1 << 64) - 1):
+        signed = to_signed(value)
+        assert -(1 << 63) <= signed < (1 << 63)
+        assert to_unsigned(signed) == value

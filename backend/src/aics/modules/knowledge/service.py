@@ -31,14 +31,22 @@ from aics.core.errors import (
     NotFoundError,
     ValidationAppError,
 )
+from aics.core.simhash import hamming, near_duplicate, to_unsigned
+from aics.core.tokens import count_tokens
 from aics.db.models import App, Chunk, ChunkQuestion, Document, Job
 from aics.db.models.knowledge import MAX_TAGS, QUESTION_MAX_CHARS, QUESTION_SOURCES, TAG_MAX_CHARS
 from aics.ingest.chunker import ChunkOptions, split_document
+from aics.ingest.indexer import EmbedItem, build_embed_text, embed_and_upsert
 from aics.ingest.parsers import MIME_TYPES, detect_file_type, parse_bytes
 from aics.ingest.parsers.base import ParsedDoc
 from aics.ingest.parsers.url import FetchedUrl, fetch_url
 from aics.ingest.questions import QuestionTarget, text_hash, upsert_question_points
-from aics.ingest.service import OVERRIDE_KEY, PREVIEW_DEFAULT_LIMIT, preview_result
+from aics.ingest.service import (
+    OVERRIDE_KEY,
+    PREVIEW_DEFAULT_LIMIT,
+    preview_result,
+    search_text_for,
+)
 from aics.modules.knowledge.chunk_search import PgChunkSearch, retrievable
 from aics.modules.knowledge.repository import (
     ChunkQuestionRepository,
@@ -101,6 +109,11 @@ MAX_QUESTIONS_PER_CHUNK = 20
 HIT_TEST_MAX_CHARS = 500
 HIT_TEST_PREVIEW_CHARS = 300
 REVIEW_APPROVED = "approved"
+CHUNK_TEXT_MAX_CHARS = 4000
+HEADING_MAX_CHARS = 200
+CHUNK_MANUAL = "manual"
+CHUNK_EDITED = "edited"
+KEEP: Any = object()  # PATCH 里区分「没传」与「传了 null」
 
 
 def normalize_questions(questions: Sequence[str]) -> list[str]:
@@ -195,6 +208,11 @@ def normalize_tags(tags: Sequence[str]) -> list[str]:
     if any(len(t) > TAG_MAX_CHARS for t in out):
         raise ValidationAppError(message=f"单个标签最多 {TAG_MAX_CHARS} 字")
     return out
+
+
+def _iso_or_none(value: datetime | None) -> str | None:
+    """审计 diff 里的时间一律用 ISO 字符串（jsonb 不能直接存 datetime）。"""
+    return value.isoformat() if value is not None else None
 
 
 def _clean_title(title: str | None, fallback: str) -> str:
@@ -1171,13 +1189,15 @@ class KnowledgeService:
         *,
         enabled: bool | None = None,
         review_status: str | None = None,
+        text: str | None = None,
+        heading_path: str | None = None,
         created_by: UUID | None = None,
     ) -> Chunk:
-        """切块启停与复核（管理接口 §知识库）：复核通过同时恢复可检索。
+        """切块启停、复核与正文编辑（管理接口 §知识库）；正文变化时只重算该块向量。
 
         先提交数据库、再同步 Qdrant payload；向量库失败只记日志——重试本接口幂等。
         """
-        chunk, _doc = await self._live_chunk(app_id, chunk_id)
+        chunk, doc = await self._live_chunk(app_id, chunk_id)
         before: dict[str, Any] = {}
         after: dict[str, Any] = {}
         if enabled is not None and chunk.enabled != enabled:
@@ -1195,6 +1215,35 @@ class KnowledgeService:
                 before.setdefault("enabled", chunk.enabled)
                 after["enabled"] = True
                 chunk.enabled = True
+        content_changed = text is not None or heading_path is not None
+        if content_changed:
+            app = await self._app(app_id)
+            new_text = chunk.text if text is None else text.strip()
+            if text is not None and not new_text:
+                raise ValidationAppError(
+                    message="切块正文不能为空",
+                    details={"errors": [{"loc": ["text"], "msg": "不能为空"}]},
+                )
+            new_heading = (
+                chunk.heading_path if heading_path is None else (heading_path.strip() or None)
+            )
+            content_changed = new_text != chunk.text or new_heading != chunk.heading_path
+            if content_changed:
+                before.update({"text": chunk.text, "heading_path": chunk.heading_path})
+                chunk.text = new_text
+                chunk.heading_path = new_heading
+                chunk.search_text = search_text_for(
+                    app_id, new_heading, new_text, list(app.custom_dict or [])
+                )
+                chunk.tokens = count_tokens(new_text)
+                chunk.source = CHUNK_EDITED
+                after.update(
+                    {
+                        "text": new_text,
+                        "heading_path": new_heading,
+                        "source": CHUNK_EDITED,
+                    }
+                )
         if not after:
             return chunk
         await self._audit(
@@ -1208,7 +1257,149 @@ class KnowledgeService:
         await self.session.commit()
         await self.session.refresh(chunk)
         await self._sync_chunk_payload(app_id, chunk)
+        if content_changed:
+            await self._reembed_chunk(app_id, chunk, doc)
         return chunk
+
+    async def add_chunk(
+        self,
+        app_id: UUID,
+        document_id: UUID,
+        *,
+        text: str,
+        heading_path: str | None = None,
+        created_by: UUID | None = None,
+    ) -> Chunk:
+        """手工新增切块（`source="manual"`）：只向量化这一块，重建时会被迁移到新构建号。"""
+        app = await self._app(app_id)
+        doc = await self._doc(app_id, document_id, lock=True)
+        body = text.strip()
+        if not body:
+            raise ValidationAppError(
+                message="切块正文不能为空",
+                details={"errors": [{"loc": ["text"], "msg": "不能为空"}]},
+            )
+        heading = (heading_path or "").strip() or None
+        next_ordinal = await self.session.scalar(
+            select(func.coalesce(func.max(Chunk.ordinal), -1) + 1).where(
+                Chunk.app_id == app_id,
+                Chunk.document_id == document_id,
+                Chunk.index_version == doc.index_version,
+            )
+        )
+        chunk = Chunk(
+            app_id=app_id,
+            document_id=document_id,
+            index_version=doc.index_version,
+            ordinal=int(next_ordinal or 0),
+            heading_path=heading,
+            text=body,
+            search_text=search_text_for(app_id, heading, body, list(app.custom_dict or [])),
+            tokens=count_tokens(body),
+            enabled=True,
+            source=CHUNK_MANUAL,
+        )
+        self.session.add(chunk)
+        await self.session.flush()
+        await self._audit(
+            "kb.chunk.create",
+            app_id,
+            actor_id=created_by,
+            target_id=chunk.id,
+            diff={"after": {"text": body, "heading_path": heading, "source": CHUNK_MANUAL}},
+            target_type="chunk",
+        )
+        await self.session.commit()
+        await self.session.refresh(chunk)
+        await self._reembed_chunk(app_id, chunk, doc)
+        return chunk
+
+    async def delete_chunk(
+        self, app_id: UUID, chunk_id: UUID, *, created_by: UUID | None = None
+    ) -> None:
+        """删除单个切块：先删向量点再删行；向量库失败只记日志（行删除仍然生效）。"""
+        chunk, _doc = await self._live_chunk(app_id, chunk_id)
+        before = {"text": chunk.text, "heading_path": chunk.heading_path, "source": chunk.source}
+        if self.store is not None:
+            try:
+                await self.store.delete_points(app_id, [chunk.id])
+            except Exception:
+                log.warning(
+                    "knowledge.chunk_delete_points_failed",
+                    app_id=str(app_id),
+                    chunk_id=str(chunk.id),
+                )
+        await self.session.delete(chunk)
+        await self._audit(
+            "kb.chunk.delete",
+            app_id,
+            actor_id=created_by,
+            target_id=chunk_id,
+            diff={"before": before},
+            target_type="chunk",
+        )
+        await self.session.commit()
+
+    async def _reembed_chunk(self, app_id: UUID, chunk: Chunk, doc: Document) -> None:
+        """单点重算向量与 payload（编辑 / 手工新增），其余切块不受影响。"""
+        if self.store is None or self.embedder is None:
+            return
+        cfg = dict(doc.chunk_config or {})
+        if not cfg:
+            cfg = dict((await self._app(app_id)).chunk_config or {})
+        text = build_embed_text(
+            doc.indexed_title or doc.title,
+            chunk.heading_path,
+            chunk.text,
+            contextual_prefix=bool(cfg.get("contextual_prefix", True)),
+        )
+        try:
+            await embed_and_upsert(
+                app_id=app_id,
+                document_id=doc.id,
+                index_version=chunk.index_version,
+                items=[EmbedItem(chunk.id, chunk.parent_id, text, enabled=chunk.enabled)],
+                embedder=self.embedder,
+                store=self.store,
+                batch_size=1,
+                tags=list(doc.tags or []),
+            )
+        except Exception:
+            log.warning(
+                "knowledge.chunk_reembed_failed", app_id=str(app_id), chunk_id=str(chunk.id)
+            )
+
+    async def duplicates(self, app_id: UUID, document_id: UUID) -> list[dict[str, Any]]:
+        """近重复提示：同应用其他未删除文档中 SimHash 海明距离 ≤ 3 的（只提示不阻止）。"""
+        doc = await self._doc(app_id, document_id)
+        if doc.simhash is None:
+            return []
+        own = to_unsigned(int(doc.simhash))
+        rows = (
+            await self.session.execute(
+                select(Document.id, Document.title, Document.simhash).where(
+                    Document.app_id == app_id,
+                    Document.id != document_id,
+                    Document.deleted_at.is_(None),
+                    Document.simhash.is_not(None),
+                )
+            )
+        ).all()
+        found = []
+        for row in rows:
+            if row[2] is None:  # 理论上 SQL 已过滤，防御历史脏数据
+                continue
+            other = to_unsigned(int(row[2]))
+            if near_duplicate(own, other):
+                found.append(
+                    {
+                        "document_id": str(row[0]),
+                        "title": row[1],
+                        "distance": hamming(own, other),
+                    }
+                )
+        found.sort(key=lambda item: item["distance"])
+        return found
 
     async def _sync_chunk_payload(self, app_id: UUID, chunk: Chunk) -> None:
         """把 `enabled` 同步到 Qdrant payload（检索按 payload 过滤）。失败只记日志。"""
@@ -1231,9 +1422,11 @@ class KnowledgeService:
         *,
         title: str | None = None,
         metadata: Mapping[str, Any] | None = None,
+        effective_at: datetime | None | object = KEEP,
+        expires_at: datetime | None | object = KEEP,
         created_by: UUID | None = None,
     ) -> Document:
-        """改标题 / 元数据（开放接口 §4 `PATCH`）：立即生效，无需重建（标题不在向量 payload 里）。"""
+        """改标题 / 元数据 / 有效期（开放接口 §4 `PATCH`）：立即生效，无需重建。"""
         await self._app(app_id)
         if title is not None and not title.strip():
             raise ValidationAppError(message="标题不能为空")
@@ -1242,12 +1435,36 @@ class KnowledgeService:
             if len(body.encode()) > METADATA_MAX_BYTES:
                 raise ValidationAppError(message=f"metadata 超过 {METADATA_MAX_BYTES} 字节")
         doc = await self._doc(app_id, document_id, lock=True)
-        before = {"title": doc.title, "metadata": dict(doc.metadata_ or {})}
+        before = {
+            "title": doc.title,
+            "metadata": dict(doc.metadata_ or {}),
+            "effective_at": _iso_or_none(doc.effective_at),
+            "expires_at": _iso_or_none(doc.expires_at),
+        }
         if title is not None:
             doc.title = _clean_title(title, doc.title)
         if metadata is not None:
             doc.metadata_ = dict(metadata)
-        after = {"title": doc.title, "metadata": dict(doc.metadata_ or {})}
+        if effective_at is not KEEP or expires_at is not KEEP:
+            new_effective = doc.effective_at if effective_at is KEEP else effective_at
+            new_expires = doc.expires_at if expires_at is KEEP else expires_at
+            if (
+                new_effective is not None
+                and new_expires is not None
+                and new_effective >= new_expires
+            ):
+                raise ValidationAppError(
+                    message="生效时间必须早于失效时间",
+                    details={"errors": [{"loc": ["expires_at"], "msg": "必须晚于 effective_at"}]},
+                )
+            doc.effective_at = new_effective
+            doc.expires_at = new_expires
+        after = {
+            "title": doc.title,
+            "metadata": dict(doc.metadata_ or {}),
+            "effective_at": _iso_or_none(doc.effective_at),
+            "expires_at": _iso_or_none(doc.expires_at),
+        }
         await self._audit(
             "kb.document.update",
             app_id,

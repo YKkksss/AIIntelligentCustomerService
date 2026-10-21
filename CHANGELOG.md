@@ -4,6 +4,36 @@
 
 ## [Unreleased]
 
+### 新增（M4.3b ③ 切块级运营接口，2026-10-21）
+
+- `modules/knowledge/admin_router.py` 新增 7 条：`POST /documents/{document_id}/chunks`（手工新增，201）、
+  `DELETE /chunks/{chunk_id}`（204）、`GET /documents/{document_id}/duplicates`（SimHash 近重复提示）、
+  `GET/POST /chunks/{chunk_id}/questions`、`DELETE /questions/{question_id}`（204）、
+  `POST /questions/{question_id}/reattach`；`PATCH /chunks/{chunk_id}` 扩 `text`/`heading_path`
+  （人工编辑 → `source=edited`，只重算该块的分词与向量），`PATCH /documents/{id}` 扩 `effective_at`/`expires_at`。
+- `KnowledgeService` 增 `add_chunk` / `delete_chunk` / `duplicates` / `_reembed_chunk`，`update_chunk` 支持正文编辑；
+  审计新增 `kb.chunk.create` / `kb.chunk.delete`，编辑复用 `kb.chunk.update`。新接口全部带 `response_model`。
+- 入库保留规则落地（设计讨论 0010 §2.1）：重建时 `manual` 切块迁到新构建号（新 id、ordinal 续排、保留启停与复核），
+  `edited` 按正文哈希命中则不重复嵌入；`documents.simhash` 同时落库，供近重复提示使用。
+
+### 修复（M4.3b ③，2026-10-21）
+
+- **SimHash 超出 PG `BIGINT` 范围**：64 位无符号指纹直接写库会 `invalid input for query argument $9 …
+  value out of int64 range`（`documents.simhash` 是有符号 64 位）。改为入库前 `to_signed()`、比较前
+  `to_unsigned()`，并在 `test_simhash.py` 加往返用例。
+- `IngestService._switch` 增 `cfg` 参数后，`run_build` 的调用点漏传导致每次构建都 `TypeError: … missing 1
+  required positional argument: 'cfg'`（构建全部 `failed`）——补上传参。
+
+### 测试（M4.3b ③，2026-10-21）
+
+- 单测：`backend/tests/unit/test_knowledge_chunk_ops.py`（9 例，业务规则）、
+  `test_knowledge_chunk_ops_api.py`（9 例，协议层与权限）、`test_simhash.py` 增有符号往返 1 例。
+- 集成：`backend/tests/integration/test_chunk_ops_pg.py`（6 例，真 PG + 真 Qdrant + 假嵌入器）——
+  编辑只动本块、手工块重建后仍可检索、过期/未生效文档离开可检索集、近重复提示双向命中、自定义词典不破坏新块分词。
+- 门禁：单测 **1254 passed / 1 环境失败（`tests/unit/test_storage.py::test_symlink_escape_rejected`，
+  `WinError 1314`）**；本机 Docker 全量集成 **315 passed / 492.04 s**（含 `tests/e2e`）；`ruff check` / `ruff format` / `lint-imports`（13）/
+  `prompts check`（8）全绿；真实模型 0 元。
+
 ### 新增（M4.3b ② 数据层，2026-10-21）
 
 - 迁移 `0016`：`chunks.source`（`parsed` / `manual` / `edited`，CHECK + 默认 `parsed`）、`documents.effective_at` / `expires_at` / `simhash bigint`、部分索引 `ix_documents_expires_at`。

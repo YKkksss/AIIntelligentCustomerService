@@ -18,6 +18,9 @@ CJK = re.compile(r"[\u4e00-\u9fff]")
 WORD = re.compile(r"[0-9a-z]+")
 NEAR_DUPLICATE_BITS = 3
 SHINGLE = 3
+#: PG 的 BIGINT 是有符号 64 位；SimHash 按无符号算，落库前转有符号、读回来再转回去。
+_UNSIGNED_MASK = (1 << 64) - 1
+_SIGN_BIT = 1 << 63
 
 
 def tokens_of(text: str) -> list[str]:
@@ -73,6 +76,16 @@ def simhash(text: str) -> int:
         if vote > 0:
             result |= 1 << bit
     return result
+
+
+def to_signed(value: int) -> int:
+    """无符号 64 位转 PG BIGINT 能存的有符号值（>= 2^63 时减去 2^64）。"""
+    return value - (1 << 64) if value >= _SIGN_BIT else value
+
+
+def to_unsigned(value: int) -> int:
+    """读库时把有符号值还原成无符号 64 位。"""
+    return value & _UNSIGNED_MASK
 
 
 def hamming(left: int, right: int) -> int:

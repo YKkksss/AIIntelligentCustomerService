@@ -24,9 +24,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from aics.core.config import Settings, get_settings
 from aics.core.errors import AppError, DocumentNotFoundError
+from aics.core.simhash import simhash, to_signed
 from aics.core.textsearch import tokenize_for_index
 from aics.db.base import new_id
 from aics.db.models import App, Chunk, ChunkParent, Document, Job
+from aics.ingest.carry import carry_chunks
 from aics.ingest.chunker import ChunkOptions, ChunkResult, split_document
 from aics.ingest.indexer import EmbedItem, build_embed_text, embed_and_upsert
 from aics.ingest.injection import detect_injection
@@ -78,6 +80,11 @@ def _embed_text_for(
     return build_embed_text(
         title, heading, text, contextual_prefix=bool(chunk_config.get("contextual_prefix", True))
     )
+
+
+def _plain_text(result: ChunkResult) -> str:
+    """切块结果拼回纯文本：SimHash 用（顺序无关，只关心内容）。"""
+    return "\n".join(c.text for c in result.chunks)
 
 
 def search_text_for(
@@ -260,6 +267,7 @@ class IngestService:
             await self._progress(document_id, job_id, PROGRESS_SPLIT_DONE, "indexing")
 
             items = await self._write_rows(app_id, document_id, n, result, title, cfg, custom_dict)
+            payload["simhash"] = simhash(_plain_text(result))
 
             span = 100 - PROGRESS_SPLIT_DONE
 
@@ -283,9 +291,20 @@ class IngestService:
                 before_batch=before_batch,
                 tags=build_tags,
             )
-            old_key, live_tags = await self._switch(
-                document_id, job_id, n, len(items), cfg_version, title, payload, custom_dict
+            old_key, live_tags, carried = await self._switch(
+                document_id, job_id, n, len(items), cfg_version, title, payload, custom_dict, cfg
             )
+            if carried:
+                await embed_and_upsert(
+                    app_id=app_id,
+                    document_id=document_id,
+                    index_version=n,
+                    items=carried,
+                    embedder=self.embedder,
+                    store=self.store,
+                    batch_size=self.settings.embed_batch,
+                    tags=build_tags,
+                )
         except _Cancelled:
             await self._safe_purge(app_id, document_id, n)
             await self._finish_job(job_id, "cancelled", None)
@@ -391,7 +410,8 @@ class IngestService:
         title: str,
         payload: Mapping[str, Any],
         custom_dict: list[str],
-    ) -> tuple[str | None, list[str]]:
+        cfg: Mapping[str, Any],
+    ) -> tuple[str | None, list[str], list[EmbedItem]]:
         """一个事务内切换生效版本；返回 (需要清理的旧文件 key（替换文件时）, 当前文档标签)。"""
         async with self.sessions() as s:
             doc = await s.get(Document, document_id, with_for_update=True)
@@ -413,10 +433,21 @@ class IngestService:
                         setattr(doc, f, payload[f])
             if OVERRIDE_KEY in payload:  # 文档级 chunk_config 随本次构建一起生效
                 doc.chunk_config = payload[OVERRIDE_KEY]
-            doc.index_version, doc.pending_index_version = n, None
+            old_version, doc.index_version, doc.pending_index_version = doc.index_version, n, None
             doc.status, doc.progress, doc.error, doc.chunk_count = "done", 100, None, count
             doc.chunk_config_version, doc.embed_model = cfg_version, self.settings.embed_model
             doc.indexed_title = title
+            if "simhash" in payload:
+                doc.simhash = to_signed(int(payload["simhash"]))
+            carried = await carry_chunks(
+                s,
+                app_id=doc.app_id,
+                document_id=document_id,
+                old_version=old_version,
+                new_version=n,
+                title=title,
+                contextual_prefix=bool(cfg.get("contextual_prefix", True)),
+            )
             job = await s.get(Job, job_id)
             if job is not None:
                 job.status, job.progress, job.finished_at = "done", 100, _now()
@@ -424,7 +455,7 @@ class IngestService:
                 await s.commit()
             except IntegrityError as exc:  # 替换后内容与同应用其他文档重复
                 raise ParseError(message="替换后的内容与已有文档重复") from exc
-            return (old_key if old_key != doc.storage_key else None), list(doc.tags or [])
+            return (old_key if old_key != doc.storage_key else None), list(doc.tags or []), carried
 
     async def _after_switch(
         self,

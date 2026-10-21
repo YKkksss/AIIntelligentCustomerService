@@ -28,6 +28,7 @@ from aics.modules.knowledge import runtime as knowledge_runtime
 from aics.modules.knowledge.router import DocumentStatus
 from aics.modules.knowledge.runtime import KnowledgeRuntime
 from aics.modules.knowledge.service import (
+    KEEP,
     PAGE_MAX,
     ChunkPage,
     DocumentBusyError,
@@ -156,8 +157,12 @@ class FakeService:
         *,
         title: str | None = None,
         metadata: dict[str, Any] | None = None,
+        effective_at: Any = None,
+        expires_at: Any = None,
     ) -> Document:
-        self.calls.append(("update_document", app_id, document_id, title, metadata))
+        self.calls.append(
+            ("update_document", app_id, document_id, title, metadata, effective_at, expires_at)
+        )
         doc = self._doc(app_id)
         if title is not None:
             doc.title = title
@@ -538,13 +543,14 @@ def test_patch_document_updates_title_and_metadata() -> None:
 
     assert response.status_code == 200
     assert response.json()["title"] == "退货政策 v2"
-    assert service.calls[0] == (
+    assert service.calls[0][:5] == (
         "update_document",
         app_id,
         document_id,
         "退货政策 v2",
         {"owner": "售后"},
     )
+    assert service.calls[0][5] is KEEP and service.calls[0][6] is KEEP
 
 
 def test_patch_document_without_fields_is_422() -> None:

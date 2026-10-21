@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -29,7 +30,12 @@ from aics.core.security import Principal, require_scope
 from aics.db.models import Chunk, Document
 from aics.ingest.parsers import EXTENSIONS, UnsupportedFileTypeError
 from aics.modules.knowledge.runtime import KnowledgeRuntime
-from aics.modules.knowledge.service import PAGE_DEFAULT, PAGE_MAX, TITLE_MAX_CHARS
+from aics.modules.knowledge.service import (
+    KEEP,
+    PAGE_DEFAULT,
+    PAGE_MAX,
+    TITLE_MAX_CHARS,
+)
 
 log = structlog.get_logger()
 
@@ -172,6 +178,8 @@ class DocumentPatch(BaseModel):
 
     title: str | None = Field(default=None, max_length=TITLE_MAX_CHARS)
     metadata: dict[str, Any] | None = None
+    effective_at: datetime | None = None
+    expires_at: datetime | None = None
 
 
 def write_body(
@@ -379,16 +387,22 @@ async def patch_document(
     request: Request,
     principal: Annotated[Principal, Depends(require_scope("kb:write"))],
 ) -> Any:
-    """改标题 / 元数据（FR-KB-01）：立即生效，无需重建。"""
-    if body.title is None and body.metadata is None:
+    """改标题 / 元数据 / 有效期（FR-KB-01）：立即生效，无需重建。"""
+    given = body.model_fields_set & {"title", "metadata", "effective_at", "expires_at"}
+    if not given:
         raise ValidationAppError(
-            message="至少要提供 title 或 metadata",
-            details={"errors": [{"loc": ["body"], "msg": "title 与 metadata 不能同时为空"}]},
+            message="至少要提供 title、metadata、effective_at 或 expires_at",
+            details={"errors": [{"loc": ["body"], "msg": "没有任何可更新的字段"}]},
         )
     runtime: KnowledgeRuntime = request.app.state.knowledge_runtime
     async with runtime.session() as session:
         doc = await runtime.service(session).update_document(
-            app_id, document_id, title=body.title, metadata=body.metadata
+            app_id,
+            document_id,
+            title=body.title,
+            metadata=body.metadata,
+            effective_at=body.effective_at if "effective_at" in given else KEEP,
+            expires_at=body.expires_at if "expires_at" in given else KEEP,
         )
     return JSONResponse(jsonable_encoder(document_body(doc)), headers=principal.rate_headers)
 
