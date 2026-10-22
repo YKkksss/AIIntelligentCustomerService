@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+### 新增（M4.7 ④ 检索按关联库过滤，2026-10-22）
+
+- 检索链路（`rag/retrieval.py`、`modules/knowledge/chunk_search.py`、`vectorstore/qdrant.py`）支持 `kb_ids`：有库集合时按 `chunk.kb_id` / Qdrant payload `kb_id` 过滤，没有则退回按 `app_id`（历史行为不变）。
+- 聊天回合（`modules/chat/service.py`）按客服的 `app_kb_links` 解析 `kb_ids` 并带进 `RagInput`；入库（`ingest/service.py`）把 `kb_id` 写进向量点。
+- 修 Qdrant 归属后置校验：按库集合检索时不再要求 `payload.app_id` 等于客服（文档可以没有 `app_id`）。
+- 新增一次性脚本 `backend/scripts/backfill_kb_payload.py`：把 `chunks.kb_id` 回填到历史向量点（幂等，本机已执行，73 个点回填完成）。
+
+### 测试（M4.7 ④ 检索按库过滤，2026-10-22）
+
+- 后端单测 1277 passed（1 环境失败）；定向集成 `test_chat_service_pg.py` + `test_chat_api_pg.py` + `test_knowledge_admin_pg.py` **42 passed**；前端 103 例全绿。
+
 ### 调整（智能客服的知识库页改为只做绑定，2026-10-22）
 
 - `/apps/:appId/knowledge` 从「知识库控制台」改成 **关联知识库**：只展示当前客服挂了哪些库（默认库标记、文档/切块计数），支持关联多个库、设为默认、解绑、跳转公共知识库页。

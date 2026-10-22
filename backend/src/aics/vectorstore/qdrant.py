@@ -312,7 +312,8 @@ class QdrantVectorStore:
         hits = []
         for pt in resp.points:
             pl = pt.payload or {}
-            if pl.get("app_id") != str(app_id):  # 防御：过滤失效时也不越权返回
+            # M4.7 ④：按库集合检索时归属由 kb_id 决定（文档可以没有 app_id）
+            if not kb_ids and pl.get("app_id") != str(app_id):
                 continue
             kind: PointKind = "question" if pl.get("kind") == "question" else "chunk"
             hits.append(
