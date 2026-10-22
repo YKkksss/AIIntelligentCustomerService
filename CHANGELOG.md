@@ -3,6 +3,23 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
 ## [Unreleased]
+
+### 调整（智能客服卡片只留「配置」入口，2026-10-22）
+
+- 卡片底部的「进入」与「配置」原本都打开同一个控制台弹窗（只是分别落在「概览」「配置」页签），信息重复；去掉「进入」，卡片点击与按钮统一进「配置」，概览仍在弹窗左侧导航里。
+
+### 新增（M4.7 ③ 公共知识库服务与接口，2026-10-22）
+
+- 平台级知识库六条接口（`/api/v1/admin/knowledge-bases`）：列表（`q` / `status` / 游标分页，带文档数与关联客服数）、详情（含 `linked_apps`）、创建、改名与描述 / 切块预设（`config_version` 乐观校验）、软删（有文档或仍被关联时 409 `KNOWLEDGE_BASE_IN_USE`）。
+- 客服侧关联两条：`GET/PUT /api/v1/admin/apps/{app_id}/knowledge-bases`，一次提交多个库、可指定默认库；`app_kb_links.is_default` 由部分唯一索引保证每个客服最多一个默认库。
+- `modules/knowledge/kb_service.py` 的 `KnowledgeBaseService`（`list/get/create/update/delete/links/set_links/default_kb_of`）+ `kb_admin_router.py`；写操作审计 `kb.create` / `kb.update` / `kb.delete` / `kb.link`。
+- 迁移 `0019`：`app_kb_links.is_default` + 部分唯一索引；迁移 `0020`：补 `documents` / `chunks` / `chunk_questions` 的 `kb_id` 外键（0018 只建了列，模型声明了外键导致 `alembic check` 报差异）。
+- 新错误码 `KNOWLEDGE_BASE_NOT_FOUND`（404）、`KNOWLEDGE_BASE_NAME_TAKEN` / `KNOWLEDGE_BASE_IN_USE`（409），接口规范 §4 已同步。
+
+### 测试（M4.7 ③，2026-10-22）
+
+- 单测 1277 passed（另 1 例 Windows 符号链接环境项失败）；`tests/unit/test_kb_admin_api.py` 11 例。
+- 集成 +9 例：`test_kb_service_pg.py` 5 例（创建 / 改名冲突 / 关联与默认库切换 / 删除保护 / 审计）、`test_kb_repository_pg.py` 4 例；本机 Docker 全量集成 326 项全绿（481 s，修掉 0018 缺外键导致的迁移往返用例失败）。
 ### 新增（知识库独立化数据层，M4.7 ②，2026-10-22）
 
 - 知识库从「每个智能客服一份」抽成**平台公共资源**：新表 `knowledge_bases`（名称唯一、描述、`status`、库级 `chunk_config`、`config_version`、创建人）与多对多关联表 `app_kb_links`（复合主键 `app_id + kb_id`，双向级联删除）。

@@ -129,12 +129,12 @@ async function onDelete(row: AppCard) {
   await load()
 }
 
-function open(row: AppCard) {
-  return router.push({ name: 'app-overview', params: { appId: row.id } })
+function openConfig(row: AppCard) {
+  return router.push({ name: 'app-config', params: { appId: row.id } })
 }
 
 async function onCommand(row: AppCard, command: string) {
-  if (command === 'config') await router.push({ name: 'app-config', params: { appId: row.id } })
+  if (command === 'config') await openConfig(row)
   if (command === 'knowledge')
     await router.push({ name: 'app-knowledge', params: { appId: row.id } })
   if (command === 'debug') await router.push({ name: 'app-debug', params: { appId: row.id } })
@@ -207,7 +207,7 @@ onMounted(load)
       </div>
 
       <div v-else class="grid">
-        <article v-for="row in visible" :key="row.id" class="app-card" @click="open(row)">
+        <article v-for="row in visible" :key="row.id" class="app-card" @click="openConfig(row)">
           <header class="app-head">
             <AssistantAvatar
               :avatar="row.avatar"
@@ -289,7 +289,6 @@ onMounted(load)
                   <el-icon><ChatDotRound /></el-icon>
                 </button>
               </el-tooltip>
-              <el-button size="small" @click.stop="open(row)">进入</el-button>
               <el-button
                 type="primary"
                 size="small"
