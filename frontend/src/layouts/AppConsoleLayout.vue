@@ -126,8 +126,8 @@ function onClosed() {
     <el-dialog
       v-model="open"
       class="app-console-dialog"
-      width="100vw"
-      top="0"
+      width="calc(100vw - 100px)"
+      top="50px"
       :show-close="true"
       :close-on-click-modal="false"
       header-class="console-header"
@@ -346,19 +346,19 @@ function onClosed() {
 </style>
 
 <style>
-/* 弹窗本体：铺满视口，头部固定、主体弹性撑满，随浏览器窗口改变尺寸（ADR：配置弹窗全屏化） */
+/* 弹窗本体：四周各留 50px 的对话框形态，头部固定、主体弹性撑满 */
 .app-console-dialog.el-dialog {
-  --el-dialog-margin-top: 0;
+  --el-dialog-margin-top: 50px;
   display: flex;
   flex-direction: column;
-  width: 100vw;
-  max-width: 100vw;
-  height: 100vh;
-  margin: 0;
+  width: calc(100vw - 100px);
+  max-width: calc(100vw - 100px);
+  height: calc(100vh - 100px);
+  margin: 50px auto;
   padding: 0;
-  border-radius: 0;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: none;
+  box-shadow: 0 24px 64px rgb(15 23 42 / 24%);
 }
 .app-console-dialog .el-dialog__header {
   flex: 0 0 auto;
@@ -382,9 +382,19 @@ function onClosed() {
   min-height: 0;
   padding: 0;
 }
-/* 遮罩层此时看不见，去掉它的内边距，避免小屏出现滚动条 */
+/* 遮罩层不让页面跟着滚，弹窗四周的留白始终是 50px */
 .el-overlay-dialog:has(> .app-console-dialog) {
   padding: 0;
   overflow: hidden;
+}
+/* 小屏按 16px 留白，避免可视区域被吃掉太多 */
+@media (max-width: 900px) {
+  .app-console-dialog.el-dialog {
+    --el-dialog-margin-top: 16px;
+    width: calc(100vw - 32px);
+    max-width: calc(100vw - 32px);
+    height: calc(100vh - 32px);
+    margin: 16px auto;
+  }
 }
 </style>
