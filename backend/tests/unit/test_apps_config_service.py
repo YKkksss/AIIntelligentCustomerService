@@ -85,6 +85,7 @@ def test_every_app_scoped_table_has_scoped_repository() -> None:
     import aics.modules.chat.event_repository  # noqa: F401
     import aics.modules.chat.repository  # noqa: F401
     import aics.modules.feedback.repository  # noqa: F401
+    import aics.modules.knowledge.kb_repository  # noqa: F401
     import aics.modules.knowledge.repository  # noqa: F401
     import aics.modules.stats.repository  # noqa: F401
     import aics.modules.webhooks.repository  # noqa: F401
@@ -100,6 +101,7 @@ def test_every_app_scoped_table_has_scoped_repository() -> None:
     assert tenant_tables == {
         "apps",
         "user_app_roles",
+        "app_kb_links",
         "documents",
         "chunks",
         "chunk_parents",

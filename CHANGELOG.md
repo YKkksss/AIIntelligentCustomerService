@@ -3,6 +3,18 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
 ## [Unreleased]
+### 新增（知识库独立化数据层，M4.7 ②，2026-10-22）
+
+- 知识库从「每个智能客服一份」抽成**平台公共资源**：新表 `knowledge_bases`（名称唯一、描述、`status`、库级 `chunk_config`、`config_version`、创建人）与多对多关联表 `app_kb_links`（复合主键 `app_id + kb_id`，双向级联删除）。
+- 迁移 `0018`：建两张表；`documents` / `chunks` / `chunk_questions` 加 `kb_id`（暂可空），并为每个存量应用回填「<应用名> 默认知识库」且自动建立关联——升级后各应用看到的文档与之前一致。
+- `documents` / `chunks` 的唯一约束仍是「应用内唯一」：同一份制度可以同时挂给多个智能客服；跨库同名文档允许并存（数据库设计 §3.18）。
+- 新增 `modules/knowledge/kb_repository.py`：`KnowledgeBaseRepository`（list / count / get / get_many / create / save / counts）与 `AppKBLinkRepository`（kb_ids / replace / apps_of_kb_all_apps），③ 的公共库接口与「应用关联多选」都走它。
+- 决策见 `docs/09-design-discussions/0012-知识库独立化与多库关联.md`：库改名不失效（按 id 关联）、删库需先解绑、多库检索按库内去重。
+
+### 测试（M4.7 ②，2026-10-22）
+
+- 集成 `backend/tests/integration/test_kb_repository_pg.py` 4 例（列表与计数、行视图不含内部字段、关联全量替换的 added/removed 与幂等、按应用隔离与反向查询）；单测守卫 `test_every_app_scoped_table_has_scoped_repository` 已覆盖新表。
+- 单测 1267 passed / 1 环境失败（`tests/unit/test_storage.py::test_symlink_escape_rejected`，WinError 1314）/ 322 deselected。
 
 ### 调整（配置弹窗放大为 50px 留白，2026-10-22）
 

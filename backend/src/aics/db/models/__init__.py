@@ -8,7 +8,14 @@ from aics.db.models.event import ConversationEvent, WebhookDelivery
 from aics.db.models.fact import ConversationFact, ConversationFactHistory
 from aics.db.models.feedback import Feedback
 from aics.db.models.job import Job
-from aics.db.models.knowledge import Chunk, ChunkParent, ChunkQuestion, Document
+from aics.db.models.knowledge import (
+    AppKBLink,
+    Chunk,
+    ChunkParent,
+    ChunkQuestion,
+    Document,
+    KnowledgeBase,
+)
 from aics.db.models.stats import AppDailyStats
 from aics.db.models.user import Role, User
 
@@ -16,6 +23,7 @@ __all__ = [
     "ApiKey",
     "AppDailyStats",
     "App",
+    "AppKBLink",
     "AuditLog",
     "Chunk",
     "ChunkParent",
@@ -27,6 +35,7 @@ __all__ = [
     "Document",
     "Feedback",
     "Job",
+    "KnowledgeBase",
     "Message",
     "Role",
     "SystemSetting",

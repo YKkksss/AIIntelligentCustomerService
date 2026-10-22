@@ -34,6 +34,45 @@ QUESTION_SOURCES = ("manual", "llm")
 QUESTION_MAX_CHARS = 200
 TAG_MAX_CHARS = 50
 MAX_TAGS = 20
+KB_STATUSES = ("active", "deleting")
+
+
+class KnowledgeBase(TimestampMixin, Base):
+    """知识库（M4.7）：平台公共的一等资源，客服通过 `app_kb_links` 关联使用。"""
+
+    __tablename__ = "knowledge_bases"
+    __table_args__ = (
+        CheckConstraint("status IN ('active', 'deleting')", name="status"),
+        Index("ix_knowledge_bases_status", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=sa_text("'active'"))
+    # 库级切块参数：一个库被多个客服复用时切法必须一致，所以配置下沉到库
+    chunk_config: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=sa_text("'{}'::jsonb")
+    )
+    config_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=sa_text("1")
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+
+
+class AppKBLink(CreatedAtMixin, Base):
+    """客服 ↔ 知识库的关联（M4.7）；复合主键，删除客服或库时级联清理。"""
+
+    __tablename__ = "app_kb_links"
+    __table_args__ = (Index("ix_app_kb_links_kb", "kb_id"),)
+
+    app_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("apps.id", ondelete="CASCADE"), primary_key=True
+    )
+    kb_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("knowledge_bases.id", ondelete="CASCADE"), primary_key=True
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
 
 
 class Document(TimestampMixin, SoftDeleteMixin, Base):
@@ -54,6 +93,8 @@ class Document(TimestampMixin, SoftDeleteMixin, Base):
         ),
         Index("ix_documents_app_status", "app_id", "status"),
         Index("ix_documents_app_created", "app_id", sa_text("created_at DESC")),
+        Index("ix_documents_kb_status", "kb_id", "status"),
+        Index("ix_documents_kb_created", "kb_id", sa_text("created_at DESC")),
         Index("ix_documents_tags", "tags", postgresql_using="gin"),
         Index(
             "ix_documents_expires_at",
@@ -65,6 +106,10 @@ class Document(TimestampMixin, SoftDeleteMixin, Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_id)
     app_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("apps.id"), nullable=False
+    )
+    # 知识库归属（M4.7）：迁移 0018 回填存量；⑤ 服务全面写入后收紧为 NOT NULL
+    kb_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("knowledge_bases.id")
     )
     title: Mapped[str] = mapped_column(Text, nullable=False)
     source_type: Mapped[str] = mapped_column(Text, nullable=False)
@@ -130,6 +175,7 @@ class Chunk(CreatedAtMixin, Base):
         UniqueConstraint("document_id", "index_version", "ordinal"),
         Index("ix_chunks_tsv", "tsv", postgresql_using="gin"),
         Index("ix_chunks_app_enabled", "app_id", postgresql_where=sa_text("enabled")),
+        Index("ix_chunks_kb_enabled", "kb_id", postgresql_where=sa_text("enabled")),
         Index(
             "ix_chunks_parent_id", "parent_id", postgresql_where=sa_text("parent_id IS NOT NULL")
         ),
@@ -143,6 +189,10 @@ class Chunk(CreatedAtMixin, Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_id)
     app_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    # 知识库归属（M4.7）：与 documents.kb_id 由入库流水线保证一致，供检索直接过滤
+    kb_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("knowledge_bases.id")
+    )
     document_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
     )
@@ -194,6 +244,10 @@ class ChunkQuestion(CreatedAtMixin, Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_id)
     app_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    # 知识库归属（M4.7）：随文档一起迁移，切块级运营按库过滤
+    kb_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("knowledge_bases.id")
+    )
     document_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
     )
