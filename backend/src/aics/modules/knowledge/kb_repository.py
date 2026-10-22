@@ -17,9 +17,17 @@ from aics.db.models.knowledge import AppKBLink, Chunk, Document, KnowledgeBase
 from aics.db.scoped import MAX_PAGE_SIZE, AppScopedRepository
 
 
-def kb_row(kb: KnowledgeBase, *, documents: int = 0, chunks: int = 0) -> dict[str, Any]:
+def kb_row(
+    kb: KnowledgeBase,
+    *,
+    documents: int = 0,
+    chunks: int = 0,
+    apps: list[dict[str, str]] | None = None,
+    linked: bool | None = None,
+    is_default: bool | None = None,
+) -> dict[str, Any]:
     """库的对外视图：不含创建人等内部字段。"""
-    return {
+    row: dict[str, Any] = {
         "id": str(kb.id),
         "name": kb.name,
         "description": kb.description,
@@ -28,9 +36,15 @@ def kb_row(kb: KnowledgeBase, *, documents: int = 0, chunks: int = 0) -> dict[st
         "config_version": kb.config_version,
         "document_count": documents,
         "chunk_count": chunks,
+        "apps": apps or [],
         "created_at": kb.created_at,
         "updated_at": kb.updated_at,
     }
+    if linked is not None:
+        row["linked"] = linked
+    if is_default is not None:
+        row["is_default"] = is_default
+    return row
 
 
 class KnowledgeBaseRepository:
@@ -53,6 +67,41 @@ class KnowledgeBaseRepository:
         if status:
             stmt = stmt.where(KnowledgeBase.status == status)
         return int((await self.session.execute(stmt)).scalar_one())
+
+    async def list_page(
+        self,
+        *,
+        status: str | None = None,
+        q: str | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[KnowledgeBase], int]:
+        """名称/描述模糊搜索 + 状态过滤 + 分页；返回（本页行, 总数）。"""
+        conditions = []
+        if status:
+            conditions.append(KnowledgeBase.status == status)
+        if q:
+            pattern = f"%{q}%"
+            conditions.append(
+                KnowledgeBase.name.ilike(pattern) | KnowledgeBase.description.ilike(pattern)
+            )
+        base = select(KnowledgeBase)
+        count_stmt = select(func.count()).select_from(KnowledgeBase)
+        if conditions:
+            base = base.where(*conditions)
+            count_stmt = count_stmt.where(*conditions)
+        total = int((await self.session.execute(count_stmt)).scalar_one())
+        size = min(max(int(page_size), 1), MAX_PAGE_SIZE)
+        stmt = (
+            base.order_by(KnowledgeBase.created_at.desc(), KnowledgeBase.id)
+            .limit(size)
+            .offset(max(page - 1, 0) * size)
+        )
+        return list((await self.session.execute(stmt)).scalars()), total
+
+    async def by_name(self, name: str) -> KnowledgeBase | None:
+        stmt = select(KnowledgeBase).where(KnowledgeBase.name == name)
+        return (await self.session.execute(stmt)).scalar_one_or_none()
 
     async def get(self, kb_id: UUID) -> KnowledgeBase | None:
         return (
@@ -115,7 +164,12 @@ class AppKBLinkRepository(AppScopedRepository[AppKBLink]):
         return list((await self.session.execute(stmt)).scalars())
 
     async def replace(
-        self, app_id: UUID, kb_ids: Iterable[UUID], *, created_by: UUID | None = None
+        self,
+        app_id: UUID,
+        kb_ids: Iterable[UUID],
+        *,
+        created_by: UUID | None = None,
+        default_kb_id: UUID | None = None,
     ) -> tuple[list[UUID], list[UUID]]:
         """全量替换关联；返回（新增, 移除）。"""
         wanted = list(dict.fromkeys(kb_ids))
@@ -136,7 +190,40 @@ class AppKBLinkRepository(AppScopedRepository[AppKBLink]):
                     ]
                 )
             )
+        # 默认库：显式指定 > 保留原默认 > 本次的第一条
+        current_default = await self.default_kb_id(app_id)
+        wanted_set = target
+        if default_kb_id is not None and default_kb_id in wanted_set:
+            keep: UUID | None = default_kb_id
+        elif current_default is not None and current_default in wanted_set:
+            keep = current_default
+        else:
+            keep = wanted[0] if wanted else None
+        await self.mark_default(app_id, keep)
         return added, removed
+
+    async def default_kb_id(self, app_id: UUID) -> UUID | None:
+        stmt = select(AppKBLink.kb_id).where(
+            AppKBLink.app_id == app_id, AppKBLink.is_default.is_(True)
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def mark_default(self, app_id: UUID, kb_id: UUID | None) -> None:
+        """把 `kb_id` 设为该应用唯一的默认库；传 None 表示清除。
+
+        分两步写：先清掉旧的默认（部分唯一索引不允许两条同时为 true），再设新的。
+        """
+        await self.session.execute(
+            update(AppKBLink)
+            .where(AppKBLink.app_id == app_id, AppKBLink.is_default.is_(True))
+            .values(is_default=False)
+        )
+        if kb_id is not None:
+            await self.session.execute(
+                update(AppKBLink)
+                .where(AppKBLink.app_id == app_id, AppKBLink.kb_id == kb_id)
+                .values(is_default=True)
+            )
 
     async def apps_of_kb_all_apps(self, kb_id: UUID) -> list[UUID]:
         stmt = select(AppKBLink.app_id).where(AppKBLink.kb_id == kb_id)

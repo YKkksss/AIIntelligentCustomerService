@@ -74,6 +74,18 @@ class HandoffStateConflictError(ConflictError):
     code, message = "HANDOFF_STATE_CONFLICT", "转人工状态已变更"
 
 
+class KnowledgeBaseNotFoundError(NotFoundError):
+    code, message = "KNOWLEDGE_BASE_NOT_FOUND", "知识库不存在"
+
+
+class KnowledgeBaseNameTakenError(ConflictError):
+    code, message = "KNOWLEDGE_BASE_NAME_TAKEN", "知识库名称已存在"
+
+
+class KnowledgeBaseInUseError(ConflictError):
+    code, message = "KNOWLEDGE_BASE_IN_USE", "知识库仍在使用中"
+
+
 class CallbackStateConflictError(ConflictError):
     """待回访状态迁移被抢先（M4.5 ③）：条件 UPDATE 返回 0 行时抛出。
 

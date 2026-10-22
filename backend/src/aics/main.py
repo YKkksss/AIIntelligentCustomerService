@@ -52,6 +52,7 @@ from aics.modules.handoff.router import router as handoff_router
 from aics.modules.handoff.runtime import HandoffRuntime
 from aics.modules.knowledge.admin_router import router as knowledge_admin_router
 from aics.modules.knowledge.chunk_search import PgChunkSearch
+from aics.modules.knowledge.kb_admin_router import router as kb_admin_router
 from aics.modules.knowledge.router import router as knowledge_router
 from aics.modules.knowledge.runtime import KnowledgeRuntime
 from aics.modules.knowledge.service import TASK_QUEUES
@@ -394,6 +395,7 @@ def create_app() -> FastAPI:
     app.include_router(chat_router)
     app.include_router(knowledge_router)
     app.include_router(knowledge_admin_router)
+    app.include_router(kb_admin_router)
     app.include_router(handoff_router)
     app.include_router(feedback_router)
     app.include_router(auth_router)

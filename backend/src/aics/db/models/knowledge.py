@@ -64,7 +64,16 @@ class AppKBLink(CreatedAtMixin, Base):
     """客服 ↔ 知识库的关联（M4.7）；复合主键，删除客服或库时级联清理。"""
 
     __tablename__ = "app_kb_links"
-    __table_args__ = (Index("ix_app_kb_links_kb", "kb_id"),)
+    __table_args__ = (
+        Index("ix_app_kb_links_kb", "kb_id"),
+        # 每个应用最多一个默认库（迁移 0019）；没有默认时按最早关联推断
+        Index(
+            "uq_app_kb_links_default",
+            "app_id",
+            unique=True,
+            postgresql_where=sa_text("is_default"),
+        ),
+    )
 
     app_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("apps.id", ondelete="CASCADE"), primary_key=True
@@ -73,6 +82,10 @@ class AppKBLink(CreatedAtMixin, Base):
         UUID(as_uuid=True), ForeignKey("knowledge_bases.id", ondelete="CASCADE"), primary_key=True
     )
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    #: 旧接口（/apps/{app_id}/documents）落到哪个库；每个应用最多一条为 true（0019）
+    is_default: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=sa_text("false")
+    )
 
 
 class Document(TimestampMixin, SoftDeleteMixin, Base):

@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from aics.core.audit import AuditSink
 from aics.ingest.parsers.url import FetchedUrl
+from aics.modules.knowledge.kb_service import KnowledgeBaseService
 from aics.modules.knowledge.service import KnowledgeService
 from aics.providers.base import EmbeddingProvider, RerankProvider
 from aics.storage import Storage, get_storage
@@ -46,6 +47,10 @@ class KnowledgeRuntime:
         """一个请求一个会话；`KnowledgeService` 自己提交，异常由这里回滚。"""
         async with self.sessions() as session:
             yield session
+
+    def kb_service(self, session: AsyncSession) -> KnowledgeBaseService:
+        """公共知识库的读写（M4.7 ③）：库本身是平台级资源，不带 app 作用域。"""
+        return KnowledgeBaseService(session, audit=self.audit)
 
     def service(self, session: AsyncSession) -> KnowledgeService:
         return KnowledgeService(
