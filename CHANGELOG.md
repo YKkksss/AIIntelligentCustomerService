@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+### 新增（M4.7 ⑤ 文档归属知识库，2026-10-23）
+
+- 文档改为归**知识库**所有：`documents.kb_id` 必填（迁移 0022 回填并收紧约束），入库与切块写入不再依赖客服；`app_id` 只记录上传入口。
+- 新增库级文档服务 `modules/knowledge/kb_docs.py` 与接口：`GET/POST /api/v1/admin/knowledge-bases/{kb_id}/documents`、`GET/PATCH/DELETE …/{document_id}`、`POST …/{document_id}/reindex`。
+- 存储键与向量归属改为按库：`storage.kb_document_key()` / `kb_prefix()`，`QdrantVectorStore.search_keyword` / `upsert_chunks` 支持 `kb_id`。
+- `rag.config.DEFAULT_CHUNK_CONFIG` 供库级上传在库未配置切块参数时兜底。
+
+### 调整（危险操作归位与会话术语，2026-10-23）
+
+- 智能客服卡片下拉菜单去掉「删除」，删除入口统一收到「配置」页底部的**危险操作**区（需确认，说明文档、会话与 API Key 由后台任务清理，平台知识库不受影响）。
+- 公共知识库页的「库内文档」抽屉右上角新增「删除知识库」按钮，删除后抽屉自动关闭。
+- 侧栏与页面标题的「会话与反馈」改名为「会话」（内容仍是会话回查 + 待回访 + 反馈三个页签）。
+
 ### 新增（M4.7 ④ 检索按关联库过滤，2026-10-22）
 
 - 检索链路（`rag/retrieval.py`、`modules/knowledge/chunk_search.py`、`vectorstore/qdrant.py`）支持 `kb_ids`：有库集合时按 `chunk.kb_id` / Qdrant payload `kb_id` 过滤，没有则退回按 `app_id`（历史行为不变）。

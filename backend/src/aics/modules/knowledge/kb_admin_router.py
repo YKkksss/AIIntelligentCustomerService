@@ -11,15 +11,19 @@ from __future__ import annotations
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
+from aics.core.errors import ValidationAppError
 from aics.core.openapi import APP_SCOPE_ERRORS, errors
 from aics.core.security import AuthedUser, require_perm
+from aics.modules.knowledge.kb_docs import ActorMeta as DocActorMeta
+from aics.modules.knowledge.kb_docs import KbUploadResult, KnowledgeBaseDocs
 from aics.modules.knowledge.kb_service import ActorMeta, KnowledgeBaseService
 from aics.modules.knowledge.runtime import KnowledgeRuntime
+from aics.storage import get_storage
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin-knowledge-bases"])
 
@@ -266,3 +270,189 @@ async def put_app_knowledge_bases(
         meta=_meta(request),
     )
     return {"items": items}
+
+
+# ---------------------------------------------------------------- 库内文档（M4.7 ⑤）
+#: 文档列表/上传等接口的错误声明（写操作多 413/429）
+_DOC_READ = errors(*APP_SCOPE_ERRORS)
+_DOC_WRITE = errors(401, 403, 404, 409, 413, 422, 429)
+_DOC_MAX_BYTES = 20 * 1024 * 1024  # 与 kb_docs.MAX_BYTES 保持一致
+
+
+async def _kb_docs(request: Request) -> Any:
+    """库级文档服务：与知识库服务共用一个会话，存储/向量库/审计/投递都取运行时。"""
+    runtime = _runtime(request)
+    async with runtime.session() as session:
+        yield KnowledgeBaseDocs(
+            session,
+            storage=runtime.storage or get_storage(),
+            store=runtime.vector,
+            audit=runtime.audit,
+            enqueue=runtime.enqueue,
+        )
+
+
+Docs = Annotated[KnowledgeBaseDocs, Depends(_kb_docs)]
+
+
+def _doc_meta(request: Request) -> DocActorMeta:
+    state = request.scope.get("state") or {}
+    client = request.client
+    return DocActorMeta(
+        ip=None if client is None else client.host,
+        user_agent=request.headers.get("user-agent"),
+        request_id=state.get("request_id"),
+    )
+
+
+async def _read_body(file: UploadFile) -> bytes:
+    """分块读上传内容并卡 20MB 上限（与开放接口的上传上限一致）。"""
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > _DOC_MAX_BYTES:
+            raise ValidationAppError(
+                message="文件超过大小上限",
+                details={"errors": [{"loc": ["file"], "msg": "最大 20 MB"}]},
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+@router.post(
+    "/knowledge-bases/{kb_id}/documents",
+    summary="向知识库上传文档（公共库）",
+    status_code=201,
+    responses=_DOC_WRITE,
+)
+async def upload_kb_document(
+    kb_id: UUID,
+    request: Request,
+    user: Annotated[AuthedUser, Depends(Writer)],
+    docs: Docs,
+    file: Annotated[UploadFile, File()],
+    title: Annotated[str | None, Form(max_length=200)] = None,
+    chunk_config: Annotated[str | None, Form()] = None,
+) -> JSONResponse:
+    data = await _read_body(file)
+    config = _parse_chunk_config(chunk_config)
+    result: KbUploadResult = await docs.upload(
+        kb_id,
+        data,
+        file.filename or "document.txt",
+        title=title,
+        created_by=user.id,
+        chunk_config=config,
+        meta=_doc_meta(request),
+    )
+    body = {
+        "document": docs.doc_body(result.document),
+        "duplicate": result.duplicate,
+        "job_id": None if result.job is None else str(result.job.id),
+    }
+    return JSONResponse(jsonable_encoder(body), status_code=201)
+
+
+@router.get(
+    "/knowledge-bases/{kb_id}/documents/{document_id}",
+    summary="知识库文档详情（公共库）",
+    responses=_DOC_READ,
+)
+async def get_kb_document(
+    kb_id: UUID,
+    document_id: UUID,
+    user: Annotated[AuthedUser, Depends(Reader)],
+    docs: Docs,
+) -> JSONResponse:
+    doc = await docs.get(kb_id, document_id)
+    return JSONResponse(jsonable_encoder(docs.doc_body(doc)))
+
+
+class KbDocumentPatch(BaseModel):
+    title: str | None = Field(default=None, max_length=200)
+    metadata: dict[str, Any] | None = None
+    tags: list[str] | None = None
+
+
+@router.patch(
+    "/knowledge-bases/{kb_id}/documents/{document_id}",
+    summary="修改知识库文档元信息（公共库）",
+    responses=_DOC_WRITE,
+)
+async def patch_kb_document(
+    kb_id: UUID,
+    document_id: UUID,
+    body: KbDocumentPatch,
+    request: Request,
+    user: Annotated[AuthedUser, Depends(Writer)],
+    docs: Docs,
+) -> JSONResponse:
+    doc = await docs.update(
+        kb_id,
+        document_id,
+        title=body.title,
+        metadata=body.metadata,
+        tags=body.tags,
+        created_by=user.id,
+        meta=_doc_meta(request),
+    )
+    return JSONResponse(jsonable_encoder(docs.doc_body(doc)))
+
+
+@router.post(
+    "/knowledge-bases/{kb_id}/documents/{document_id}/reindex",
+    summary="重建知识库文档（公共库）",
+    status_code=202,
+    responses=_DOC_WRITE,
+)
+async def reindex_kb_document(
+    kb_id: UUID,
+    document_id: UUID,
+    request: Request,
+    user: Annotated[AuthedUser, Depends(Writer)],
+    docs: Docs,
+) -> JSONResponse:
+    job = await docs.reindex(kb_id, document_id, created_by=user.id, meta=_doc_meta(request))
+    return JSONResponse({"job_id": str(job.id)}, status_code=202)
+
+
+@router.delete(
+    "/knowledge-bases/{kb_id}/documents/{document_id}",
+    summary="删除知识库文档（公共库）",
+    status_code=204,
+    responses=_DOC_WRITE,
+)
+async def delete_kb_document(
+    kb_id: UUID,
+    document_id: UUID,
+    request: Request,
+    user: Annotated[AuthedUser, Depends(Writer)],
+    docs: Docs,
+) -> Response:
+    await docs.delete(kb_id, document_id, created_by=user.id, meta=_doc_meta(request))
+    return Response(status_code=204)
+
+
+def _parse_chunk_config(raw: str | None) -> dict[str, Any] | None:
+    """表单里的 chunk_config 是 JSON 字符串；非法 JSON 直接 422 到 loc=chunk_config。"""
+    if raw is None or not raw.strip():
+        return None
+    import json
+
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValidationAppError(
+            message="chunk_config 不是合法 JSON",
+            details={"errors": [{"loc": ["chunk_config"], "msg": str(exc)}]},
+        ) from exc
+    if not isinstance(parsed, dict):
+        raise ValidationAppError(
+            message="chunk_config 必须是对象",
+            details={"errors": [{"loc": ["chunk_config"], "msg": "必须是对象"}]},
+        )
+    return parsed

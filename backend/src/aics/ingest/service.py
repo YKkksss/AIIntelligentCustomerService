@@ -38,6 +38,7 @@ from aics.ingest.parsers.url import fetch_url
 from aics.ingest.questions import migrate_document_questions
 from aics.ingest.repository import ChunkParentRepository, ChunkRepository
 from aics.providers.base import EmbeddingProvider
+from aics.rag.config import DEFAULT_CHUNK_CONFIG
 from aics.storage import Storage, build_storage
 from aics.vectorstore import QdrantVectorStore, build_vector_store
 
@@ -200,19 +201,25 @@ class IngestService:
             return parse_bytes(fetched.content, fetched.file_type)
         raise ParseError(message="文档没有可读取的来源")
 
-    async def _purge_build(self, app_id: UUID, document_id: UUID, n: int) -> None:
-        await self.store.delete_document(app_id, document_id, index_version=n)
+    async def _purge_build(self, app_id: UUID | None, document_id: UUID, n: int) -> None:
+        if app_id is None:
+            # 库级文档：payload 里没有 app_id，按 document_id + 构建号删
+            await self.store.delete_document_points(document_id, index_version=n)
+        else:
+            await self.store.delete_document(app_id, document_id, index_version=n)
         async with self.sessions() as s:
             await ChunkRepository(s).delete_versions(app_id, document_id, index_version=n)
             await ChunkParentRepository(s).delete_versions(app_id, document_id, index_version=n)
             await s.commit()
 
-    async def _cancelled(self, app_id: UUID, document_id: UUID) -> bool:
+    async def _cancelled(self, app_id: UUID | None, document_id: UUID) -> bool:
         async with self.sessions() as s:
-            app = await s.get(App, app_id)
+            app = await s.get(App, app_id) if app_id is not None else None
             doc = await s.get(Document, document_id)
             return (
-                app is None or doc is None or app.status == "deleting" or doc.status == "deleting"
+                (app_id is not None and (app is None or app.status == "deleting"))
+                or doc is None
+                or doc.status == "deleting"
             )
 
     async def _progress(
@@ -238,9 +245,12 @@ class IngestService:
                 return "skipped"
             if job.status in ("done", "failed", "cancelled"):
                 return "skipped"  # 重复投递：已有终态
-            app = await s.get(App, doc.app_id)
+            # M4.7 ⑤：库级文档没有 app_id，此时用平台默认配置构建
+            app = await s.get(App, doc.app_id) if doc.app_id is not None else None
             n = doc.pending_index_version
-            if app is None or app.status == "deleting" or doc.status == "deleting":
+            if (doc.app_id is not None and (app is None or app.status == "deleting")) or (
+                doc.status == "deleting"
+            ):
                 job.status, job.finished_at = "cancelled", _now()
                 await s.commit()
                 return "cancelled"
@@ -253,8 +263,15 @@ class IngestService:
             await s.commit()
             app_id, title = doc.app_id, doc.title
             payload: dict[str, Any] = dict(job.payload or {})
-            cfg: dict[str, Any] = dict(effective_chunk_config(app.chunk_config, doc, payload))
-            cfg_version, custom_dict = app.chunk_config_version, list(app.custom_dict or [])
+            base_cfg: Mapping[str, Any] = (
+                app.chunk_config if app is not None else dict(DEFAULT_CHUNK_CONFIG)
+            )
+            cfg: dict[str, Any] = dict(effective_chunk_config(base_cfg, doc, payload))
+            cfg_version, custom_dict = (
+                (app.chunk_config_version, list(app.custom_dict or []))
+                if app is not None
+                else (0, [])
+            )
             build_tags = list(doc.tags or [])
         replace_key: str | None = payload.get("storage_key")
 

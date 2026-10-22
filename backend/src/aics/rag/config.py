@@ -215,6 +215,7 @@ def default_chunk_preset() -> str:
     return _load_presets()[0]
 
 
+
 def get_chunk_preset(name: str) -> ChunkPreset:
     presets = _load_presets()[1]
     if name not in presets:
@@ -550,3 +551,9 @@ def validate_app_config(
 
     if issues:
         raise ConfigValidationError(issues)
+
+#: 库级文档（没有 app_id）构建时使用的切块配置：默认预设的完整展开（M4.7 ⑤）。
+#: 应用侧仍用 `apps.chunk_config`（同样由该预设展开而来），两边口径一致。
+DEFAULT_CHUNK_CONFIG: dict[str, Any] = ChunkConfig.model_validate(
+    {"preset": default_chunk_preset()}
+).model_dump(mode="json")

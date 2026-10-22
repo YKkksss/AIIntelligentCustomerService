@@ -147,7 +147,7 @@ class QdrantVectorStore:
         self._ensured.discard(self.chunks_collection)
 
     # ---------------- 写入 ----------------
-    async def upsert_chunks(self, app_id: UUID, points: Sequence[ChunkPoint]) -> int:
+    async def upsert_chunks(self, app_id: UUID | None, points: Sequence[ChunkPoint]) -> int:
         if not points:
             return 0
         await self.ensure_chunks_collection()
@@ -160,7 +160,7 @@ class QdrantVectorStore:
                     id=str(p.point_id or p.chunk_id),
                     vector=list(p.vector),
                     payload={
-                        "app_id": str(app_id),
+                        **({"app_id": str(app_id)} if app_id is not None else {}),
                         "document_id": str(p.document_id),
                         "chunk_id": str(p.chunk_id),
                         "index_version": p.index_version,
@@ -173,6 +173,37 @@ class QdrantVectorStore:
             )
         await self.client.upsert(self.chunks_collection, points=structs, wait=True)
         return len(structs)
+
+    async def delete_document_points(
+        self, document_id: UUID, *, index_version: int | None = None
+    ) -> None:
+        """按文档删除向量点（M4.7 ⑤：库级文档没有 app_id，document_id 全局唯一）。
+
+        与 `delete_points` 的区别：不带应用过滤条件，因此只允许内部调用（入库清理、
+        删除文档），不暴露给检索路径。
+        """
+        await self._client.delete(
+            collection_name=self.collection,
+            points_selector=qm.FilterSelector(
+                filter=qm.Filter(
+                    must=[
+                        qm.FieldCondition(
+                            key="document_id", match=qm.MatchValue(value=str(document_id))
+                        ),
+                        *(
+                            [
+                                qm.FieldCondition(
+                                    key="index_version", match=qm.MatchValue(value=index_version)
+                                )
+                            ]
+                            if index_version is not None
+                            else []
+                        ),
+                    ]
+                )
+            ),
+            wait=True,
+        )
 
     async def set_enabled(self, app_id: UUID, chunk_ids: Sequence[UUID], enabled: bool) -> None:
         """同步 PG 中 `enabled AND review_status <> 'flagged'` 的变化；只作用于本应用的点。

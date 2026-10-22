@@ -31,6 +31,21 @@ def document_key(app_id: UUID, document_id: UUID, version: int, ext: str) -> str
     return f"{UUID(str(app_id))}/{UUID(str(document_id))}/v{version}.{ext}"
 
 
+def kb_document_key(kb_id: UUID, document_id: UUID, version: int, ext: str) -> str:
+    """知识库文档的存储 key（M4.7 ⑤：文档归属库，前缀用 kb-<id>/）。
+
+    与 `document_key` 保持同构，便于运维按前缀清理；`kb-` 前缀让两类文档在同一个
+    bucket 里也能一眼区分（UUID 前缀不会撞上应用目录）。
+    """
+    ext = ext.lower().lstrip(".")
+    if not _EXT_RE.match(ext):
+        raise ValueError(f"非法扩展名: {ext!r}")
+    return f"kb-{UUID(str(kb_id))}/{UUID(str(document_id))}/v{version}.{ext}"
+
+
+def kb_prefix(kb_id: UUID) -> str:
+    return f"kb-{UUID(str(kb_id))}/"
+
 def app_prefix(app_id: UUID) -> str:
     return f"{UUID(str(app_id))}/"
 
