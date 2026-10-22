@@ -126,8 +126,8 @@ function onClosed() {
     <el-dialog
       v-model="open"
       class="app-console-dialog"
-      width="min(1400px, 94vw)"
-      top="5vh"
+      width="100vw"
+      top="0"
       :show-close="true"
       :close-on-click-modal="false"
       header-class="console-header"
@@ -241,7 +241,8 @@ function onClosed() {
 
 .console-body {
   display: flex;
-  height: min(720px, 70vh);
+  flex: 1;
+  min-height: 0;
   background: #f7f9fc;
   border-top: 1px solid var(--aics-split);
 }
@@ -327,28 +328,63 @@ function onClosed() {
 .console-main {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   overflow: auto;
   padding: 20px 24px 24px;
+}
+
+/* 窄屏：左侧导航收窄，主体仍然弹性铺满 */
+@media (max-width: 860px) {
+  .console-nav {
+    width: 164px;
+    flex-basis: 164px;
+  }
+  .console-main {
+    padding: 16px;
+  }
 }
 </style>
 
 <style>
-/* 弹窗本体：去掉 Element Plus 的默认内边距，头部与主体自己撑满 */
+/* 弹窗本体：铺满视口，头部固定、主体弹性撑满，随浏览器窗口改变尺寸（ADR：配置弹窗全屏化） */
 .app-console-dialog.el-dialog {
+  --el-dialog-margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  max-width: 100vw;
+  height: 100vh;
+  margin: 0;
   padding: 0;
-  border-radius: 16px;
+  border-radius: 0;
   overflow: hidden;
-  box-shadow: 0 24px 64px rgb(15 23 42 / 24%);
+  box-shadow: none;
 }
 .app-console-dialog .el-dialog__header {
+  flex: 0 0 auto;
   margin: 0;
-  padding: 16px 20px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--aics-split);
 }
 .app-console-dialog .el-dialog__headerbtn {
-  top: 8px;
-  right: 8px;
+  top: 12px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  z-index: 2;
+}
+.app-console-dialog .el-dialog__headerbtn .el-dialog__close {
+  font-size: 18px;
 }
 .app-console-dialog .el-dialog__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
   padding: 0;
+}
+/* 遮罩层此时看不见，去掉它的内边距，避免小屏出现滚动条 */
+.el-overlay-dialog:has(> .app-console-dialog) {
+  padding: 0;
+  overflow: hidden;
 }
 </style>
