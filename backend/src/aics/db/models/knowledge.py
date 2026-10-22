@@ -117,10 +117,10 @@ class Document(TimestampMixin, SoftDeleteMixin, Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_id)
-    app_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("apps.id"), nullable=False
-    )
-    # 知识库归属（M4.7）：迁移 0018 回填存量；⑤ 服务全面写入后收紧为 NOT NULL
+    #: 上传来源（M4.7 ④ 起可空）：公共知识库上传的文档没有所属智能客服。
+    #: 归属由 kb_id 决定，检索按客服关联的库集合过滤。
+    app_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("apps.id"))
+    # 知识库归属（M4.7）：迁移 0018 回填存量；④ 起是文档的唯一归属方
     kb_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("knowledge_bases.id")
     )
@@ -167,7 +167,8 @@ class ChunkParent(CreatedAtMixin, Base):
     __table_args__ = (UniqueConstraint("document_id", "index_version", "ordinal"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_id)
-    app_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    #: 上传来源（可空，M4.7 ④）；归属见 kb_id
+    app_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     document_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
     )
@@ -201,7 +202,8 @@ class Chunk(CreatedAtMixin, Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_id)
-    app_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    #: 上传来源（可空，M4.7 ④）；归属见 kb_id
+    app_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     # 知识库归属（M4.7）：与 documents.kb_id 由入库流水线保证一致，供检索直接过滤
     kb_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("knowledge_bases.id")
@@ -256,7 +258,8 @@ class ChunkQuestion(CreatedAtMixin, Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_id)
-    app_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    #: 上传来源（可空，M4.7 ④）
+    app_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     # 知识库归属（M4.7）：随文档一起迁移，切块级运营按库过滤
     kb_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("knowledge_bases.id")
