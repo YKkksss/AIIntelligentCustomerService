@@ -118,17 +118,6 @@ async function onCopy(row: AppCard) {
   await load()
 }
 
-async function onDelete(row: AppCard) {
-  await ElMessageBox.confirm(
-    `删除后该智能客服的文档、会话与 Key 会被异步清理，接口立即不可用。确定删除「${row.name}」？`,
-    '删除智能客服',
-    { type: 'warning' },
-  )
-  await appApi.remove(row.id)
-  ElMessage.success('已提交清理任务')
-  await load()
-}
-
 function openConfig(row: AppCard) {
   return router.push({ name: 'app-config', params: { appId: row.id } })
 }
@@ -139,7 +128,6 @@ async function onCommand(row: AppCard, command: string) {
     await router.push({ name: 'app-knowledge', params: { appId: row.id } })
   if (command === 'debug') await router.push({ name: 'app-debug', params: { appId: row.id } })
   if (command === 'copy') await onCopy(row)
-  if (command === 'delete') await onDelete(row)
 }
 
 onMounted(load)
@@ -239,7 +227,6 @@ onMounted(load)
                     调试对话
                   </el-dropdown-item>
                   <el-dropdown-item v-if="canWrite()" command="copy" divided>复制</el-dropdown-item>
-                  <el-dropdown-item v-if="canWrite()" command="delete">删除</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>

@@ -85,7 +85,7 @@ const routes: RouteRecordRaw[] = [
             path: 'logs',
             name: 'app-logs',
             component: () => import('@/views/LogsView.vue'),
-            meta: { permission: 'log.read', title: '会话与反馈' },
+            meta: { permission: 'log.read', title: '会话' },
           },
           {
             path: 'webhooks',

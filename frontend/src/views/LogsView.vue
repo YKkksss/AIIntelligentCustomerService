@@ -159,7 +159,7 @@ onMounted(load)
   <div>
     <div class="head">
       <div>
-        <div class="aics-page-title">会话与反馈</div>
+        <div class="aics-page-title">会话</div>
         <div class="aics-page-subtitle">按渠道、状态与关键字回查会话；处理待回访与用户反馈。</div>
       </div>
     </div>

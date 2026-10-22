@@ -65,7 +65,7 @@ const NAV: NavItem[] = [
   },
   {
     name: 'app-logs',
-    title: '会话与反馈',
+    title: '会话',
     icon: ChatLineSquare,
     permission: 'log.read',
     group: '接入与运营',

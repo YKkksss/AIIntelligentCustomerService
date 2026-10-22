@@ -116,6 +116,10 @@ async function remove(row: KnowledgeBaseRow) {
   )
   await kbApi.remove(row.id)
   ElMessage.success('已删除')
+  if (current.value?.id === row.id) {
+    drawerVisible.value = false
+    current.value = null
+  }
   await load()
 }
 
@@ -288,6 +292,14 @@ onMounted(load)
     </el-dialog>
 
     <el-drawer v-model="drawerVisible" :title="current?.name ?? '库内文档'" size="720px">
+      <template #header>
+        <div class="drawer-head">
+          <span class="drawer-title">{{ current?.name ?? '库内文档' }}</span>
+          <el-button v-if="current" type="danger" plain size="small" @click="remove(current)">
+            删除知识库
+          </el-button>
+        </div>
+      </template>
       <p class="drawer-hint">
         共 {{ docsTotal }} 篇。文档仍属于上传它的智能客服（上传入口在客服页），这里只做查看。
       </p>
@@ -421,6 +433,18 @@ onMounted(load)
 .doc-sub {
   color: var(--aics-text-3);
   font-size: 12px;
+}
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-right: 8px;
+}
+.drawer-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--aics-text);
 }
 .drawer-hint {
   margin: 0 0 12px;

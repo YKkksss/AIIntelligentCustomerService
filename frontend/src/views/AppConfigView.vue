@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { appApi, type AppDetail, type ChunkPreset } from '@/api/admin'
 import { kbApi, type KnowledgeBaseRow } from '@/api/knowledge-bases'
 import AssistantAvatar from '@/components/AssistantAvatar.vue'
@@ -182,6 +182,20 @@ const loading = ref(false)
 const saving = ref(false)
 const errors = ref<string[]>([])
 const canWrite = computed(() => auth.can('app.write'))
+
+const router = useRouter()
+
+/** 删除智能客服：危险操作放在配置页底部，卡片菜单里不再提供。 */
+async function removeApp() {
+  await ElMessageBox.confirm(
+    `删除后「${detail.value?.name ?? '该智能客服'}」的文档、会话与 API Key 会被异步清理，接口立即不可用；知识库本身不受影响。`,
+    '删除智能客服',
+    { type: 'warning', confirmButtonText: '删除', confirmButtonClass: 'el-button--danger' },
+  )
+  await appApi.remove(appId)
+  ElMessage.success('已提交清理任务')
+  await router.push('/apps')
+}
 
 /** 知识库是平台公共资源：这里只维护「这个智能客服关联哪些库」，不建库。 */
 const kbOptions = ref<KnowledgeBaseRow[]>([])
@@ -513,6 +527,21 @@ onMounted(load)
         </el-form>
       </section>
     </div>
+
+    <section class="group danger-group">
+      <header class="group-head">
+        <h3>危险操作</h3>
+        <span class="group-hint"
+          >删除后接口立即不可用，文档、会话与 API Key 由后台任务异步清理</span
+        >
+      </header>
+      <div class="danger-body">
+        <p class="danger-text">
+          删除「{{ detail?.name }}」不可恢复。平台知识库不会被删除，仍可在「知识库」页继续使用。
+        </p>
+        <el-button type="danger" :disabled="!canWrite" @click="removeApp">删除智能客服</el-button>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -629,6 +658,23 @@ onMounted(load)
 .group :deep(.el-select__tags) {
   max-height: 72px;
   overflow-y: auto;
+}
+.danger-group {
+  margin-top: 16px;
+  border-color: #fde2e2;
+}
+.danger-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 16px 16px;
+}
+.danger-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--aics-text2, #595959);
 }
 @media (max-width: 1200px) {
   .groups {
