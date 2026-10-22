@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { appApi, type AppDetail, type ChunkPreset } from '@/api/admin'
+import { kbApi, type KnowledgeBaseRow } from '@/api/knowledge-bases'
 import AssistantAvatar from '@/components/AssistantAvatar.vue'
 import {
   AVATAR_STYLES,
@@ -182,6 +183,40 @@ const saving = ref(false)
 const errors = ref<string[]>([])
 const canWrite = computed(() => auth.can('app.write'))
 
+/** 知识库是平台公共资源：这里只维护「这个智能客服关联哪些库」，不建库。 */
+const kbOptions = ref<KnowledgeBaseRow[]>([])
+const kbLinked = ref<KnowledgeBaseRow[]>([])
+const kbSelected = ref<string[]>([])
+const kbSaving = ref(false)
+
+const kbDefaultId = computed(() => kbLinked.value.find((row) => row.is_default)?.id ?? null)
+
+async function loadKnowledgeBases() {
+  const [all, linked] = await Promise.all([
+    kbApi.list({ pageSize: 100, status: 'active' }),
+    kbApi.appLinks(appId),
+  ])
+  kbOptions.value = all.items.filter((row) => row.status !== 'deleting')
+  kbLinked.value = linked
+  kbSelected.value = linked.map((row) => row.id)
+}
+
+async function saveKnowledgeBases() {
+  kbSaving.value = true
+  try {
+    const keep = kbSelected.value.includes(kbDefaultId.value ?? '')
+      ? kbDefaultId.value
+      : (kbSelected.value[0] ?? null)
+    kbLinked.value = await kbApi.setAppLinks(appId, {
+      kb_ids: kbSelected.value,
+      default_kb_id: keep,
+    })
+    ElMessage.success('关联已保存')
+  } finally {
+    kbSaving.value = false
+  }
+}
+
 /** 头像不是配置字典的一部分：整体对象提交，只有真改了才进 patch。 */
 const avatarStyle = computed<AvatarStyle>({
   get: () => normalizeAvatar(form.avatar as AvatarInput, appId).style,
@@ -267,6 +302,7 @@ async function load() {
     next.avatar = normalizeAvatar(body.avatar, body.id)
     Object.assign(form, next)
     snapshot.value = clone(next)
+    await loadKnowledgeBases()
   } finally {
     loading.value = false
   }
@@ -374,6 +410,44 @@ onMounted(load)
           </el-select>
           <el-button :disabled="!canWrite" @click="rerollAvatar">换一个</el-button>
           <span class="avatar-seed">seed：{{ (form.avatar as AvatarInput)?.seed }}</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="group kb-group">
+      <header class="group-head">
+        <h3>知识库</h3>
+        <span class="group-hint">
+          知识库是平台公共资源：一个库可以同时给多个智能客服使用；未关联的库不参与召回
+        </span>
+      </header>
+      <div class="kb-body">
+        <el-select
+          v-model="kbSelected"
+          multiple
+          filterable
+          collapse-tags
+          collapse-tags-tooltip
+          :disabled="!canWrite"
+          placeholder="选择要关联的知识库"
+          style="width: 100%"
+        >
+          <el-option v-for="row in kbOptions" :key="row.id" :label="row.name" :value="row.id">
+            <span>{{ row.name }}</span>
+            <span class="kb-meta">{{ row.document_count }} 篇文档</span>
+          </el-option>
+        </el-select>
+        <div class="kb-actions">
+          <el-button
+            type="primary"
+            plain
+            :loading="kbSaving"
+            :disabled="!canWrite"
+            @click="saveKnowledgeBases"
+          >
+            保存关联
+          </el-button>
+          <router-link class="kb-link" to="/knowledge-bases">管理公共知识库 →</router-link>
         </div>
       </div>
     </section>
@@ -517,6 +591,31 @@ onMounted(load)
   display: flex;
   align-items: center;
   gap: 12px;
+}
+.kb-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 2px 2px;
+}
+.kb-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.kb-link {
+  font-size: 13px;
+  color: var(--aics-primary);
+  text-decoration: none;
+}
+.kb-link:hover {
+  text-decoration: underline;
+}
+.kb-meta {
+  float: right;
+  margin-left: 12px;
+  font-size: 12px;
+  color: var(--aics-text-3);
 }
 .avatar-seed {
   font-size: 12px;
