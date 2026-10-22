@@ -2,7 +2,15 @@
 import { computed, watch } from 'vue'
 import type { Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowDown, Bell, Document, Odometer, Service, User } from '@element-plus/icons-vue'
+import {
+  ArrowDown,
+  Bell,
+  Collection,
+  Document,
+  Odometer,
+  Service,
+  User,
+} from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -21,6 +29,7 @@ const globalMenu = computed<MenuItem[]>(() =>
   [
     { name: 'home', title: '仪表盘', icon: Odometer },
     { name: 'apps', title: '智能客服', icon: Service, permission: 'app.read' },
+    { name: 'knowledge-bases', title: '知识库', icon: Collection, permission: 'kb.read' },
     { name: 'users', title: '用户', icon: User, permission: 'user.admin' },
     { name: 'audit', title: '审计', icon: Document, permission: 'audit.read' },
   ].filter((item) => !item.permission || auth.can(item.permission)),
@@ -65,6 +74,8 @@ const breadcrumb = computed<string[]>(() => {
       return ['仪表盘']
     case 'apps':
       return ['智能客服', '全部智能客服']
+    case 'knowledge-bases':
+      return ['知识库']
     case 'users':
       return ['用户']
     case 'audit':

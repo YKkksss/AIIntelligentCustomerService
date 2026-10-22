@@ -110,6 +110,27 @@ class KBLinkBody(BaseModel):
     default_kb_id: UUID | None = None
 
 
+class KBDocumentRow(BaseModel):
+    id: str
+    title: str
+    status: str
+    source_type: str
+    chunk_count: int
+    app_id: str
+    app_name: str
+    effective_at: Any
+    expires_at: Any
+    created_at: Any
+    updated_at: Any
+
+
+class KBDocumentPage(BaseModel):
+    items: list[KBDocumentRow]
+    total: int
+    page: int
+    page_size: int
+
+
 @router.get("/knowledge-bases", summary="知识库列表（平台公共）", responses=_READ_ERRORS)
 async def list_knowledge_bases(
     request: Request,
@@ -121,6 +142,25 @@ async def list_knowledge_bases(
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> JSONResponse:
     items, total = await service.list(status=status, q=q, page=page, page_size=page_size)
+    body = {"items": items, "total": total, "page": page, "page_size": page_size}
+    return JSONResponse(jsonable_encoder(body))
+
+
+@router.get(
+    "/knowledge-bases/{kb_id}/documents",
+    summary="知识库里的文档（平台公共页）",
+    responses=_READ_ERRORS,
+    response_model=KBDocumentPage,
+)
+async def list_kb_documents(
+    kb_id: UUID,
+    user: Annotated[AuthedUser, Depends(Reader)],
+    service: Service,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> JSONResponse:
+    # 文档仍带 app_id（上传仍走客服页），这里返回 app_name 让运营知道出处
+    items, total = await service.documents(kb_id, page=page, page_size=page_size)
     body = {"items": items, "total": total, "page": page, "page_size": page_size}
     return JSONResponse(jsonable_encoder(body))
 

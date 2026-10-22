@@ -148,6 +148,48 @@ class KnowledgeBaseService:
             for row in rows
         ]
 
+    async def documents(
+        self, kb_id: UUID, *, page: int = 1, page_size: int = DEFAULT_LIMIT
+    ) -> tuple[list[dict[str, Any]], int]:
+        """库内文档（M4.7 ⑤ 公共页用）。
+
+        文档目前仍属于某个智能客服（`documents.app_id` NOT NULL），所以列表里带 `app_name`，
+        方便运营知道这篇是谁上传的；上传入口仍留在客服页，等 `documents` 去掉 `app_id` 再搬。
+        """
+        await self._get(kb_id)
+        size = max(1, min(int(page_size), MAX_LIMIT))
+        offset = (max(1, int(page)) - 1) * size
+        where = (Document.kb_id == kb_id, Document.deleted_at.is_(None))
+        total = (
+            await self.session.execute(select(func.count()).select_from(Document).where(*where))
+        ).scalar_one()
+        stmt = (
+            select(Document, App.name)
+            .join(App, App.id == Document.app_id)
+            .where(*where)
+            .order_by(Document.created_at.desc(), Document.id.desc())
+            .limit(size)
+            .offset(offset)
+        )
+        rows = (await self.session.execute(stmt)).all()
+        items = [
+            {
+                "id": str(doc.id),
+                "title": doc.title,
+                "status": doc.status,
+                "source_type": doc.source_type,
+                "chunk_count": doc.chunk_count,
+                "app_id": str(doc.app_id),
+                "app_name": app_name,
+                "effective_at": doc.effective_at,
+                "expires_at": doc.expires_at,
+                "created_at": doc.created_at,
+                "updated_at": doc.updated_at,
+            }
+            for doc, app_name in rows
+        ]
+        return items, int(total)
+
     async def default_kb_of(self, app_id: UUID) -> UUID | None:
         """应用的默认库：显式标记优先，其次按名字找迁移期回填的库，最后取最早的关联。"""
         marked = await self.links.default_kb_id(app_id)

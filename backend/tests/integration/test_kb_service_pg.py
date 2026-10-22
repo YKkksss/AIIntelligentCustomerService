@@ -159,3 +159,37 @@ async def test_default_kb_falls_back_to_migrated_name(pg) -> None:
                 )
             )
             await session.commit()
+
+
+async def test_documents_lists_with_app_name(svc) -> None:
+    """公共库页的「库内文档」：带 app_name，按创建时间倒序，总量正确（M4.7 ⑤）。"""
+    from aics.db.models.knowledge import Document
+
+    kb = await _create(svc, f"库内文档-{uuid4().hex[:6]}")
+    kb_id = UUID(kb["id"])
+    app_id = svc["pg"]["app_a"]
+    session = svc["session"]
+    for index in range(2):
+        doc = Document(
+            app_id=app_id,
+            kb_id=kb_id,
+            title=f"文档 {index}",
+            source_type="file",
+            content_hash=uuid4().hex * 2,
+            status="done",
+            created_by=svc["pg"]["user_id"],
+        )
+        session.add(doc)
+    await session.commit()
+
+    items, total = await svc["service"].documents(kb_id)
+    app_name = (
+        await session.execute(select(App.name).where(App.id == app_id))
+    ).scalar_one()
+    await session.execute(delete(Document).where(Document.kb_id == kb_id))
+    await session.commit()
+
+    assert total == 2
+    assert [item["title"] for item in items] == ["文档 1", "文档 0"]
+    assert all(item["app_name"] == app_name for item in items)
+    assert all(item["status"] == "done" for item in items)

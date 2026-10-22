@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+### 新增（M4.7 ⑤ 公共知识库页与库内文档，2026-10-22）
+
+- 左侧全局菜单新增「知识库」：平台公共知识库列表（搜索、状态筛选、建库/改名/描述、停用/启用、删除），打开可看库内文档（标题、状态、切块数、所属智能客服）；每个智能客服自己的文档入口保留。
+- 新增 `GET /api/v1/admin/knowledge-bases/{kb_id}/documents`（`kb.read`）：库内文档分页，带 `app_name`（文档仍属于上传它的智能客服）。
+- 前端 `frontend/src/views/KnowledgeBasesView.vue`、`frontend/src/api/kb.ts`、路由 `/knowledge-bases` 与菜单项。
+
+### 测试（M4.7 ⑤，2026-10-22）
+
+- 前端新增 `frontend/src/api/kb.spec.ts`（4 例：列表参数、建库、改名、关联多选），vitest 20 文件 / 119 例全绿、覆盖率 85.11% 语句。
+- 后端集成补 `test_kb_service_pg.py::test_documents_lists_with_app_name`（库内文档带 `app_name`、倒序、总量）。
+
 ### 调整（智能客服卡片只留「配置」入口，2026-10-22）
 
 - 卡片底部的「进入」与「配置」原本都打开同一个控制台弹窗（只是分别落在「概览」「配置」页签），信息重复；去掉「进入」，卡片点击与按钮统一进「配置」，概览仍在弹窗左侧导航里。
