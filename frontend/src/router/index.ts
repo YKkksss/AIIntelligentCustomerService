@@ -54,8 +54,8 @@ const routes: RouteRecordRaw[] = [
           {
             path: 'knowledge',
             name: 'app-knowledge',
-            component: () => import('@/views/KnowledgeView.vue'),
-            meta: { permission: 'kb.read', title: '知识库' },
+            component: () => import('@/views/AppKnowledgeView.vue'),
+            meta: { permission: 'kb.read', title: '关联知识库' },
           },
           {
             path: 'knowledge/:documentId',

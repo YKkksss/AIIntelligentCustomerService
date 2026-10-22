@@ -59,6 +59,7 @@ class ChunkPoint:
     tags: Sequence[str] = ()
     kind: PointKind = "chunk"
     point_id: UUID | None = None  # question points: the question id (defaults to chunk_id)
+    kb_id: UUID | None = None  # 知识库归属（M4.7 ④）：检索按库集合过滤
 
 
 @dataclass(frozen=True)
@@ -81,6 +82,10 @@ def _tags(tags: Sequence[str]) -> qm.FieldCondition:
 
 def _app(app_id: UUID) -> qm.FieldCondition:
     return qm.FieldCondition(key="app_id", match=qm.MatchValue(value=str(app_id)))
+
+
+def _kbs(kb_ids: Sequence[UUID]) -> qm.FieldCondition:
+    return qm.FieldCondition(key="kb_id", match=qm.MatchAny(any=[str(k) for k in kb_ids]))
 
 
 class QdrantVectorStore:
@@ -122,6 +127,7 @@ class QdrantVectorStore:
             )
             for field, schema in (
                 ("app_id", qm.KeywordIndexParams(type=qm.KeywordIndexType.KEYWORD, is_tenant=True)),
+                ("kb_id", qm.PayloadSchemaType.KEYWORD),
                 ("document_id", qm.PayloadSchemaType.KEYWORD),
                 ("index_version", qm.PayloadSchemaType.INTEGER),
                 ("enabled", qm.PayloadSchemaType.BOOL),
@@ -268,13 +274,14 @@ class QdrantVectorStore:
     # ---------------- 读取 ----------------
     async def search_chunks(
         self,
-        app_id: UUID,
+        app_id: UUID | None,
         vector: Sequence[float],
         limit: int,
         *,
         enabled_only: bool = True,
         tags: Sequence[str] | None = None,
         include_questions: bool = True,
+        kb_ids: Sequence[UUID] | None = None,
     ) -> list[ChunkHit]:
         """Nearest points of the app; question points map to their chunk (callers dedup).
 
@@ -283,7 +290,10 @@ class QdrantVectorStore:
             raise VectorStoreError(f"查询向量维度 {len(vector)} ≠ {self.dim}")
         if not await self.client.collection_exists(self.chunks_collection):
             return []
-        must: list[qm.Condition] = [_app(app_id)]
+        # M4.7 ④：有库集合时按 kb_id 过滤（文档可没有 app_id），否则退回按应用过滤
+        must: list[qm.Condition] = [
+            _kbs(kb_ids) if kb_ids else _app(app_id)  # type: ignore[arg-type]
+        ]
         if enabled_only:
             must.append(qm.FieldCondition(key="enabled", match=qm.MatchValue(value=True)))
         if tags:
@@ -317,10 +327,19 @@ class QdrantVectorStore:
             )
         return hits
 
-    async def count_chunks(self, app_id: UUID, *, enabled_only: bool = True) -> int:
+    async def count_chunks(
+        self,
+        app_id: UUID,
+        *,
+        enabled_only: bool = True,
+        kb_ids: Sequence[UUID] | None = None,
+    ) -> int:
         if not await self.client.collection_exists(self.chunks_collection):
             return 0
-        must: list[qm.Condition] = [_app(app_id)]
+        # M4.7 ④：有库集合时按 kb_id 过滤（文档可没有 app_id），否则退回按应用过滤
+        must: list[qm.Condition] = [
+            _kbs(kb_ids) if kb_ids else _app(app_id)  # type: ignore[arg-type]
+        ]
         if enabled_only:
             must.append(qm.FieldCondition(key="enabled", match=qm.MatchValue(value=True)))
         res = await self.client.count(
@@ -331,12 +350,20 @@ class QdrantVectorStore:
         return res.count
 
     async def count_by_document(
-        self, app_id: UUID, *, enabled_only: bool = True, limit: int = FACET_LIMIT
+        self,
+        app_id: UUID,
+        *,
+        enabled_only: bool = True,
+        limit: int = FACET_LIMIT,
+        kb_ids: Sequence[UUID] | None = None,
     ) -> dict[UUID, int]:
         """按 document_id 精确分组计数（Qdrant facet，exact=True）；对账与孤儿点清理用。"""
         if not await self.client.collection_exists(self.chunks_collection):
             return {}
-        must: list[qm.Condition] = [_app(app_id)]
+        # M4.7 ④：有库集合时按 kb_id 过滤（文档可没有 app_id），否则退回按应用过滤
+        must: list[qm.Condition] = [
+            _kbs(kb_ids) if kb_ids else _app(app_id)  # type: ignore[arg-type]
+        ]
         if enabled_only:
             must.append(qm.FieldCondition(key="enabled", match=qm.MatchValue(value=True)))
         res = await self.client.facet(

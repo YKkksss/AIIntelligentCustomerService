@@ -53,7 +53,13 @@ class ParentText:
 @runtime_checkable
 class ChunkSearch(Protocol):
     async def keyword_search(
-        self, app_id: UUID, question: str, k: int, *, tags: Sequence[str] | None = None
+        self,
+        app_id: UUID,
+        question: str,
+        k: int,
+        *,
+        tags: Sequence[str] | None = None,
+        kb_ids: Sequence[UUID] | None = None,
     ) -> list[KeywordHit]:
         """Full-text search over retrievable chunks of the app (OR tsquery, ts_rank_cd desc).
 
@@ -64,14 +70,19 @@ class ChunkSearch(Protocol):
         ...
 
     async def fetch_chunks(
-        self, app_id: UUID, chunk_ids: Sequence[UUID], *, tags: Sequence[str] | None = None
+        self,
+        app_id: UUID,
+        chunk_ids: Sequence[UUID],
+        *,
+        tags: Sequence[str] | None = None,
+        kb_ids: Sequence[UUID] | None = None,
     ) -> dict[UUID, ChunkText]:
         """Only chunks that are retrievable *now* (enabled, not flagged, current index version,
         document not deleting, and matching `tags` when given); others are silently omitted."""
         ...
 
     async def fetch_parents(
-        self, app_id: UUID, parent_ids: Sequence[UUID]
+        self, app_id: UUID, parent_ids: Sequence[UUID], *, kb_ids: Sequence[UUID] | None = None
     ) -> dict[UUID, ParentText]: ...
 
 

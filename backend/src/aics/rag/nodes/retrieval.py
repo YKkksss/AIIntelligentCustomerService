@@ -43,7 +43,13 @@ async def _routes(inp: RagInput, ports: RagPorts, query: str) -> dict[str, Any]:
     tags = list(cfg.default_tags if inp.tags is None else inp.tags)
     t0 = time.perf_counter()
     v, k, deg = await r.retrieve(
-        inp.app_id, query, cfg, vector=vector, chunk_search=ports.chunk_search, tags=tags or None
+        inp.app_id,
+        query,
+        cfg,
+        vector=vector,
+        chunk_search=ports.chunk_search,
+        tags=tags or None,
+        kb_ids=inp.kb_ids or None,
     )
     return {
         "vector_hits": v,
@@ -63,6 +69,7 @@ async def _fuse(inp: RagInput, ports: RagPorts, upd: dict[str, Any]) -> dict[str
         inp.config,
         chunk_search=ports.chunk_search,
         tags=upd.get("tags") or None,
+        kb_ids=inp.kb_ids or None,
     )
     return {"fused": fused, "timings": {"fuse": _ms(t0)}}
 

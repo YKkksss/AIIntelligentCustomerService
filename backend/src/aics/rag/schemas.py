@@ -59,6 +59,8 @@ class RagInput(BaseModel):
     profile: AppProfile
     handoff: HandoffConfig = Field(default_factory=HandoffConfig)
     tags: list[str] | None = None  # request tag filter; None → config.default_tags
+    #: 该客服关联的知识库（M4.7 ④）：非空时检索按 chunk.kb_id 过滤；空 = 退回按 app_id
+    kb_ids: list[UUID] = Field(default_factory=list)
     refusal_streak: int = Field(0, ge=0)
     last_assistant_was_clarify: bool = False
     run_mode: RunMode = RunMode.online

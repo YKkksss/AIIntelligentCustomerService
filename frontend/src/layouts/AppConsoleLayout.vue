@@ -35,7 +35,7 @@ const NAV: NavItem[] = [
   { name: 'app-config', title: '配置', icon: Setting, permission: 'app.read', group: '看板' },
   {
     name: 'app-knowledge',
-    title: '知识库',
+    title: '关联知识库',
     icon: Collection,
     permission: 'kb.read',
     group: '知识与调试',

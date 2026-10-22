@@ -39,7 +39,7 @@ class EmbedItem:
 
 async def embed_and_upsert(
     *,
-    app_id: UUID,
+    app_id: UUID | None,
     document_id: UUID,
     index_version: int,
     items: Sequence[EmbedItem],
@@ -48,6 +48,7 @@ async def embed_and_upsert(
     batch_size: int,
     before_batch: Callable[[int, int], Awaitable[None]] | None = None,
     tags: Sequence[str] = (),
+    kb_id: UUID | None = None,
 ) -> int:
     """分批向量化并 upsert；每批之前调用 `before_batch(done, total)`（中止检查与进度更新）。"""
     done = 0
@@ -59,7 +60,16 @@ async def embed_and_upsert(
         await store.upsert_chunks(
             app_id,
             [
-                ChunkPoint(i.chunk_id, document_id, index_version, v, i.enabled, i.parent_id, tags)
+                ChunkPoint(
+                    i.chunk_id,
+                    document_id,
+                    index_version,
+                    v,
+                    i.enabled,
+                    i.parent_id,
+                    tags,
+                    kb_id=kb_id,
+                )
                 for i, v in zip(batch, vectors, strict=True)
             ],
         )

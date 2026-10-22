@@ -37,7 +37,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 import structlog
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aics.core import metrics
@@ -45,6 +45,7 @@ from aics.core.errors import AppError, ConversationNotFoundError
 from aics.core.schedule import in_service_hours
 from aics.db.base import new_id
 from aics.db.models.conversation import Conversation, Message
+from aics.db.models.knowledge import AppKBLink
 from aics.memory.compactor import CompactParams
 from aics.memory.repository import ConversationFactRepository
 from aics.modules.apps.service import AppConfig, AppService
@@ -253,6 +254,8 @@ class _Prepared:
     last_assistant_was_clarify: bool
     system_reply: str | None = None
     stateless: bool = False
+    #: 该客服关联的知识库（M4.7 ④）：非空时检索只看这些库里的文档
+    kb_ids: list[UUID] = field(default_factory=list)
 
 
 class TurnHandle:
@@ -338,6 +341,7 @@ class ChatService:
                 rag = merge_debug_config(rag, req.debug_config)
             convs = ConversationRepository(s)
             msgs = MessageRepository(s)
+            kb_ids = await self._kb_ids(s, req.app_id)
             previous: UUID | None = None
             conv = None
             if req.conversation_id is not None:
@@ -422,6 +426,7 @@ class ChatService:
                 last_assistant_was_clarify=bool(last is not None and last.intent == "clarify"),
                 system_reply=system_reply,
                 stateless=req.stateless,
+                kb_ids=kb_ids,
             )
 
     # ------------------------------------------------------------ execute
@@ -462,6 +467,15 @@ class ChatService:
             ),
         )
 
+    async def _kb_ids(self, session: AsyncSession, app_id: UUID) -> list[UUID]:
+        """该客服关联的知识库（M4.7 ④）；没关联时返回空列表 = 退回按应用过滤。"""
+        rows = await session.scalars(
+            select(AppKBLink.kb_id)
+            .where(AppKBLink.app_id == app_id)
+            .order_by(AppKBLink.created_at.asc())
+        )
+        return list(rows)
+
     def _rag_input(self, p: _Prepared) -> RagInput:
         cfg = p.rag  # 应用配置 + 本轮的 debug_config（M4.4 ②）
         if p.req.rag_overrides:  # 请求级参数只影响本轮
@@ -479,6 +493,7 @@ class ChatService:
             refusal_streak=p.refusal_streak,
             last_assistant_was_clarify=p.last_assistant_was_clarify,
             run_mode=p.req.run_mode,
+            kb_ids=p.kb_ids,
         )
 
     async def _run_rag_turn(self, h: TurnHandle) -> None:

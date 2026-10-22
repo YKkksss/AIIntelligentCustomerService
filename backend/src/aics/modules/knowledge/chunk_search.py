@@ -42,6 +42,14 @@ def retrievable(tags: Sequence[str] | None = None) -> list[object]:
     return cond
 
 
+def _scope(app_id: UUID, kb_ids: Sequence[UUID] | None) -> list[object]:
+    """检索范围（M4.7 ④）：客服关联了库就按 kb_id 过滤（文档可以没有 pp_id），
+    否则退回按 pp_id 过滤（历史行为）。"""
+    if kb_ids:
+        return [Chunk.kb_id.in_(list(kb_ids))]
+    return [Chunk.app_id == app_id]
+
+
 class PgChunkSearch:
     def __init__(self, sessions: async_sessionmaker[AsyncSession]) -> None:
         self.sessions = sessions
@@ -50,7 +58,13 @@ class PgChunkSearch:
         return list(await s.scalar(select(App.custom_dict).where(App.id == app_id)) or [])
 
     async def keyword_search(
-        self, app_id: UUID, question: str, k: int, *, tags: Sequence[str] | None = None
+        self,
+        app_id: UUID,
+        question: str,
+        k: int,
+        *,
+        tags: Sequence[str] | None = None,
+        kb_ids: Sequence[UUID] | None = None,
     ) -> list[KeywordHit]:
         if not 1 <= k <= MAX_KEYWORD_K:
             raise ValueError(f"k must be within 1..{MAX_KEYWORD_K}")
@@ -63,7 +77,7 @@ class PgChunkSearch:
             stmt = (
                 select(Chunk.id, score)
                 .join(Document, Document.id == Chunk.document_id)
-                .where(Chunk.app_id == app_id, Chunk.tsv.op("@@")(q), *retrievable(tags))
+                .where(*_scope(app_id, kb_ids), Chunk.tsv.op("@@")(q), *retrievable(tags))
                 .order_by(score.desc(), Chunk.id)
                 .limit(k)
             )
@@ -71,7 +85,12 @@ class PgChunkSearch:
         return [KeywordHit(r[0], float(r[1])) for r in rows]
 
     async def fetch_chunks(
-        self, app_id: UUID, chunk_ids: Sequence[UUID], *, tags: Sequence[str] | None = None
+        self,
+        app_id: UUID,
+        chunk_ids: Sequence[UUID],
+        *,
+        tags: Sequence[str] | None = None,
+        kb_ids: Sequence[UUID] | None = None,
     ) -> dict[UUID, ChunkText]:
         ids = list(dict.fromkeys(chunk_ids))
         if not ids:
@@ -81,7 +100,7 @@ class PgChunkSearch:
         stmt = (
             select(Chunk, Document.title)
             .join(Document, Document.id == Chunk.document_id)
-            .where(Chunk.app_id == app_id, Chunk.id.in_(ids), *retrievable(tags))
+            .where(*_scope(app_id, kb_ids), Chunk.id.in_(ids), *retrievable(tags))
         )
         async with self.sessions() as s:
             rows = (await s.execute(stmt)).all()
@@ -99,7 +118,7 @@ class PgChunkSearch:
         }
 
     async def fetch_parents(
-        self, app_id: UUID, parent_ids: Sequence[UUID]
+        self, app_id: UUID, parent_ids: Sequence[UUID], *, kb_ids: Sequence[UUID] | None = None
     ) -> dict[UUID, ParentText]:
         ids = list(dict.fromkeys(parent_ids))
         if not ids:
@@ -115,7 +134,7 @@ class PgChunkSearch:
                     Document.index_version == ChunkParent.index_version,
                 ),
             )
-            .where(ChunkParent.app_id == app_id, ChunkParent.id.in_(ids))
+            .where(ChunkParent.id.in_(ids))
         )
         async with self.sessions() as s:
             rows = (await s.execute(stmt)).all()
