@@ -136,6 +136,8 @@ class PgChunkSearch:
             )
             .where(ChunkParent.id.in_(ids))
         )
+        # 归属过滤：有库集合按库，否则退回按上传入口（与 retrievable() 的口径一致）
+        stmt = stmt.where(Document.kb_id.in_(list(kb_ids)) if kb_ids else Document.app_id == app_id)
         async with self.sessions() as s:
             rows = (await s.execute(stmt)).all()
         return {

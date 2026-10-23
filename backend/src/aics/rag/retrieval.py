@@ -203,9 +203,7 @@ async def retrieve(
                 app_id, question, cfg.keyword_top_k, tags=tags, kb_ids=kb_ids
             )
         else:
-            hits = await chunk_search.keyword_search(
-                app_id, question, cfg.keyword_top_k, tags=tags
-            )
+            hits = await chunk_search.keyword_search(app_id, question, cfg.keyword_top_k, tags=tags)
         return [(h.chunk_id, h.score) for h in hits]
 
     async def none() -> list[tuple[UUID, float]]:
