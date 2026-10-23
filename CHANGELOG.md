@@ -4,6 +4,24 @@
 
 ## [Unreleased]
 
+### 新增（M4.7 ⑤ 公共知识库的上传权限与归属收口，2026-10-23）
+
+- 公共知识库页可以直接上传文档：`POST /api/v1/admin/knowledge-bases/{kb_id}/documents`（multipart），文档直接归属该库（`documents.kb_id`），入库流水线把 `kb_id` 写进 `chunks.kb_id`（`carry_chunks` 迁移手工块时也保留）。
+- 库级写权限定稿：库的改名 / 改描述 / 改切块参数 / 停用 / 删除，以及库内文档的上传、替换、重建、删除，只允许「库的创建者」与「超级管理员」（服务层 `ensure_kb_manager`，越权 403）；`created_by` 随列表 / 详情返回，前端据此显示上传入口。
+- 开放接口与客服页的上传路径现在也会解析应用的默认知识库并写入 `kb_id`（此前 `documents.kb_id` 为空，检索按库过滤时会被漏掉）。
+- 前端公共知识库页新增「上传文档」入口（仅库管理者可见），库内文档列表支持公共库文档（`app_id` 为空）。
+
+### 修复（M4.7 ⑤，2026-10-23）
+
+- 公共知识库的文档列表用内连接 `apps`，公共库上传的文档（`app_id` 为空）一条都查不出来 → 改成外连接。
+- `KBRow` / `KBDocumentRow` 响应模型漏了 `created_by`，且 `app_id` / `app_name` 被声明成必填 → 公共库文档的列表与详情会被响应模型拦成 500。
+
+### 测试（M4.7 ⑤，2026-10-23）
+
+- 单测：`tests/unit/test_kb_permissions.py` 5 例（创建者 / 超管 / 他人 / 匿名 / 无主库）。
+- 集成：`tests/integration/test_kb_service_pg.py` 新增「成员不能改别人的库、超管可以代管」；`tests/integration/test_kb_repository_pg.py` 改为断言 `created_by` 会出现在视图里。
+- 门禁：单测 **1282 passed**（1 项 Windows 符号链接环境失败）、知识库相关集成 33 项全过；真实模型 0 元。
+
 ### 新增（M4.7 ⑤ 文档归属知识库，2026-10-23）
 
 - 文档改为归**知识库**所有：`documents.kb_id` 必填（迁移 0022 回填并收紧约束），入库与切块写入不再依赖客服；`app_id` 只记录上传入口。

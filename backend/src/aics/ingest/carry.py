@@ -89,6 +89,7 @@ async def carry_chunks(
         row = Chunk(
             id=new_id(),
             app_id=app_id,
+            kb_id=old.kb_id,
             document_id=document_id,
             index_version=new_version,
             ordinal=ordinal,

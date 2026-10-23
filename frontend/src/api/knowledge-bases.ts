@@ -21,6 +21,7 @@ export interface KnowledgeBaseRow {
   document_count: number
   chunk_count: number
   apps: KBAppLink[]
+  created_by: string | null
   linked?: boolean | null
   is_default?: boolean | null
   created_at: string
@@ -117,6 +118,22 @@ export const kbApi = {
     const { data } = await http.get<KBDocumentPage>(`${BASE}/${id}/documents`, {
       params: { page: query.page ?? 1, page_size: query.pageSize ?? 20 },
     })
+    return data
+  },
+
+  async upload(
+    id: string,
+    file: File,
+    options: { title?: string; chunkConfig?: string } = {},
+  ): Promise<{ document_id: string; job_id: string }> {
+    const form = new FormData()
+    form.append('file', file)
+    if (options.title) form.append('title', options.title)
+    if (options.chunkConfig) form.append('chunk_config', options.chunkConfig)
+    const { data } = await http.post<{ document_id: string; job_id: string }>(
+      `${BASE}/${id}/documents`,
+      form,
+    )
     return data
   },
 

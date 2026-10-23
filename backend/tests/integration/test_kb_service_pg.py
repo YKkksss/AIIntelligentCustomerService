@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy import delete, select
 
-from aics.core.errors import ConflictError, NotFoundError, ValidationAppError
+from aics.core.errors import ConflictError, ForbiddenError, NotFoundError, ValidationAppError
 from aics.db.models.app import App
 from aics.db.models.audit import AuditLog
 from aics.db.models.knowledge import AppKBLink, KnowledgeBase
@@ -183,9 +183,7 @@ async def test_documents_lists_with_app_name(svc) -> None:
     await session.commit()
 
     items, total = await svc["service"].documents(kb_id)
-    app_name = (
-        await session.execute(select(App.name).where(App.id == app_id))
-    ).scalar_one()
+    app_name = (await session.execute(select(App.name).where(App.id == app_id))).scalar_one()
     await session.execute(delete(Document).where(Document.kb_id == kb_id))
     await session.commit()
 
@@ -193,3 +191,20 @@ async def test_documents_lists_with_app_name(svc) -> None:
     assert [item["title"] for item in items] == ["文档 1", "文档 0"]
     assert all(item["app_name"] == app_name for item in items)
     assert all(item["status"] == "done" for item in items)
+
+
+async def test_member_cannot_manage_a_kb_they_do_not_own(svc) -> None:
+    """公共库的写操作只认创建者与超管；普通成员只能用，不能改。"""
+    service = svc["service"]
+    owner = svc["pg"]["user_id"]
+    other = uuid4()
+    kb = await _create(svc, f"权限口径库-{uuid4().hex[:6]}")
+    with pytest.raises(ForbiddenError):
+        await service.update(kb["id"], {"description": "改一下"}, actor_id=other)
+    with pytest.raises(ForbiddenError):
+        await service.delete(kb["id"], actor_id=other)
+    # 超管可以代管
+    updated = await service.update(
+        kb["id"], {"description": "超管改的"}, actor_id=other, is_super_admin=True
+    )
+    assert updated["description"] == "超管改的"

@@ -22,6 +22,7 @@ from sqlalchemy import func, select
 from aics.core.audit import AuditEntry, AuditSink, diff
 from aics.core.errors import (
     AppNotFoundError,
+    ForbiddenError,
     KnowledgeBaseInUseError,
     KnowledgeBaseNameTakenError,
     KnowledgeBaseNotFoundError,
@@ -86,6 +87,18 @@ def _name(raw: str | None) -> str:
             details={"errors": [{"loc": ["name"], "msg": f"不能为空且不超过 {NAME_MAX_CHARS} 字"}]},
         )
     return name
+
+
+def ensure_kb_manager(
+    kb: KnowledgeBase, *, actor_id: UUID | None, is_super_admin: bool = False
+) -> None:
+    """库的创建者与超级管理员才能改动库本身；其他人只能挂载使用。
+
+    规则写在服务层而不是路由：库级文档接口（kb_docs）也要用同一把尺子。
+    """
+    if is_super_admin or (actor_id is not None and kb.created_by == actor_id):
+        return
+    raise ForbiddenError(message="只有知识库创建者或超级管理员可以修改该库")
 
 
 class KnowledgeBaseService:
@@ -165,7 +178,8 @@ class KnowledgeBaseService:
         ).scalar_one()
         stmt = (
             select(Document, App.name)
-            .join(App, App.id == Document.app_id)
+            # 公共库的文档没有 app_id：必须外连接，否则整页文档都查不出来
+            .outerjoin(App, App.id == Document.app_id)
             .where(*where)
             .order_by(Document.created_at.desc(), Document.id.desc())
             .limit(size)
@@ -179,7 +193,7 @@ class KnowledgeBaseService:
                 "status": doc.status,
                 "source_type": doc.source_type,
                 "chunk_count": doc.chunk_count,
-                "app_id": str(doc.app_id),
+                "app_id": str(doc.app_id) if doc.app_id else None,
                 "app_name": app_name,
                 "effective_at": doc.effective_at,
                 "expires_at": doc.expires_at,
@@ -252,9 +266,11 @@ class KnowledgeBaseService:
         patch: Mapping[str, Any],
         *,
         actor_id: UUID | None = None,
+        is_super_admin: bool = False,
         meta: ActorMeta = _NO_META,
     ) -> dict[str, Any]:
         kb = await self._get(kb_id)
+        ensure_kb_manager(kb, actor_id=actor_id, is_super_admin=is_super_admin)
         unknown = set(patch) - {"name", "description", "chunk_config", "status"}
         if unknown:
             raise ValidationAppError(
@@ -319,9 +335,11 @@ class KnowledgeBaseService:
         kb_id: UUID,
         *,
         actor_id: UUID | None = None,
+        is_super_admin: bool = False,
         meta: ActorMeta = _NO_META,
     ) -> None:
         kb = await self._get(kb_id)
+        ensure_kb_manager(kb, actor_id=actor_id, is_super_admin=is_super_admin)
         apps = await self.links.apps_of_kb_all_apps(kb_id)
         docs = int(
             (

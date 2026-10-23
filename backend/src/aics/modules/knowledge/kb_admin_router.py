@@ -72,6 +72,7 @@ class KBRow(BaseModel):
     document_count: int
     chunk_count: int
     apps: list[KBAppLink] = Field(default_factory=list)
+    created_by: str | None = None
     linked: bool | None = None
     is_default: bool | None = None
     created_at: Any
@@ -120,8 +121,9 @@ class KBDocumentRow(BaseModel):
     status: str
     source_type: str
     chunk_count: int
-    app_id: str
-    app_name: str
+    # 公共库的文档没有 app_id / app_name（归属看 kb_id）
+    app_id: str | None = None
+    app_name: str | None = None
     effective_at: Any
     expires_at: Any
     created_at: Any
@@ -219,7 +221,9 @@ async def patch_knowledge_base(
     service: Service,
 ) -> dict[str, Any]:
     patch = body.model_dump(exclude_unset=True)
-    return await service.update(kb_id, patch, actor_id=user.id, meta=_meta(request))
+    return await service.update(
+        kb_id, patch, actor_id=user.id, is_super_admin=user.is_super_admin, meta=_meta(request)
+    )
 
 
 @router.delete(
@@ -231,7 +235,9 @@ async def delete_knowledge_base(
     user: Annotated[AuthedUser, Depends(Writer)],
     service: Service,
 ) -> Response:
-    await service.delete(kb_id, actor_id=user.id, meta=_meta(request))
+    await service.delete(
+        kb_id, actor_id=user.id, is_super_admin=user.is_super_admin, meta=_meta(request)
+    )
     return Response(status_code=204)
 
 
@@ -346,6 +352,7 @@ async def upload_kb_document(
         file.filename or "document.txt",
         title=title,
         created_by=user.id,
+        is_super_admin=user.is_super_admin,
         chunk_config=config,
         meta=_doc_meta(request),
     )
@@ -398,6 +405,7 @@ async def patch_kb_document(
         metadata=body.metadata,
         tags=body.tags,
         created_by=user.id,
+        is_super_admin=user.is_super_admin,
         meta=_doc_meta(request),
     )
     return JSONResponse(jsonable_encoder(docs.doc_body(doc)))
@@ -416,7 +424,13 @@ async def reindex_kb_document(
     user: Annotated[AuthedUser, Depends(Writer)],
     docs: Docs,
 ) -> JSONResponse:
-    job = await docs.reindex(kb_id, document_id, created_by=user.id, meta=_doc_meta(request))
+    job = await docs.reindex(
+        kb_id,
+        document_id,
+        created_by=user.id,
+        is_super_admin=user.is_super_admin,
+        meta=_doc_meta(request),
+    )
     return JSONResponse({"job_id": str(job.id)}, status_code=202)
 
 
@@ -433,7 +447,13 @@ async def delete_kb_document(
     user: Annotated[AuthedUser, Depends(Writer)],
     docs: Docs,
 ) -> Response:
-    await docs.delete(kb_id, document_id, created_by=user.id, meta=_doc_meta(request))
+    await docs.delete(
+        kb_id,
+        document_id,
+        created_by=user.id,
+        is_super_admin=user.is_super_admin,
+        meta=_doc_meta(request),
+    )
     return Response(status_code=204)
 
 

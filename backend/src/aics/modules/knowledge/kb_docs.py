@@ -31,6 +31,7 @@ from aics.core.errors import DocumentNotFoundError, NotFoundError, ValidationApp
 from aics.db.models import Chunk, ChunkParent, ChunkQuestion, Document, Job, KnowledgeBase
 from aics.db.models.app import App
 from aics.ingest.parsers import MIME_TYPES, detect_file_type
+from aics.modules.knowledge.kb_service import ensure_kb_manager
 from aics.rag.config import (
     DEFAULT_CHUNK_CONFIG,
     ChunkConfig,
@@ -195,9 +196,11 @@ class KnowledgeBaseDocs:
         *,
         title: str | None = None,
         created_by: uuid.UUID | None = None,
+        is_super_admin: bool = False,
         chunk_config: dict[str, Any] | None = None,
         meta: ActorMeta = _NO_META,
     ) -> KbUploadResult:
+        await self._ensure_manager(kb_id, created_by, is_super_admin)
         await self._kb(kb_id)
         ftype = detect_file_type(filename, data)
         name = posixpath.basename(filename.replace("\\", "/")) or f"document.{ftype}"
@@ -245,6 +248,13 @@ class KnowledgeBaseDocs:
         self._send(INGEST_TASK, [str(doc.id), str(job.id)])
         return KbUploadResult(doc, job=job)
 
+    async def _ensure_manager(
+        self, kb_id: uuid.UUID, actor_id: uuid.UUID | None, is_super_admin: bool
+    ) -> None:
+        """库级写操作的统一权限：创建者或超管；其他人只能挂载到客服使用。"""
+        kb = await self._kb(kb_id)
+        ensure_kb_manager(kb, actor_id=actor_id, is_super_admin=is_super_admin)
+
     async def update(
         self,
         kb_id: uuid.UUID,
@@ -254,8 +264,10 @@ class KnowledgeBaseDocs:
         metadata: dict[str, Any] | None = None,
         tags: Sequence[str] | None = None,
         created_by: uuid.UUID | None = None,
+        is_super_admin: bool = False,
         meta: ActorMeta = _NO_META,
     ) -> Document:
+        await self._ensure_manager(kb_id, created_by, is_super_admin)
         doc = await self.get(kb_id, document_id)
         before = {"title": doc.title, "tags": list(doc.tags or [])}
         changed = False
@@ -287,8 +299,10 @@ class KnowledgeBaseDocs:
         document_id: uuid.UUID,
         *,
         created_by: uuid.UUID | None = None,
+        is_super_admin: bool = False,
         meta: ActorMeta = _NO_META,
     ) -> Job:
+        await self._ensure_manager(kb_id, created_by, is_super_admin)
         doc = await self.get(kb_id, document_id)
         if doc.status == "deleting":
             raise ValidationAppError(
@@ -311,8 +325,10 @@ class KnowledgeBaseDocs:
         document_id: uuid.UUID,
         *,
         created_by: uuid.UUID | None = None,
+        is_super_admin: bool = False,
         meta: ActorMeta = _NO_META,
     ) -> None:
+        await self._ensure_manager(kb_id, created_by, is_super_admin)
         """库级文档删除：同步清向量点、切块、补充问题、存储与行。
 
         库级文档没有工作流竞争（不属于某个客服、没有替换/构建冲突），直接删干净比排

@@ -33,7 +33,7 @@ from aics.core.errors import (
 )
 from aics.core.simhash import hamming, near_duplicate, to_unsigned
 from aics.core.tokens import count_tokens
-from aics.db.models import App, Chunk, ChunkQuestion, Document, Job
+from aics.db.models import App, AppKBLink, Chunk, ChunkQuestion, Document, Job
 from aics.db.models.knowledge import MAX_TAGS, QUESTION_MAX_CHARS, QUESTION_SOURCES, TAG_MAX_CHARS
 from aics.ingest.chunker import ChunkOptions, split_document
 from aics.ingest.indexer import EmbedItem, build_embed_text, embed_and_upsert
@@ -442,6 +442,17 @@ class KnowledgeService:
         return max(doc.index_version, doc.pending_index_version or 0) + 1
 
     # ------------------------------------------------------------------ 新建
+
+    async def _kb_of(self, app_id: UUID) -> UUID | None:
+        """客服的默认知识库：优先 is_default，其次任意一个关联库。"""
+        rows = await self.session.execute(
+            select(AppKBLink.kb_id)
+            .where(AppKBLink.app_id == app_id)
+            .order_by(AppKBLink.is_default.desc(), AppKBLink.created_at.asc())
+            .limit(1)
+        )
+        return rows.scalars().first()
+
     async def _create(
         self,
         app_id: UUID,
@@ -460,6 +471,7 @@ class KnowledgeService:
             return found
         doc = Document(
             app_id=app_id,
+            kb_id=await self._kb_of(app_id),
             title=title,
             source_type=source_type,
             source_uri=source_uri,

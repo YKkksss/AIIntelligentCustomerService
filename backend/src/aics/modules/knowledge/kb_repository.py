@@ -26,9 +26,10 @@ def kb_row(
     linked: bool | None = None,
     is_default: bool | None = None,
 ) -> dict[str, Any]:
-    """库的对外视图：不含创建人等内部字段。"""
+    """库的对外视图：`created_by` 只用于前端判断「我是不是这个库的管理者」。"""
     row: dict[str, Any] = {
         "id": str(kb.id),
+        "created_by": str(kb.created_by) if kb.created_by else None,
         "name": kb.name,
         "description": kb.description,
         "status": kb.status,

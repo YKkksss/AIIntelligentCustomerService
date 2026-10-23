@@ -57,7 +57,8 @@ async def test_row_view_has_no_internal_fields(kbs) -> None:
     row = kb_row(kb, documents=3, chunks=9)
     assert row["document_count"] == 3 and row["chunk_count"] == 9
     assert row["config_version"] == 1
-    assert "created_by" not in row
+    # 前端要按 created_by 判断「我是不是这个库的管理者」，所以视图里保留它
+    assert row["created_by"] == (str(kb.created_by) if kb.created_by else None)
 
 
 async def test_replace_reports_added_and_removed(kbs, pg) -> None:

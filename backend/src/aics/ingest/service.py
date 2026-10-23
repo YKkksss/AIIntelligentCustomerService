@@ -411,6 +411,11 @@ class IngestService:
                 )
             )
         async with self.sessions() as s:
+            # 文档可能属于公共知识库（app_id 为空）：切块跟着文档的 kb_id 走，检索按库过滤
+            doc = await s.get(Document, document_id)
+            kb_id = doc.kb_id if doc is not None else None
+            for row in [*parents, *chunks]:
+                row.kb_id = kb_id
             if parents:
                 await ChunkParentRepository(s).add_many(app_id, parents)
             await ChunkRepository(s).add_many(app_id, chunks)

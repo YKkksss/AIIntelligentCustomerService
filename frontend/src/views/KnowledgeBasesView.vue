@@ -137,6 +137,49 @@ const docs = ref<KBDocumentRow[]>([])
 const docsTotal = ref(0)
 const docsLoading = ref(false)
 
+/** 库的管理者：创建者或超级管理员；其他人只能把库挂到客服上使用。 */
+const canManage = computed(() => {
+  const row = current.value
+  if (!row) return false
+  if (auth.isSuperAdmin) return true
+  return !!row.created_by && row.created_by === auth.user?.id
+})
+
+const uploadVisible = ref(false)
+const uploading = ref(false)
+const uploadTitle = ref('')
+const uploadFile = ref<File | null>(null)
+
+function openUpload() {
+  uploadTitle.value = ''
+  uploadFile.value = null
+  uploadVisible.value = true
+}
+
+function onPickFile(file: { raw?: File }) {
+  uploadFile.value = file.raw ?? null
+}
+
+async function submitUpload() {
+  if (!current.value || !uploadFile.value) {
+    ElMessage.warning('请选择要上传的文件')
+    return
+  }
+  uploading.value = true
+  try {
+    await kbApi.upload(current.value.id, uploadFile.value, {
+      title: uploadTitle.value.trim() || undefined,
+    })
+    ElMessage.success('已提交，正在切分与向量化')
+    uploadVisible.value = false
+    await openDocs(current.value)
+  } catch {
+    /* 拦截器已统一提示 */
+  } finally {
+    uploading.value = false
+  }
+}
+
 async function openDocs(row: KnowledgeBaseRow) {
   current.value = row
   drawerVisible.value = true
@@ -295,13 +338,21 @@ onMounted(load)
       <template #header>
         <div class="drawer-head">
           <span class="drawer-title">{{ current?.name ?? '库内文档' }}</span>
-          <el-button v-if="current" type="danger" plain size="small" @click="remove(current)">
-            删除知识库
-          </el-button>
+          <div class="drawer-actions">
+            <el-button v-if="canManage" type="primary" size="small" @click="openUpload">
+              上传文档
+            </el-button>
+            <el-button v-if="current" type="danger" plain size="small" @click="remove(current)">
+              删除知识库
+            </el-button>
+          </div>
         </div>
       </template>
       <p class="drawer-hint">
-        共 {{ docsTotal }} 篇。文档仍属于上传它的智能客服（上传入口在客服页），这里只做查看。
+        共 {{ docsTotal }} 篇。文档属于知识库本身，客服通过关联知识库来使用它们。
+        {{
+          canManage ? '你是这个库的管理者，可以直接上传。' : '只有库的创建者与超级管理员可以上传。'
+        }}
       </p>
       <el-table v-loading="docsLoading" :data="docs" size="small" empty-text="这个库还没有文档">
         <el-table-column label="标题" min-width="200">
@@ -321,6 +372,28 @@ onMounted(load)
         </el-table-column>
       </el-table>
     </el-drawer>
+
+    <el-dialog v-model="uploadVisible" title="上传文档" width="520px" append-to-body>
+      <el-form label-width="72px">
+        <el-form-item label="文件">
+          <el-upload
+            :auto-upload="false"
+            :limit="1"
+            :on-change="onPickFile"
+            accept=".txt,.md,.pdf,.docx,.html,.csv"
+          >
+            <el-button>选择文件</el-button>
+          </el-upload>
+        </el-form-item>
+        <el-form-item label="标题">
+          <el-input v-model="uploadTitle" placeholder="留空则用文件名" maxlength="200" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="uploadVisible = false">取消</el-button>
+        <el-button type="primary" :loading="uploading" @click="submitUpload">上传</el-button>
+      </template>
+    </el-dialog>
   </section>
 </template>
 
