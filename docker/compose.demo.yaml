@@ -1,0 +1,122 @@
+name: aics-demo
+
+# M4.8 ④ 一键演示：依赖 + API + worker + beat + 前端（nginx 反代）。
+# 用法：docker compose -f docker/compose.demo.yaml up -d --build
+# 打开 http://localhost:8080 ，用 .env.demo 里的超管账号登录（首次启动自动 bootstrap）。
+# 演示口令仅供本地使用，生产请改 .env.demo 里的三个密钥。
+
+x-app-env: &app-env
+  AICS_ENV: dev
+  AICS_DB_URL: postgresql+asyncpg://aics:aics@db:5432/aics
+  AICS_REDIS_URL: redis://redis:6379/0
+  AICS_CELERY_BROKER_URL: amqp://aics:aics@mq:5672//
+  AICS_QDRANT_URL: http://qdrant:6333
+  AICS_API_HOST: 0.0.0.0
+  AICS_API_PORT: "8000"
+  AICS_JWT_SECRET: demo-jwt-secret-please-change-0123456789abcdef0123456789abcdef0123456789
+  AICS_API_KEY_PEPPER: demo-pepper-please-change
+  AICS_DATA_ENCRYPTION_KEY: demo-data-key-please-change-0123456789abcdef
+  AICS_URL_FETCH_ALLOWLIST: ""
+
+x-app: &app
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile.api
+  environment: *app-env
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:16.15-alpine
+    environment:
+      POSTGRES_USER: aics
+      POSTGRES_PASSWORD: aics
+      POSTGRES_DB: aics
+    volumes:
+      - demo-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aics -d aics"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports: ["127.0.0.1:55432:5432"]
+
+  redis:
+    image: redis:8.2.9-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mq:
+    image: rabbitmq:4.3.5-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: aics
+      RABBITMQ_DEFAULT_PASS: aics
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    ports: ["127.0.0.1:55672:15672"]
+
+  qdrant:
+    image: qdrant/qdrant:v1.18.2
+    volumes:
+      - demo-qdrant:/qdrant/storage
+    ports: ["127.0.0.1:56333:6333"]
+
+  migrate:
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db: {condition: service_healthy}
+
+  seed:
+    <<: *app
+    command:
+      - sh
+      - -c
+      - >-
+        python -m aics.cli bootstrap-admin --email demo@aics.local --password Demo123456@ --name 演示管理员
+        && python -m scripts.demo_seed
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+
+  api:
+    <<: *app
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      qdrant: {condition: service_started}
+      migrate: {condition: service_completed_successfully}
+    ports: ["127.0.0.1:8800:8000"]
+
+  worker:
+    <<: *app
+    command: ["celery", "-A", "aics.tasks.celery_app", "worker", "-Q", "ingest,context,eval,maintenance", "-l", "info"]
+    depends_on:
+      mq: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+
+  beat:
+    <<: *app
+    command: ["celery", "-A", "aics.tasks.celery_app", "beat", "-l", "info"]
+    depends_on:
+      mq: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+    depends_on:
+      api: {condition: service_started}
+    ports: ["127.0.0.1:8080:80"]
+    restart: unless-stopped
+
+volumes:
+  demo-db:
+  demo-qdrant:
