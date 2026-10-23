@@ -134,7 +134,7 @@ async def get_system_settings(
 @router.patch(
     "/system/settings",
     summary="更新平台系统设置（写审计 system.update，S）",
-    responses=errors(401, 403, 422),
+    responses=errors(401, 403, 409, 422),
 )
 async def update_system_settings(
     request: Request,
@@ -142,7 +142,15 @@ async def update_system_settings(
     service: Service,
     body: Annotated[dict[str, Any], Body()],
 ) -> JSONResponse:
-    payload = await service.update_system_settings(body, actor_id=user.id, meta=_meta(request))
+    expected = body.pop("expected_version", None)
+    if expected is not None and not isinstance(expected, int):
+        raise ValidationAppError(
+            message="expected_version 必须是整数",
+            details={"errors": [{"loc": ["expected_version"], "msg": "必须是整数"}]},
+        )
+    payload = await service.update_system_settings(
+        body, actor_id=user.id, meta=_meta(request), expected_version=expected
+    )
     return JSONResponse(jsonable_encoder(payload))
 
 

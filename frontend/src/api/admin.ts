@@ -116,6 +116,8 @@ export interface ChunkPreset {
 
 export interface SystemSettings {
   default_session_config: Record<string, unknown>
+  /** 平台默认设置的乐观并发版本（ISSUE-77）。 */
+  version: number
 }
 
 export const authApi = {
@@ -269,10 +271,13 @@ export const systemApi = {
     const { data } = await http.get<SystemSettings>('/admin/system/settings')
     return data
   },
-  async patch(defaultSessionConfig: Record<string, unknown>): Promise<SystemSettings> {
-    const { data } = await http.patch<SystemSettings>('/admin/system/settings', {
-      default_session_config: defaultSessionConfig,
-    })
+  async patch(
+    defaultSessionConfig: Record<string, unknown>,
+    version?: number,
+  ): Promise<SystemSettings> {
+    const payload: Record<string, unknown> = { default_session_config: defaultSessionConfig }
+    if (version !== undefined) payload.expected_version = version
+    const { data } = await http.patch<SystemSettings>('/admin/system/settings', payload)
     return data
   },
 }

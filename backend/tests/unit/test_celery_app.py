@@ -164,3 +164,27 @@ def test_webhook_tasks_call_the_jobs(monkeypatch: object) -> None:
     assert deliver("0198f4b0-0000-7000-8000-000000000001") == out
     assert sweep() == {"due": 2}
     assert enqueued == due
+
+
+def test_default_time_limits_and_long_task_overrides() -> None:
+    """ISSUE-12：默认软/硬超时兜底，入库与清理任务单独放宽。"""
+    from aics.tasks import apps as apps_tasks  # noqa: F401
+    from aics.tasks import celery_app as celery_app_mod
+
+    assert (
+        celery_app_mod.celery_app.conf.task_soft_time_limit == celery_app_mod.SOFT_TIME_LIMIT == 600
+    )
+    assert celery_app_mod.celery_app.conf.task_time_limit == celery_app_mod.HARD_TIME_LIMIT == 900
+
+    for name in ("aics.ingest_document", "aics.retokenize_app", "aics.cleanup_app"):
+        task = celery_app_mod.celery_app.tasks[name]
+        assert task.soft_time_limit == 1800, name
+        assert task.time_limit == 2100, name
+
+
+def test_channel_of_mode_is_exported() -> None:
+    """ISSUE-10：`CHANNEL_OF_MODE` 必须能从 chat.service 的公开面拿到。"""
+    from aics.modules.chat import service as chat_service
+
+    assert "CHANNEL_OF_MODE" in chat_service.__all__
+    assert chat_service.CHANNEL_OF_MODE[chat_service.RunMode.online] == "api"

@@ -16,14 +16,15 @@ from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from aics.core.errors import ValidationAppError
+from aics.core.errors import ConfigVersionConflictError, ValidationAppError
 from aics.db.models import SystemSetting
 from aics.rag.config import PLATFORM_DEFAULT_SESSION, EffectiveSessionConfig
 
 log = logging.getLogger(__name__)
 
 DEFAULT_SESSION_CONFIG_KEY = "default_session_config"
-KNOWN_KEYS = frozenset({DEFAULT_SESSION_CONFIG_KEY})
+VERSION_KEY = "default_session_config_version"
+KNOWN_KEYS = frozenset({DEFAULT_SESSION_CONFIG_KEY, VERSION_KEY})
 
 
 class SystemSettingsRepository:
@@ -51,6 +52,18 @@ class SystemSettingsService:
     def __init__(self, session: AsyncSession) -> None:
         self.repo = SystemSettingsRepository(session)
 
+    async def version(self) -> int:
+        """Monotonic version of the platform default session config (ISSUE-77).
+
+        Stored as its own row so `default_session_config` stays a pure value; every successful
+        write bumps it inside the same transaction as the value.
+        """
+        raw = await self.repo.get_value(VERSION_KEY)
+        try:
+            return int(raw or 0)
+        except (TypeError, ValueError):
+            return 0
+
     async def get_default_session_config(self) -> EffectiveSessionConfig:
         """Stored platform default; falls back to the code default if missing or invalid.
 
@@ -67,8 +80,22 @@ class SystemSettingsService:
             return PLATFORM_DEFAULT_SESSION
 
     async def set_default_session_config(
-        self, value: dict[str, Any], *, updated_by: UUID | None
-    ) -> EffectiveSessionConfig:
+        self,
+        value: dict[str, Any],
+        *,
+        updated_by: UUID | None,
+        expected_version: int | None = None,
+    ) -> tuple[EffectiveSessionConfig, int]:
+        """Validate, write and bump the version; returns `(config, new_version)`.
+
+        `expected_version` 给了就做乐观并发（ISSUE-77）：两个管理员同时改平台默认设置时，
+        后保存的人拿到 409 `CONFIG_VERSION_CONFLICT`，不会静默覆盖前一个人的值。
+        """
+        current = await self.version()
+        if expected_version is not None and expected_version != current:
+            raise ConfigVersionConflictError(
+                details={"expected": expected_version, "current": current}
+            )
         try:
             cfg = EffectiveSessionConfig.model_validate(value)
         except ValidationError as e:
@@ -87,4 +114,6 @@ class SystemSettingsService:
         await self.repo.set_value(
             DEFAULT_SESSION_CONFIG_KEY, cfg.model_dump(mode="json"), updated_by=updated_by
         )
-        return cfg
+        new_version = current + 1
+        await self.repo.set_value(VERSION_KEY, new_version, updated_by=updated_by)
+        return cfg, new_version

@@ -18,6 +18,8 @@ const form = reactive<SessionDefaults>({
 })
 const loading = ref(false)
 const saving = ref(false)
+//: 平台默认设置的版本号（ISSUE-77）：保存时回传，别人先改过就 409，避免静默覆盖。
+const version = ref(0)
 const canWrite = computed(() => auth.can('system.write'))
 
 async function load() {
@@ -25,6 +27,7 @@ async function load() {
   try {
     const body = await systemApi.get()
     Object.assign(form, body.default_session_config as Partial<SessionDefaults>)
+    version.value = body.version ?? 0
   } finally {
     loading.value = false
   }
@@ -33,9 +36,18 @@ async function load() {
 async function save() {
   saving.value = true
   try {
-    await systemApi.patch({ ...form })
+    await systemApi.patch({ ...form }, version.value)
     ElMessage.success('已保存')
     await load()
+  } catch (err: unknown) {
+    const code = (err as { response?: { data?: { error?: { code?: string } } } }).response?.data
+      ?.error?.code
+    if (code === 'CONFIG_VERSION_CONFLICT') {
+      ElMessage.error('这条设置刚被别人改过，已刷成最新值，请确认后重试')
+      await load()
+      return
+    }
+    throw err
   } finally {
     saving.value = false
   }

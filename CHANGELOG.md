@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+### 新增（M4.8 ② 平台设置的乐观并发，2026-10-23）
+
+- `GET /api/v1/admin/system/settings` 返回值增加 `version`；`PATCH` 接受可选 `expected_version`，与当前版本不符时 409 `CONFIG_VERSION_CONFLICT`（`details` 为 `{"expected","current"}`），`expected_version` 非整数为 422。
+- `system_settings` 新增一行 `default_session_config_version`，与 `default_session_config` 在同一事务里写入并 +1。
+- 前端系统设置页回传版本；冲突时提示「刚被别人改过」并自动刷新成最新值。
+
+### 修复（M4.8 ②，2026-10-23）
+
+- Celery 任务补超时兜底（ISSUE-12）：默认软/硬超时 600 / 900 秒，入库、重建索引、清理应用等长任务放宽到 1800 / 2100 秒，避免卡死任务长期占住并发槽位。
+- `chunk_questions.source` 的 `llm` 值加注释说明是 M5.3 预留值（ISSUE-11）；`CHANNEL_OF_MODE` 早已在 `__all__` 里，补测试锁住（ISSUE-10 属过期记录）。
+
+### 测试（M4.8 ②，2026-10-23）
+
+- 新增：`tests/unit/test_system_settings_admin.py` 3 例（版本上报与自增、过期版本 409 且不落库不审计、版本匹配放行）、`tests/unit/test_celery_app.py` 2 例（默认超时与长任务覆盖、`CHANNEL_OF_MODE` 导出）。
+
 ### 文档（M4.8 ① 上线前准备计划，2026-10-23）
 
 - `docs/00-planning/03-开发计划.md` 新增 M4.8 子步骤计划（分诊 + 一致性小修 + 运维小口 + 一键演示 + 收尾），里程碑行标注 M4.8 进行中。

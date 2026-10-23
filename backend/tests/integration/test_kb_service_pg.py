@@ -196,7 +196,6 @@ async def test_documents_lists_with_app_name(svc) -> None:
 async def test_member_cannot_manage_a_kb_they_do_not_own(svc) -> None:
     """公共库的写操作只认创建者与超管；普通成员只能用，不能改。"""
     service = svc["service"]
-    owner = svc["pg"]["user_id"]
     other = uuid4()
     kb = await _create(svc, f"权限口径库-{uuid4().hex[:6]}")
     with pytest.raises(ForbiddenError):

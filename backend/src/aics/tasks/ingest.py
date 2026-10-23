@@ -22,7 +22,7 @@ def _enqueue_cleanup(
     )
 
 
-@celery_app.task(name=INGEST_TASK, queue="ingest")
+@celery_app.task(name=INGEST_TASK, queue="ingest", soft_time_limit=1800, time_limit=2100)
 def ingest_document(document_id: str, job_id: str) -> str:
     """构建文档索引；可重复执行（acks_late 重投时先清理同构建号的半成品）。"""
     return asyncio.run(
@@ -30,7 +30,7 @@ def ingest_document(document_id: str, job_id: str) -> str:
     )
 
 
-@celery_app.task(name="aics.retokenize_app", queue="ingest")
+@celery_app.task(name="aics.retokenize_app", queue="ingest", soft_time_limit=1800, time_limit=2100)
 def retokenize_app(app_id: str, job_id: str) -> str:
     """custom_dict 变化后只重新分词（重算 search_text），不重新向量化。"""
     return asyncio.run(run_retokenize_job(UUID(app_id), UUID(job_id)))

@@ -21,6 +21,10 @@ KEY_USAGE_FLUSH_INTERVAL_S = 60.0  # = apikeys.keyusage.KEY_USAGE_FLUSH_INTERVAL
 #: 出站 Webhook 的到期重试扫描（M3.5 ③；ADR-0016：不依赖 Celery 长 countdown）。
 WEBHOOK_RETRY_INTERVAL_S = 10.0
 
+#: 默认 10 分钟软超时 / 15 分钟硬超时（ISSUE-12）；入库与清理这类长任务在装饰器上单独放宽。
+SOFT_TIME_LIMIT = 600
+HARD_TIME_LIMIT = 900
+
 
 def create_celery() -> Celery:
     s = get_settings()
@@ -40,6 +44,10 @@ def create_celery() -> Celery:
         result_serializer="json",
         accept_content=["json"],
         result_expires=3600,
+        # ISSUE-12：硬/软超时兜底，避免某个任务卡死把 worker 的并发槽位长期占住。
+        # 长任务（入库、清理、重建索引）在自己的装饰器里覆盖这两项。
+        task_soft_time_limit=SOFT_TIME_LIMIT,
+        task_time_limit=HARD_TIME_LIMIT,
         timezone="Asia/Shanghai",
         enable_utc=True,
         worker_hijack_root_logger=False,

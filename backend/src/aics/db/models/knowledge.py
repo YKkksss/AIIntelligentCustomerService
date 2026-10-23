@@ -30,6 +30,7 @@ from aics.db.base import Base, CreatedAtMixin, SoftDeleteMixin, TimestampMixin, 
 
 DOCUMENT_STATUSES = ("queued", "parsing", "indexing", "done", "failed", "deleting")
 QUESTION_STATUSES = ("active", "pending")
+#: `llm` 预留给 M5.3（由模型自动生成补充问题）；当前只有 `manual` 有生产者（ISSUE-11）。
 QUESTION_SOURCES = ("manual", "llm")
 QUESTION_MAX_CHARS = 200
 TAG_MAX_CHARS = 50

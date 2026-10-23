@@ -394,11 +394,20 @@ class AppsAdminService:
 
     async def system_settings(self) -> dict[str, Any]:
         """`GET /system/settings`：v1 只有平台默认会话配置（代码默认值兜底）。"""
-        cfg = await SystemSettingsService(self.session).get_default_session_config()
-        return {DEFAULT_SESSION_CONFIG_KEY: cfg.model_dump(mode="json")}
+        service = SystemSettingsService(self.session)
+        cfg = await service.get_default_session_config()
+        return {
+            DEFAULT_SESSION_CONFIG_KEY: cfg.model_dump(mode="json"),
+            "version": await service.version(),
+        }
 
     async def update_system_settings(
-        self, payload: Mapping[str, Any], *, actor_id: UUID, meta: ActorMeta = _NO_META
+        self,
+        payload: Mapping[str, Any],
+        *,
+        actor_id: UUID,
+        meta: ActorMeta = _NO_META,
+        expected_version: int | None = None,
     ) -> dict[str, Any]:
         """`PATCH /system/settings`：校验、落库并写 `system.update` 审计。"""
         value = payload.get(DEFAULT_SESSION_CONFIG_KEY)
@@ -410,9 +419,10 @@ class AppsAdminService:
         before = (await service.get_default_session_config()).model_dump(mode="json")
         # PATCH 语义：只给部分字段也要成立，合并现值后再整对象校验（否则必填字段报 422）
         merged = {**before, **dict(value)}
-        after = (await service.set_default_session_config(merged, updated_by=actor_id)).model_dump(
-            mode="json"
+        saved, version = await service.set_default_session_config(
+            merged, updated_by=actor_id, expected_version=expected_version
         )
+        after = saved.model_dump(mode="json")
         changed = [k for k in after if before.get(k) != after.get(k)]
         if changed and self.audit is not None:
             await self.audit.write(
@@ -433,7 +443,7 @@ class AppsAdminService:
                 ),
             )
         await self.session.commit()
-        return {DEFAULT_SESSION_CONFIG_KEY: after}
+        return {DEFAULT_SESSION_CONFIG_KEY: after, "version": version}
 
     async def _record(
         self,
