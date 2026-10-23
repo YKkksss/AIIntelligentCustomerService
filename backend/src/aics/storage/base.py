@@ -46,6 +46,7 @@ def kb_document_key(kb_id: UUID, document_id: UUID, version: int, ext: str) -> s
 def kb_prefix(kb_id: UUID) -> str:
     return f"kb-{UUID(str(kb_id))}/"
 
+
 def app_prefix(app_id: UUID) -> str:
     return f"{UUID(str(app_id))}/"
 
