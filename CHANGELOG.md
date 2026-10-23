@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### 文档（M4.8 ① 上线前准备计划，2026-10-23）
+
+- `docs/00-planning/03-开发计划.md` 新增 M4.8 子步骤计划（分诊 + 一致性小修 + 运维小口 + 一键演示 + 收尾），里程碑行标注 M4.8 进行中。
+- `docs/00-planning/07-待解决问题清单.md`：ISSUE-110 从项目符号改为 §1 表格行（与其余开放问题同格式）。
+
 ### 新增（M4.7 ⑤ 公共知识库的上传权限与归属收口，2026-10-23）
 
 - 公共知识库页可以直接上传文档：`POST /api/v1/admin/knowledge-bases/{kb_id}/documents`（multipart），文档直接归属该库（`documents.kb_id`），入库流水线把 `kb_id` 写进 `chunks.kb_id`（`carry_chunks` 迁移手工块时也保留）。
