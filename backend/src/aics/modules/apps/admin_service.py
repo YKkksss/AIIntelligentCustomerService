@@ -21,7 +21,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aics.core.audit import AuditEntry, AuditSink
-from aics.core.errors import ConfigVersionConflictError, ValidationAppError
+from aics.core.errors import ConfigVersionConflictError, ConflictError, ValidationAppError
 from aics.db.models import ApiKey, App, Chunk, Conversation, Document, Job, UserAppRole
 from aics.modules.apps.avatar import avatar_of, normalize_avatar  # noqa: F401 - 校验在 service 层
 from aics.modules.apps.service import BASIC_FIELDS, CONFIG_FIELDS, AppConfig, AppService
@@ -391,6 +391,58 @@ class AppsAdminService:
             "revoked_keys": len(prefixes),
             "closed_conversations": closed,
         }
+
+    async def retry_cleanup(
+        self, app_id: UUID, *, actor_id: UUID, meta: ActorMeta = _NO_META
+    ) -> dict[str, Any]:
+        """`POST /apps/{id}/cleanup/retry`：应用卡在 `deleting` 时手工重跑清理（ISSUE-78）。
+
+        投递失败（worker 未起、队列不存在）时应用会永久停在 `deleting`：本接口补一个
+        「再来一次」的入口。已有 `queued` / `running` 的清理任务时 409，避免重复并发删除。
+        """
+        app = await self.apps.get_app(app_id)
+        if app.status != "deleting":
+            raise ConflictError(
+                message="应用不在删除中，无需重试清理",
+                details={"status": app.status},
+            )
+        running = (
+            await self.session.execute(
+                select(Job)
+                .where(
+                    Job.app_id == app_id,
+                    Job.type == "cleanup_app",
+                    Job.status.in_(("queued", "running")),
+                )
+                .order_by(Job.id.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if running is not None:
+            raise ConflictError(
+                message="清理任务正在排队或执行中，请稍后查看结果",
+                details={"job_id": str(running.id), "status": running.status},
+            )
+        job = Job(
+            app_id=app_id,
+            type="cleanup_app",
+            target_id=app_id,
+            payload={"reason": "admin.retry"},
+            created_by=actor_id,
+        )
+        self.session.add(job)
+        await self.session.flush()
+        job_id = str(job.id)
+        await self._record(
+            actor_id,
+            meta,
+            "app.cleanup.retry",
+            app_id,
+            {"before": {"status": "deleting"}, "after": {"status": "deleting", "job_id": job_id}},
+        )
+        await self.session.commit()
+        self._enqueue(CLEANUP_TASK, (str(app_id), job_id), "apps.cleanup_enqueue_failed")
+        return {"job_id": job_id, "status": "queued"}
 
     async def system_settings(self) -> dict[str, Any]:
         """`GET /system/settings`：v1 只有平台默认会话配置（代码默认值兜底）。"""

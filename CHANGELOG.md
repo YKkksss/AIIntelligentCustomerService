@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+### 新增（M4.8 ③ 清理重试与 `/metrics`，2026-10-23）
+
+- 管理接口新增 `POST /api/v1/admin/apps/{app_id}/cleanup/retry`（`app.delete`）：应用卡在 `deleting` 时手工重跑清理；应用不在删除中或已有 `queued`/`running` 的清理任务时 409，成功返回 202 `{job_id, status}`，审计 `app.cleanup.retry`，投递失败仍保留任务行（ISSUE-78 的「重试入口」）。
+- 新增 `GET /metrics`（Prometheus 文本、不进 OpenAPI、不做鉴权）：暴露进程内 counter（`aics_*_total` 声明为 counter，其余为 gauge）与观测值的 `_count`/`_sum`，标签做 Prometheus 转义；这是 ISSUE-06 的最小版，告警规则与日志轮转仍留 M6.3。
+- 前端智能客服卡片菜单对 `deleting` 状态提供「重试清理」。
+
+### 测试（M4.8 ③，2026-10-23）
+
+- `backend/tests/unit/test_apps_admin_cleanup_retry.py`（6 例）：非删除中 409、已有任务 409、未知应用 404、成功建任务+投递+审计、投递失败仍成功。
+- `backend/tests/unit/test_metrics_exposition.py`（4 例）：counter/gauge 声明、标签转义、观测值 `_count`/`_sum`、空快照、`/metrics` 文本与「不进 OpenAPI」。
+
 ### 新增（M4.8 ② 平台设置的乐观并发，2026-10-23）
 
 - `GET /api/v1/admin/system/settings` 返回值增加 `version`；`PATCH` 接受可选 `expected_version`，与当前版本不符时 409 `CONFIG_VERSION_CONFLICT`（`details` 为 `{"expected","current"}`），`expected_version` 非整数为 422。

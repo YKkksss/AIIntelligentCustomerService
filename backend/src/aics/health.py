@@ -13,10 +13,11 @@ import httpx
 import redis.asyncio as aioredis
 import structlog
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from kombu import Connection
 from sqlalchemy import text
 
+from aics.core import metrics
 from aics.core.config import get_settings
 from aics.db.engine import get_engine
 
@@ -101,3 +102,13 @@ async def readyz() -> JSONResponse:
     return JSONResponse(
         {"status": "ok" if ok else "error", "checks": results}, status_code=200 if ok else 503
     )
+
+
+@router.get("/metrics", include_in_schema=False)
+async def prometheus_metrics() -> Response:
+    """Prometheus 文本（M4.8 ③，ISSUE-06 的最小版）：进程内 counter 的快照。
+
+    故意不进 OpenAPI、不做鉴权：这是给反代 / 抓取器用的内部端点，生产侧由网关限制来源
+    （告警规则与日志轮转在 M6.3）。多副本部署时每个副本各暴露一份，由 Prometheus 聚合。
+    """
+    return Response(metrics.render(), media_type="text/plain; version=0.0.4; charset=utf-8")

@@ -111,6 +111,13 @@ async function onCreate() {
   }
 }
 
+async function onRetryCleanup(row: AppCard) {
+  await ElMessageBox.confirm(`重新触发「${row.name}」的清理？清理完成后它会被删除。`, '重试清理')
+  const { status } = await appApi.retryCleanup(row.id)
+  ElMessage.success(status === 'queued' ? '已重新排入清理队列' : '已提交清理')
+  await load()
+}
+
 async function onCopy(row: AppCard) {
   await ElMessageBox.confirm(`复制「${row.name}」的配置（不含文档、Key 与会话）？`, '复制智能客服')
   await appApi.copy(row.id)
@@ -128,6 +135,7 @@ async function onCommand(row: AppCard, command: string) {
     await router.push({ name: 'app-knowledge', params: { appId: row.id } })
   if (command === 'debug') await router.push({ name: 'app-debug', params: { appId: row.id } })
   if (command === 'copy') await onCopy(row)
+  if (command === 'retry-cleanup') await onRetryCleanup(row)
 }
 
 onMounted(load)
@@ -227,6 +235,9 @@ onMounted(load)
                     调试对话
                   </el-dropdown-item>
                   <el-dropdown-item v-if="canWrite()" command="copy" divided>复制</el-dropdown-item>
+          <el-dropdown-item v-if="row.status === 'deleting' && auth.can('app.delete')" command="retry-cleanup">
+            重试清理
+          </el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>

@@ -200,3 +200,18 @@ async def delete_app(
 ) -> JSONResponse:
     payload = await service.delete(app_id, actor_id=user.id, meta=_meta(request))
     return JSONResponse(jsonable_encoder(payload), status_code=202)
+
+
+@router.post(
+    "/apps/{app_id}/cleanup/retry",
+    summary="重试删除中的智能客服（投递失败后的兜底，S）",
+    responses=errors(401, 403, 404, 409),
+)
+async def retry_cleanup(
+    app_id: UUID,
+    user: Annotated[AuthedUser, Depends(require_perm("app.delete"))],
+    request: Request,
+    service: Service,
+) -> JSONResponse:
+    payload = await service.retry_cleanup(app_id, actor_id=user.id, meta=_meta(request))
+    return JSONResponse(jsonable_encoder(payload), status_code=202)

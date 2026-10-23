@@ -256,6 +256,12 @@ export const appApi = {
     const { data } = await http.delete<{ job_id: string }>(`/admin/apps/${appId}`)
     return data
   },
+  async retryCleanup(appId: string): Promise<{ job_id: string; status: string }> {
+    const { data } = await http.post<{ job_id: string; status: string }>(
+      `/admin/apps/${appId}/cleanup/retry`,
+    )
+    return data
+  },
   async models(): Promise<ModelEntry[]> {
     const { data } = await http.get<ModelEntry[]>('/admin/models')
     return data
